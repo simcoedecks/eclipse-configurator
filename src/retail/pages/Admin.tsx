@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../shared/firebase';
+import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
