@@ -19,13 +19,12 @@ import {
   MapPin,
   Plus,
   Minus,
-  Loader2,
-  DollarSign
+  Loader2
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import html2canvas from 'html2canvas';
-import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, getDoc, query, where, getDocs } from '../../shared/firebase';
+import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs } from '../../shared/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
 import { toPng, toJpeg } from 'html-to-image';
@@ -325,25 +324,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [city, setCity] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [contractorDiscount, setContractorDiscount] = useState<number>(0);
-  const [applyContractorDiscount, setApplyContractorDiscount] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUserRole(userData.role);
-          setContractorDiscount(userData.discountLevel || 0);
-        }
-      } else {
-        setUserRole(null);
-        setContractorDiscount(0);
-        setApplyContractorDiscount(false);
-      }
     });
     return () => unsubscribe();
   }, []);
@@ -513,11 +497,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const totalPrice = useMemo(() => {
     if (basePrice === null) return null;
     const subtotal = basePrice + accessoriesPrice + woodgrainUpgrade;
-    if (applyContractorDiscount && contractorDiscount > 0) {
-      return subtotal * (1 - contractorDiscount / 100);
-    }
     return subtotal;
-  }, [basePrice, accessoriesPrice, woodgrainUpgrade, applyContractorDiscount, contractorDiscount]);
+  }, [basePrice, accessoriesPrice, woodgrainUpgrade]);
 
   const pdfData = useMemo(() => {
     const sqft = width * depth;
@@ -598,10 +579,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
     const accessoriesTotal = itemizedAccessories.reduce((sum, item) => sum + item.cost, 0);
     const subtotal = (basePrice || 0) + accessoriesTotal;
-    const discountAmount = (applyContractorDiscount && contractorDiscount > 0) ? subtotal * (contractorDiscount / 100) : 0;
-    const discountedSubtotal = subtotal - discountAmount;
-    const hst = discountedSubtotal * 0.13;
-    const finalTotal = discountedSubtotal + hst;
+    const hst = subtotal * 0.13;
+    const finalTotal = subtotal + hst;
 
     return {
       name, email, phone, address, city,
@@ -612,11 +591,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       louverColorName: COLORS.find(c => c.hex === louverColor)?.name || louverColor,
       basePrice: basePrice || 0,
       accessories: itemizedAccessories,
-      subtotal, 
-      discount: discountAmount,
-      discountPercentage: contractorDiscount,
-      discountedSubtotal,
-      hst, 
+      subtotal,
+      discount: 0,
+      discountPercentage: 0,
+      discountedSubtotal: subtotal,
+      hst,
       total: finalTotal,
       visualizerProps: {
         width, depth, height, accessories: selectedAccessories, frameColor, louverColor,
@@ -624,7 +603,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         houseWall: 'none' as any, staticMode: true
       }
     };
-  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, heaterControl, numScreenBaysX, numScreenBaysZ, applyContractorDiscount, contractorDiscount]);
+  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, heaterControl, numScreenBaysX, numScreenBaysZ]);
 
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
@@ -1392,11 +1371,6 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               />
             ))}
           </div>
-          {userRole === 'contractor' && contractorDiscount > 0 && currentStep < 5 && (
-            <div className="mt-2 text-[9px] text-luxury-gold flex items-center gap-1">
-              <DollarSign className="w-3 h-3" /> Contractor pricing applied in final step
-            </div>
-          )}
         </div>
 
         {/* Scrollable Content */}
@@ -1871,34 +1845,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                     <div className="pt-4 border-t border-luxury-black/10 flex justify-between items-end">
                       <div className="flex flex-col">
                         <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">Total Investment</span>
-                        {applyContractorDiscount && contractorDiscount > 0 && (
-                          <span className="text-[8px] text-emerald-600 font-bold uppercase tracking-wider">Contractor Discount Applied ({contractorDiscount}%)</span>
-                        )}
                       </div>
                       <span className="text-2xl font-serif text-luxury-black">{formatCurrency(totalPrice || 0)}</span>
                     </div>
                   </div>
-
-                  {userRole === 'contractor' && contractorDiscount > 0 && (
-                    <div className="bg-luxury-gold/5 border border-luxury-gold/20 p-4 rounded-lg space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4 text-luxury-gold" />
-                          <span className="text-xs font-bold uppercase tracking-widest text-luxury-black">Contractor Options</span>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer"
-                            checked={applyContractorDiscount}
-                            onChange={(e) => setApplyContractorDiscount(e.target.checked)}
-                          />
-                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-luxury-gold"></div>
-                          <span className="ml-2 text-[10px] font-medium text-luxury-black/60">Apply {contractorDiscount}% Discount</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="space-y-4">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Contact Information</h4>
