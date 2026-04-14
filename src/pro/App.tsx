@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import ProConfigurator from './pages/ProConfigurator';
 import AuthGuard from './components/AuthGuard';
 import ProLayout from './components/ProLayout';
 
@@ -21,7 +22,7 @@ export default function App() {
                     <Route path="/" element={<Dashboard contractor={contractor} />} />
                     <Route path="/quotes" element={<Dashboard contractor={contractor} />} />
                     <Route path="/account" element={<Dashboard contractor={contractor} />} />
-                    <Route path="/quote/new" element={<Dashboard contractor={contractor} />} />
+                    <Route path="/quote/new" element={<ProConfigurator contractor={contractor} />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </ProLayout>
