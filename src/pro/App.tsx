@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import AuthGuard from './components/AuthGuard';
 import ProLayout from './components/ProLayout';
@@ -9,7 +10,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<div className="min-h-screen bg-[#111] text-white flex items-center justify-center"><p className="text-gray-400">Signup — coming soon</p></div>} />
+        <Route path="/signup" element={<Signup />} />
         <Route
           path="/*"
           element={
