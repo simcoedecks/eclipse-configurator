@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "lead": {
+      "title": "Configurator Lead",
+      "description": "Real-time tracking of configurator state",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "number" },
+            "depth": { "type": "number" },
+            "height": { "type": "number" },
+            "frameColor": { "type": "string" },
+            "louverColor": { "type": "string" },
+            "accessories": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "configuration", "lastUpdated"]
+    },
+    "job": {
+      "title": "Quote Request Job",
+      "description": "A job submitted by a homeowner for pricing",
+      "type": "object",
+      "properties": {
+        "submissionId": { "type": "string" },
+        "city": { "type": "string" },
+        "configuration": { "$ref": "lead" },
+        "status": { "type": "string", "enum": ["open", "in-progress", "completed", "contractor_quote"] },
+        "isDuplicate": { "type": "boolean", "description": "Flag indicating if this is a duplicate submission" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["submissionId", "city", "configuration", "status", "createdAt"]
+    },
+    "bid": {
+      "title": "Contractor Bid",
+      "description": "A bid submitted by a contractor for a job",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "contractorId": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "amount": { "type": "number" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jobId", "contractorId", "contractorName", "amount", "createdAt"]
+    },
+    "submissions": {
+      "title": "Configurator Submissions",
+      "description": "Lead submissions from the pergola configurator",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "User's name" },
+        "email": { "type": "string", "format": "email", "description": "User's email" },
+        "phone": { "type": "string", "description": "User's phone number" },
+        "address": { "type": "string", "description": "User's address" },
+        "city": { "type": "string", "description": "User's city" },
+        "type": { "type": "string", "enum": ["email", "consultation"], "description": "Type of request" },
+        "configuration": {
+          "type": "object",
+          "description": "Pergola configuration details",
+          "properties": {
+            "width": { "type": "number" },
+            "depth": { "type": "number" },
+            "height": { "type": "number" },
+            "frameColor": { "type": "string" },
+            "louverColor": { "type": "string" },
+            "totalPrice": { "type": "string" },
+            "accessories": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "isDuplicate": { "type": "boolean", "description": "Flag indicating if this is a duplicate submission" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of submission" }
+      },
+      "required": ["name", "email", "type", "configuration", "createdAt"]
+    },
+    "user": {
+      "title": "User Profile",
+      "description": "User profile and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["homeowner", "contractor", "admin"] },
+        "discountLevel": { "type": "number", "description": "Discount percentage for contractors (e.g., 10 for 10%)" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/leads/{userId}": {
+      "schema": "lead",
+      "description": "Real-time tracking of configurator state"
+    },
+    "/jobs/{jobId}": {
+      "schema": "job",
+      "description": "Collection of quote request jobs"
+    },
+    "/bids/{bidId}": {
+      "schema": "bid",
+      "description": "Collection of contractor bids"
+    },
+    "/submissions/{submissionId}": {
+      "schema": "submissions",
+      "description": "Collection of lead submissions"
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Collection of user profiles"
+    }
+  }
+}

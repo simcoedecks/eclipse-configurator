@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: submissions
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required) - User's name
+    //   - email: string (required, email format) - User's email
+    //   - phone: string (optional) - User's phone number
+    //   - address: string (optional) - User's address
+    //   - city: string (optional) - User's city
+    //   - type: string (required, enum: ['email', 'consultation']) - Type of request
+    //   - configuration: map (required) - Pergola configuration details
+    //   - createdAt: timestamp (required) - Timestamp of submission
+    //
+    // Collection: leads
+    // Document ID: userId
+    // Fields:
+    //   - userId: string (required)
+    //   - configuration: map (required)
+    //   - lastUpdated: timestamp (required)
+    //
+    // Collection: jobs
+    // Document ID: auto-generated
+    // Fields:
+    //   - submissionId: string (required)
+    //   - city: string (required)
+    //   - configuration: map (required)
+    //   - status: string (required, enum: ['open', 'in-progress', 'completed'])
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: bids
+    // Document ID: auto-generated
+    // Fields:
+    //   - jobId: string (required)
+    //   - contractorId: string (required)
+    //   - contractorName: string (required)
+    //   - amount: number (required)
+    //   - message: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "michael@simcoedecks.ca" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate']) &&
+             data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.type in ['email', 'consultation'] &&
+             data.configuration is map &&
+             data.createdAt is timestamp &&
+             (!('contractorId' in data) || data.contractorId == null || data.contractorId is string) &&
+             (!('isDuplicate' in data) || data.isDuplicate is bool);
+    }
+
+    function isValidLead(data) {
+      return data.keys().hasOnly(['userId', 'configuration', 'lastUpdated']) &&
+             data.userId is string &&
+             data.configuration is map &&
+             data.lastUpdated is timestamp;
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasOnly(['submissionId', 'city', 'configuration', 'status', 'createdAt', 'customerName', 'customerEmail', 'customerPhone', 'contractorId', 'isDuplicate']) &&
+             data.submissionId is string &&
+             data.city is string &&
+             data.configuration is map &&
+             data.status in ['open', 'in-progress', 'completed', 'contractor_quote'] &&
+             data.createdAt is timestamp &&
+             (!('customerName' in data) || data.customerName is string) &&
+             (!('customerEmail' in data) || data.customerEmail is string) &&
+             (!('customerPhone' in data) || data.customerPhone is string) &&
+             (!('contractorId' in data) || data.contractorId == null || data.contractorId is string) &&
+             (!('isDuplicate' in data) || data.isDuplicate is bool);
+    }
+
+    function isValidBid(data) {
+      return data.keys().hasOnly(['jobId', 'contractorId', 'contractorName', 'amount', 'message', 'createdAt']) &&
+             data.keys().hasAll(['jobId', 'contractorId', 'contractorName', 'amount', 'createdAt']) &&
+             data.jobId is string &&
+             data.contractorId is string &&
+             data.contractorName is string &&
+             data.amount is number &&
+             (!('message' in data) || data.message is string) &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    function isValidSubmissionUpdate(data, prevData) {
+      // Allow updating only email tracking fields
+      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt'];
+      let affectedKeys = data.diff(prevData).affectedKeys();
+      return affectedKeys.hasOnly(allowedFields);
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if isValidSubmission(request.resource.data);
+      allow read: if isAdmin();
+      allow update: if isAdmin() || isValidSubmissionUpdate(request.resource.data, resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /leads/{userId} {
+      allow read, write: if isOwner(userId) && isValidLead(request.resource.data);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow create: if isValidJob(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /bids/{bidId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidBid(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+    
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

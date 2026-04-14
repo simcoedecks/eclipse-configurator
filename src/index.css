@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Outfit", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-luxury-gold: #C5A059;
+  --color-luxury-gold-text: #9B7D3B;
+  --color-luxury-black: #1A1A1A;
+  --color-luxury-charcoal: #2D2D2D;
+  --color-luxury-cream: #F5F2ED;
+  --color-luxury-paper: #FAF9F6;
+}
+
+@layer base {
+  body {
+    @apply bg-luxury-paper text-luxury-black font-sans antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif tracking-tight;
+  }
+}
+
+.glass-panel {
+  @apply bg-white/70 backdrop-blur-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.05)];
+}
+
+.luxury-button {
+  @apply bg-luxury-black text-white px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:bg-luxury-gold hover:tracking-[0.25em] disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.luxury-button-outline {
+  @apply border border-luxury-black/20 text-luxury-black px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:border-luxury-gold hover:text-luxury-gold;
+}
+
+.luxury-input {
+  @apply bg-transparent border-b border-luxury-black/10 py-4 px-0 rounded-none focus:border-luxury-gold focus:ring-0 transition-all font-serif text-lg placeholder:text-luxury-black/20;
+}
+
+.luxury-card {
+  @apply bg-white border border-luxury-cream p-10 transition-all duration-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:-translate-y-2;
+}
+
+.luxury-label {
+  @apply text-[10px] uppercase tracking-[0.2em] font-bold text-luxury-black/40 mb-2 block;
+}
+
+.luxury-value {
+  @apply text-2xl font-serif text-luxury-gold font-medium;
+}
+
+/* Custom Scrollbar for Luxury Feel */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 160, 89, 0.3) var(--color-luxury-paper);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-luxury-paper;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-luxury-gold/30 rounded-full hover:bg-luxury-gold/50 transition-all;
+}
+
+/* Improve range input touch targets on mobile */
+@media (pointer: coarse) {
+  input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+}
