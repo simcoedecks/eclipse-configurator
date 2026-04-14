@@ -5,20 +5,14 @@
 
 import { useState, useMemo, useRef, Suspense, Fragment, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ChevronRight, 
+import {
+  ChevronRight,
   ChevronDown,
-  Check, 
-  Sun, 
-  Blinds, 
-  Lightbulb, 
-  Wind, 
-  Thermometer, 
-  Fan, 
-  PanelRight, 
-  Smartphone, 
-  Speaker, 
-  Mail, 
+  Check,
+  Sun,
+  Blinds,
+  PanelRight,
+  Mail,
   Calendar,
   User,
   Phone,
@@ -38,6 +32,9 @@ import { toPng, toJpeg } from 'html-to-image';
 import { ProposalDocument } from '../components/ProposalDocument';
 import { generateProposalPDF } from '../lib/pdfGenerator';
 import { useDebounce } from 'use-debounce';
+import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, getScreenDescription, formatCurrency } from '../shared/lib/pricing';
+import { type AccessoryType, type Accessory, ACCESSORIES } from '../shared/lib/accessories';
+import { COLORS, getColorName } from '../shared/lib/colors';
 
 enum OperationType {
   CREATE = 'create',
@@ -90,102 +87,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
-const SCREEN_PRICES: Record<number, Record<number, number>> = {
-  8: { 7: 3969.70, 8: 4124.85, 9: 4333.50, 10: 4579.60, 11: 4777.55, 12: 4884.55, 13: 5103.90, 14: 5312.55, 15: 5408.85, 16: 5617.50, 17: 5788.70, 18: 5938.50, 19: 6125.75, 20: 6313.00 },
-  9: { 7: 4039.25, 8: 4183.70, 9: 4397.70, 10: 4643.80, 11: 4847.10, 12: 4948.75, 13: 5162.75, 14: 5371.40, 15: 5478.40, 16: 5692.40, 17: 5842.20, 18: 6034.80, 19: 6222.05, 20: 6409.30 },
-  10: { 7: 4108.80, 8: 4263.95, 9: 4467.25, 10: 4708.00, 11: 4916.65, 12: 5029.00, 13: 5232.30, 14: 5446.30, 15: 5604.45, 16: 5756.60, 17: 5917.10, 18: 6077.60, 19: 6264.85, 20: 6452.10 },
-  11: { 7: 4162.30, 8: 4328.15, 9: 4531.45, 10: 4772.20, 11: 4986.20, 12: 5087.85, 13: 5301.85, 14: 5515.85, 15: 5654.95, 16: 5820.08, 17: 5986.65, 18: 6141.80, 19: 6329.05, 20: 6516.30 }
-};
-
-function getMarkup(area: number): number {
-  if (area <= 99) return 1.20;
-  if (area <= 119) return 1.15;
-  return 1.10;
-}
-
-function calculateLouverCount(width: number, depth: number): number {
-  const postSize = 7.25 / 12;
-  const maxLouverSpan = 13;
-  const maxDepthSpan = 20;
-  const numBaysX = Math.ceil(width / maxLouverSpan);
-  const numBaysZ = Math.ceil(depth / maxDepthSpan);
-  
-  const louverBayWidthZ = ((depth - postSize) / numBaysZ) - postSize;
-  const targetSpacing = 7.75 / 12;
-  const louverMargin = 0.1;
-  const louverArea = louverBayWidthZ - (louverMargin * 2 + (8.5 / 12));
-  const louverCountPerBay = Math.max(2, Math.round(louverArea / targetSpacing) + 1);
-  
-  return numBaysX * numBaysZ * louverCountPerBay;
-}
-
-function calculateScreenPrice(length: number, height: number, numBays: number): number {
-  const base = Math.floor(length / numBays);
-  const remainder = length % numBays;
-  
-  let total = 0;
-  for (let i = 0; i < numBays; i++) {
-    const screenLength = base + (i < remainder ? 1 : 0);
-    total += SCREEN_PRICES[height]?.[screenLength] || 0;
-  }
-  
-  return total * 1.05; // 5% markup for screens
-}
-
-function getScreenDescription(length: number, numBays: number) {
-  if (numBays === 1) return `Includes 1 screen (${length}')`;
-  
-  const base = Math.floor(length / numBays);
-  const remainder = length % numBays;
-  
-  if (remainder === 0) {
-    return `Includes ${numBays} screens (${base}' each)`;
-  } else {
-    return `Includes ${numBays} screens (${remainder} at ${base + 1}', ${numBays - remainder} at ${base}')`;
-  }
-}
-
-type AccessoryType = 'flat' | 'sqft' | 'screen_width' | 'screen_depth' | 'wall_width' | 'wall_depth';
-
-interface Accessory {
-  id: string;
-  name: string;
-  price: number;
-  type: AccessoryType;
-  icon: React.ElementType;
-  description: string;
-  imageUrl?: string;
-}
-
-const ACCESSORIES: Accessory[] = [
-  { id: 'led', name: 'Integrated LED Lighting', price: 1500, type: 'flat', icon: Lightbulb, description: 'Perimeter lighting system', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=400&h=300' },
-  { id: 'sensor', name: 'Wind & Rain Sensor', price: 550, type: 'flat', icon: Wind, description: 'Automated weather sensor that detects wind, rain and temperature changes to automatically close louvers and protect your outdoor space', imageUrl: '/wind-rain-sensor.jpg' },
-  { id: 'heater', name: 'Bromic Platinum Smart-Heat 4500W', price: 3431, type: 'flat', icon: Thermometer, description: '4500W premium infrared electric patio heater with sleek low-profile design. Provides powerful radiant heat for year-round outdoor comfort. Installation by a licensed electrician at additional cost.*', imageUrl: '/bromic-heater.jpg' },
-  { id: 'fan', name: 'Ceiling Fan', price: 2750, type: 'flat', icon: Fan, description: 'Outdoor-rated ceiling fan with integrated LED light and remote control. Designed for wet locations with weather-resistant construction and quiet motor', imageUrl: '/ceiling-fan.jpg' },
-  { id: 'screen_front', name: 'Motorized Screen (Front)', price: 0, type: 'screen_width', icon: Blinds, description: 'Retractable screen for front side', imageUrl: '/motorizedscreens.png' },
-  { id: 'screen_back', name: 'Motorized Screen (Back)', price: 0, type: 'screen_width', icon: Blinds, description: 'Retractable screen for back side', imageUrl: '/motorizedscreens.png' },
-  { id: 'screen_left', name: 'Motorized Screen (Left)', price: 0, type: 'screen_depth', icon: Blinds, description: 'Retractable screen for left side', imageUrl: '/motorizedscreens.png' },
-  { id: 'screen_right', name: 'Motorized Screen (Right)', price: 0, type: 'screen_depth', icon: Blinds, description: 'Retractable screen for right side', imageUrl: '/motorizedscreens.png' },
-  { id: 'wall_front', name: 'Privacy Wall (Front)', price: 55, type: 'wall_width', icon: PanelRight, description: 'Fixed privacy wall for front side', imageUrl: '/privacywall.png' },
-  { id: 'wall_back', name: 'Privacy Wall (Back)', price: 55, type: 'wall_width', icon: PanelRight, description: 'Fixed privacy wall for back side', imageUrl: '/privacywall.png' },
-  { id: 'wall_left', name: 'Privacy Wall (Left)', price: 55, type: 'wall_depth', icon: PanelRight, description: 'Fixed privacy wall for left side', imageUrl: '/privacywall.png' },
-  { id: 'wall_right', name: 'Privacy Wall (Right)', price: 55, type: 'wall_depth', icon: PanelRight, description: 'Fixed privacy wall for right side', imageUrl: '/privacywall.png' },
-  { id: 'guillotine_front', name: 'Guillotine Window (Front)', price: 0, type: 'screen_width', icon: Blinds, description: 'Motorized guillotine window for front side', imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=400&h=300' },
-  { id: 'app_control', name: 'Smart App Control', price: 450, type: 'flat', icon: Smartphone, description: 'Wi-Fi enabled smart home integration to control louvers, screens, lighting and accessories from your smartphone or tablet anywhere', imageUrl: '/smart-app-control.jpg' },
-  { id: 'audio', name: 'Integrated Audio', price: 1200, type: 'flat', icon: Speaker, description: 'Marine-grade outdoor speaker system', imageUrl: 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&q=80&w=400&h=300' },
-  { id: 'inlite_scope', name: 'in-lite SCOPE', price: 450, type: 'flat', icon: Lightbulb, description: '12V outdoor architectural spotlights', imageUrl: 'https://images.unsplash.com/photo-1565814329452-e1efa11c5b89?auto=format&fit=crop&q=80&w=400&h=300' },
-  { id: 'inlite_halo', name: 'in-lite HALO', price: 380, type: 'flat', icon: Lightbulb, description: 'Dimmable ambient wall fixtures', imageUrl: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&q=80&w=400&h=300' },
-];
-
-const COLORS = [
-  { id: 'ral9005', name: 'Jet Black', hex: '#0A0A0A', ral: 'RAL 9005', type: 'solid', isStandard: true },
-  { id: 'ral9016', name: 'Traffic White', hex: '#F6F6F6', ral: 'RAL 9016', type: 'solid', isStandard: true },
-  { id: 'ral9006', name: 'White Aluminium', hex: '#A5A5A5', ral: 'RAL 9006', type: 'solid', isStandard: false },
-  { id: 'ral7016', name: 'Anthracite Grey', hex: '#383E42', ral: 'RAL 7016', type: 'solid', isStandard: false },
-  { id: 'ral8017', name: 'Chocolate Brown', hex: '#44322D', ral: 'RAL 8017', type: 'solid', isStandard: false },
-  { id: 'ral9001', name: 'Cream', hex: '#F1EBD9', ral: 'RAL 9001', type: 'solid', isStandard: false },
-  { id: 'woodgrain', name: 'Woodgrain', hex: '#8B5A2B', ral: 'Woodgrain', type: 'wood', isStandard: false },
-];
 
 function calculateBasePrice(depth: number, width: number): number | null {
   // The pricing was reported as reversed from the PDF table.
@@ -224,11 +125,6 @@ export default function Home() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [leadId, setLeadId] = useState<string | null>(null);
   const [isDuplicateLead, setIsDuplicateLead] = useState(false);
-  const getColorName = (hex: string) => {
-    const color = COLORS.find(c => c.hex === hex);
-    return color ? `${color.name} (${color.ral})` : hex;
-  };
-
   const getQuoteSummary = () => {
     let accessoriesText = 'None';
     if (selectedAccessories.size > 0) {
@@ -789,14 +685,6 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       next.add(id);
     }
     setSelectedAccessories(next);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   useEffect(() => {
