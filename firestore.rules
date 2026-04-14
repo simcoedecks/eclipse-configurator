@@ -63,6 +63,12 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isContractor() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/contractors/$(request.auth.uid))
+        && get(/databases/$(database)/documents/contractors/$(request.auth.uid)).data.status == 'active';
+    }
+
     function isValidEmail(email) {
       return email is string &&
         email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
@@ -144,6 +150,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidBid(request.resource.data);
       allow update, delete: if isAdmin();
+    }
+
+    match /contractors/{contractorId} {
+      allow read: if request.auth != null && (request.auth.uid == contractorId || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {

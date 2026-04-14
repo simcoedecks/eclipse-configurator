@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon } from 'lucide-react';
+import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function Admin() {
@@ -10,9 +10,12 @@ export default function Admin() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
+  const [contractors, setContractors] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'submissions' | 'jobs'>('submissions');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'jobs' | 'contractors'>('submissions');
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -52,10 +55,15 @@ export default function Admin() {
         setFetching(false);
       });
 
+      const unsubContractors = onSnapshot(collection(db, 'contractors'), (snapshot) => {
+        setContractors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+
       return () => {
         unsubSubmissions();
         unsubJobs();
         unsubBids();
+        unsubContractors();
       };
     } catch (err: any) {
       console.error('Error fetching data:', err);
@@ -203,6 +211,14 @@ export default function Admin() {
           >
             Contractor Jobs ({jobs.length})
           </button>
+          <button
+            onClick={() => setActiveTab('contractors')}
+            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === 'contractors' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Contractors ({contractors.length})
+          </button>
         </div>
 
         {error && (
@@ -214,6 +230,154 @@ export default function Admin() {
         {fetching ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          </div>
+        ) : activeTab === 'contractors' ? (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold">Contractor Management</h2>
+              <button
+                onClick={() => setShowInviteForm(!showInviteForm)}
+                className="flex items-center gap-2 bg-black text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Invite Contractor
+              </button>
+            </div>
+
+            {showInviteForm && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">New Contractor Invite</h3>
+                <form
+                  onSubmit={async (e: FormEvent) => {
+                    e.preventDefault();
+                    setInviteLoading(true);
+                    const form = e.target as HTMLFormElement;
+                    const formData = new FormData(form);
+                    const adminSecret = localStorage.getItem('adminSecret') || prompt('Enter admin secret (EXPORT_SECRET):');
+                    if (!adminSecret) {
+                      toast.error('Admin secret is required');
+                      setInviteLoading(false);
+                      return;
+                    }
+                    localStorage.setItem('adminSecret', adminSecret);
+
+                    try {
+                      const res = await fetch('/api/pro/invite-contractor', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          companyName: formData.get('companyName'),
+                          contactName: formData.get('contactName'),
+                          email: formData.get('email'),
+                          phone: formData.get('phone'),
+                          discountPercentage: formData.get('discountPercentage'),
+                          adminSecret,
+                        }),
+                      });
+                      const result = await res.json();
+                      if (result.success) {
+                        toast.success(`Invite sent to ${formData.get('email')}`);
+                        form.reset();
+                        setShowInviteForm(false);
+                      } else {
+                        toast.error(result.error || 'Failed to send invite');
+                        if (res.status === 401) localStorage.removeItem('adminSecret');
+                      }
+                    } catch {
+                      toast.error('Failed to connect to server');
+                    } finally {
+                      setInviteLoading(false);
+                    }
+                  }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+                    <input name="companyName" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name *</label>
+                    <input name="contactName" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                    <input name="email" type="email" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input name="phone" type="tel" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Discount %</label>
+                    <input name="discountPercentage" type="number" min="0" max="100" defaultValue="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={inviteLoading}
+                      className="flex items-center gap-2 bg-black text-white py-2 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                      {inviteLoading ? 'Sending...' : 'Send Invite'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
+                      <th className="p-4 font-medium">Company</th>
+                      <th className="p-4 font-medium">Contact</th>
+                      <th className="p-4 font-medium">Email</th>
+                      <th className="p-4 font-medium">Status</th>
+                      <th className="p-4 font-medium">Discount</th>
+                      <th className="p-4 font-medium">Last Login</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm divide-y divide-gray-100">
+                    {contractors.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-gray-500">
+                          No contractors found. Invite your first contractor above.
+                        </td>
+                      </tr>
+                    ) : (
+                      contractors.map((c) => (
+                        <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="p-4 align-top">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium text-gray-900">{c.companyName}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 align-top text-gray-600">{c.contactName}</td>
+                          <td className="p-4 align-top text-gray-600">
+                            <a href={`mailto:${c.email}`} className="hover:text-black">{c.email}</a>
+                          </td>
+                          <td className="p-4 align-top">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                              c.status === 'active' ? 'bg-green-100 text-green-800' :
+                              c.status === 'invited' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td className="p-4 align-top text-gray-600">{c.discountPercentage || 0}%</td>
+                          <td className="p-4 align-top text-gray-500 text-xs">
+                            {c.lastLogin ? new Date(c.lastLogin.toDate()).toLocaleDateString() : 'Never'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         ) : activeTab === 'submissions' ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

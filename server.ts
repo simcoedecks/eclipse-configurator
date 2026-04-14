@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "crypto";
 import archiver from "archiver";
 import { Resend } from "resend";
 import dotenv from "dotenv";
@@ -513,6 +514,144 @@ export async function createExpressApp() {
         success: false,
         error: e instanceof Error ? e.message : "Unknown",
       });
+    }
+  });
+
+  // ── Invite Contractor ───────────────────────────────────────────────────────
+  app.post("/api/pro/invite-contractor", async (req: Request, res: Response) => {
+    try {
+      const { companyName, contactName, email, phone, discountPercentage, adminSecret } = req.body;
+
+      if (adminSecret !== process.env.EXPORT_SECRET) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+      if (!companyName || !contactName || !email) {
+        return res.status(400).json({ success: false, error: "Missing required fields: companyName, contactName, email" });
+      }
+      if (!adminDb) {
+        return res.status(500).json({ success: false, error: "Firebase Admin not initialized" });
+      }
+
+      const inviteToken = crypto.randomUUID();
+      const contractorRef = await adminDb.collection("contractors").add({
+        companyName,
+        contactName,
+        email,
+        phone: phone || "",
+        discountPercentage: Number(discountPercentage) || 0,
+        status: "invited",
+        inviteToken,
+        invitedAt: FieldValue.serverTimestamp(),
+        activatedAt: null,
+        lastLogin: null,
+        createdBy: "admin",
+      });
+
+      const proUrl = process.env.PRO_URL || "https://pro.eclipsepergola.ca";
+      const signupLink = `${proUrl}/signup?token=${inviteToken}`;
+
+      if (resend) {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: email,
+          subject: "You're Invited to Eclipse Pro — Contractor Portal",
+          html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /></head>
+<body style="margin:0;padding:0;background:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <h1 style="color:#C5A059;font-size:28px;margin:0;">Eclipse Pro</h1>
+      <p style="color:#888;font-size:14px;margin:8px 0 0;">Contractor Portal</p>
+    </div>
+    <div style="background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:32px;">
+      <h2 style="color:#fff;font-size:20px;margin:0 0 16px;">Welcome, ${contactName}!</h2>
+      <p style="color:#ccc;font-size:15px;line-height:1.6;margin:0 0 8px;">
+        You've been invited to join <strong style="color:#C5A059;">Eclipse Pro</strong> as a contractor for <strong style="color:#fff;">${companyName}</strong>.
+      </p>
+      <p style="color:#ccc;font-size:15px;line-height:1.6;margin:0 0 24px;">
+        Click the button below to create your account and start receiving project opportunities.
+      </p>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${signupLink}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;font-size:16px;text-decoration:none;padding:14px 40px;border-radius:8px;">
+          Create Your Account
+        </a>
+      </div>
+      <p style="color:#666;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #333;padding-top:16px;">
+        If the button doesn't work, copy and paste this link into your browser:<br/>
+        <a href="${signupLink}" style="color:#C5A059;word-break:break-all;">${signupLink}</a>
+      </p>
+    </div>
+    <p style="color:#555;font-size:11px;text-align:center;margin-top:24px;">
+      Eclipse Pergola &mdash; Contractor Portal
+    </p>
+  </div>
+</body>
+</html>`,
+        });
+      }
+
+      return res.json({ success: true, contractorId: contractorRef.id, inviteToken });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("invite-contractor error:", msg);
+      return res.status(500).json({ success: false, error: "Internal server error" });
+    }
+  });
+
+  // ── Activate Contractor ────────────────────────────────────────────────────
+  app.post("/api/pro/activate-contractor", async (req: Request, res: Response) => {
+    try {
+      const { inviteToken, uid } = req.body;
+
+      if (!inviteToken || !uid) {
+        return res.status(400).json({ success: false, error: "Missing inviteToken or uid" });
+      }
+      if (!adminDb) {
+        return res.status(500).json({ success: false, error: "Firebase Admin not initialized" });
+      }
+
+      // Find the contractor doc with matching invite token
+      const snapshot = await adminDb
+        .collection("contractors")
+        .where("inviteToken", "==", inviteToken)
+        .where("status", "==", "invited")
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        return res.status(404).json({ success: false, error: "Invalid or expired invite token" });
+      }
+
+      const oldDoc = snapshot.docs[0];
+      const oldData = oldDoc.data();
+
+      // Create new doc keyed by Firebase Auth UID
+      await adminDb.collection("contractors").doc(uid).set({
+        companyName: oldData.companyName,
+        contactName: oldData.contactName,
+        email: oldData.email,
+        phone: oldData.phone || "",
+        discountPercentage: oldData.discountPercentage || 0,
+        status: "active",
+        inviteToken: null,
+        invitedAt: oldData.invitedAt,
+        activatedAt: FieldValue.serverTimestamp(),
+        lastLogin: null,
+        createdBy: oldData.createdBy || "admin",
+      });
+
+      // Delete old auto-ID doc if different from uid
+      if (oldDoc.id !== uid) {
+        await adminDb.collection("contractors").doc(oldDoc.id).delete();
+      }
+
+      return res.json({ success: true });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("activate-contractor error:", msg);
+      return res.status(500).json({ success: false, error: "Internal server error" });
     }
   });
 
