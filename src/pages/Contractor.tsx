@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User, collection, addDoc, serverTimestamp, doc, setDoc } from '../firebase';
+import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User, collection, addDoc, serverTimestamp, doc, setDoc } from '../shared/firebase';
 import { getDocs, query, orderBy, where, onSnapshot } from 'firebase/firestore';
 import { LogOut, Loader2, DollarSign, CheckCircle } from 'lucide-react';
 import { toast, Toaster } from 'sonner';

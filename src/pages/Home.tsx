@@ -23,14 +23,14 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
-import PergolaVisualizer from '../components/PergolaVisualizer';
+import PergolaVisualizer from '../shared/components/PergolaVisualizer';
 import html2canvas from 'html2canvas';
-import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, getDoc, query, where, getDocs } from '../firebase';
+import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, getDoc, query, where, getDocs } from '../shared/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
 import { toPng, toJpeg } from 'html-to-image';
-import { ProposalDocument } from '../components/ProposalDocument';
-import { generateProposalPDF } from '../lib/pdfGenerator';
+import { ProposalDocument } from '../shared/components/ProposalDocument';
+import { generateProposalPDF } from '../shared/lib/pdfGenerator';
 import { useDebounce } from 'use-debounce';
 import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, getScreenDescription, formatCurrency } from '../shared/lib/pricing';
 import { type AccessoryType, type Accessory, ACCESSORIES } from '../shared/lib/accessories';

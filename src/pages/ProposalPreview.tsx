@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { toPng } from 'html-to-image';
-import { ProposalDocument } from '../components/ProposalDocument';
+import { ProposalDocument } from '../shared/components/ProposalDocument';
 
 const sampleData = {
   name: 'John & Sarah Mitchell',
