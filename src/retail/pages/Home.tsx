@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Check,
   Sun,
+  Moon,
   Blinds,
   PanelRight,
   Mail,
@@ -34,6 +35,7 @@ import { useDebounce } from 'use-debounce';
 import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, getScreenDescription, formatCurrency } from '../../shared/lib/pricing';
 import { type AccessoryType, type Accessory, ACCESSORIES } from '../../shared/lib/accessories';
 import { COLORS, getColorName } from '../../shared/lib/colors';
+import { useTheme } from '../../shared/hooks/useTheme';
 
 enum OperationType {
   CREATE = 'create',
@@ -115,7 +117,8 @@ function calculateBasePrice(depth: number, width: number): number | null {
   return calculatedPrice * getMarkup(area);
 }
 
-export default function Home() {
+export default function Home({ skipIntro = false }: { skipIntro?: boolean }) {
+  const { theme, toggleTheme, isDark } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -322,7 +325,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
-  const [hasStarted, setHasStarted] = useState(false);
+  const [hasStarted, setHasStarted] = useState(skipIntro);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
@@ -941,17 +944,17 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="flex flex-col md:flex-row h-screen w-full bg-luxury-paper overflow-hidden font-sans text-luxury-black relative max-w-[1920px] mx-auto"
+          className={`flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}
         >
           {currentUser && (
-            <div className="absolute top-0 left-0 w-full bg-luxury-black text-luxury-cream py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md">
+            <div className={`absolute top-0 left-0 w-full py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md ${isDark ? 'bg-[#141414] text-white/70' : 'bg-luxury-black text-luxury-cream'}`}>
               <User className="w-3 h-3" />
               Logged in as Contractor: {currentUser.email}
             </div>
           )}
 
           {/* Left: 3D Visualizer */}
-          <div className="flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full bg-luxury-cream/30 overflow-hidden">
+          <div className={`flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
             <PergolaVisualizer
               width={width}
               depth={depth}
@@ -981,10 +984,20 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
 
           {/* Right: Lead Capture Form (Sidebar) */}
-          <div className="w-full md:w-[380px] lg:w-[420px] xl:w-[480px] bg-white border-t md:border-t-0 md:border-l border-luxury-cream flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto">
-            <div className="p-6 lg:p-8 flex flex-col justify-center min-h-full">
-              <h3 className="text-2xl font-serif text-luxury-black mb-2">Welcome</h3>
-              <p className="text-sm text-slate-500 mb-8">Please enter your details to start configuring your bespoke pergola.</p>
+          <div className={`w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
+            <div className="p-6 lg:p-8 flex flex-col justify-center min-h-full relative">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="absolute top-4 right-4 theme-toggle"
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                <div className="theme-toggle-knob">
+                  {isDark ? <Moon className="w-3 h-3 text-luxury-gold" /> : <Sun className="w-3 h-3 text-amber-500" />}
+                </div>
+              </button>
+              <h3 className={`text-2xl font-serif mb-2 ${isDark ? 'text-white' : 'text-luxury-black'}`}>Welcome</h3>
+              <p className={`text-sm mb-8 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>Please enter your details to start configuring your bespoke pergola.</p>
               <form 
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -1021,25 +1034,25 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
-                  <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all" placeholder="John Doe" />
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Name *</label>
+                  <input type="text" required value={name} onChange={e => setName(e.target.value)} className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="John Doe" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number *</label>
-                  <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all" placeholder="(555) 123-4567" />
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Phone Number *</label>
+                  <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="(555) 123-4567" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email Address *</label>
-                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all" placeholder="john@example.com" />
+                  <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Email Address *</label>
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="john@example.com" />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all" placeholder="123 Main St" />
+                    <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Address</label>
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="123 Main St" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">City *</label>
-                    <input type="text" required value={city} onChange={e => setCity(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all" placeholder="Toronto" />
+                    <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>City *</label>
+                    <input type="text" required value={city} onChange={e => setCity(e.target.value)} className={`w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="Toronto" />
                   </div>
                 </div>
                 
@@ -1071,8 +1084,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     const Icon = icon as any;
 
     return (
-      <div className={`flex flex-col rounded-xl border transition-all overflow-hidden bg-white ${anySelected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200'}`}>
-        <div className="w-full h-32 overflow-hidden border-b border-slate-100 relative">
+      <div className={`flex flex-col rounded-xl border transition-all overflow-hidden bg-white dark:bg-[#1a1a1a] ${anySelected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 dark:border-white/10'}`}>
+        <div className="w-full h-32 overflow-hidden border-b border-slate-100 dark:border-white/5 relative">
           <img 
             src={imageUrl} 
             alt={title} 
@@ -1087,7 +1100,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
         </div>
         <div className="p-2 space-y-2">
-          <p className="text-[10px] text-slate-500">Select the sides you would like to add:</p>
+          <p className="text-[10px] text-slate-500 dark:text-white/50">Select the sides you would like to add:</p>
           <div className="grid grid-cols-2 gap-1">
             {groupAccessories.map(a => {
               const isSelected = selectedAccessories.has(a.id);
@@ -1131,8 +1144,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   onClick={() => toggleAccessory(a.id)}
                   className={`flex items-center justify-between px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
                     isSelected 
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700' 
+                      : 'border-slate-200 dark:border-white/10 bg-slate-50 text-slate-600 dark:text-white/60 hover:border-slate-300 dark:border-white/15'
                   }`}
                 >
                   <span>{sideName}</span>
@@ -1196,12 +1209,12 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         onClick={() => toggleAccessory(accessory.id)}
         className={`flex flex-col items-start rounded-xl border text-left transition-all overflow-hidden ${
           isSelected 
-            ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500' 
-            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30/50 dark:bg-emerald-900/20 ring-1 ring-emerald-500' 
+            : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] hover:border-slate-300 dark:border-white/15 hover:bg-slate-50 dark:hover:bg-white/5 dark:hover:bg-white/5'
         }`}
       >
         {accessory.imageUrl && (
-          <div className="w-full h-32 overflow-hidden border-b border-slate-100">
+          <div className="w-full h-32 overflow-hidden border-b border-slate-100 dark:border-white/5">
             <img 
               src={accessory.imageUrl} 
               alt={accessory.name} 
@@ -1213,16 +1226,16 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         <div className="p-4 w-full flex-1 flex flex-col">
           <div className="flex justify-between items-start mb-1">
             <div className="flex items-center gap-2">
-              <Icon className={`w-4 h-4 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
-              <span className={`font-medium text-sm ${isSelected ? 'text-emerald-900' : 'text-slate-900'}`}>
+              <Icon className={`w-4 h-4 ${isSelected ? 'text-emerald-600' : 'text-slate-400 dark:text-white/40'}`} />
+              <span className={`font-medium text-sm ${isSelected ? 'text-emerald-900' : 'text-slate-900 dark:text-white'}`}>
                 {accessory.name}
               </span>
             </div>
             {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0 ml-2" />}
           </div>
-          <p className="text-xs text-slate-500 mb-3 flex-1 mt-2">{description}</p>
+          <p className="text-xs text-slate-500 dark:text-white/50 mb-3 flex-1 mt-2">{description}</p>
           <div className="flex justify-between items-center w-full">
-            <p className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600'}`}>
+            <p className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
               +{formatCurrency(accessoryCost)}
             </p>
           </div>
@@ -1234,19 +1247,19 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 onClick={() => setHeaterControl(heaterControl === 'dimmer' ? 'switch' : 'dimmer')}
                 className={`w-full flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
                   heaterControl === 'dimmer'
-                    ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-emerald-500'
+                    : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] hover:border-slate-300 dark:border-white/15'
                 }`}
               >
                 <img src="/bromic-dimmer.png" alt="Bromic Affinity Smart-Heat Dimmer" className="w-12 h-12 object-contain rounded shrink-0" />
                 <div className="flex-1 text-left">
-                  <p className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-900' : 'text-slate-800'}`}>
+                  <p className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-900' : 'text-slate-800 dark:text-white/80'}`}>
                     Bromic Affinity Smart-Heat Dimmer
                   </p>
-                  <p className="text-[10px] text-slate-500">App-controlled dimmer with zones</p>
+                  <p className="text-[10px] text-slate-500 dark:text-white/50">App-controlled dimmer with zones</p>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
-                  <span className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-700' : 'text-slate-600'}`}>
+                  <span className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
                     +{formatCurrency(1031)}
                   </span>
                   {heaterControl === 'dimmer' && <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5" />}
@@ -1260,18 +1273,18 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-luxury-paper overflow-hidden font-sans text-luxury-black relative max-w-[1920px] mx-auto">
-      <Toaster position="top-center" />
-      
+    <div className={`flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}>
+      <Toaster position="top-center" theme={isDark ? 'dark' : 'light'} />
+
       {currentUser && (
-        <div className="absolute top-0 left-0 w-full bg-luxury-black text-luxury-cream py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md">
+        <div className={`absolute top-0 left-0 w-full py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md ${isDark ? 'bg-[#141414] text-white/70' : 'bg-luxury-black text-luxury-cream'}`}>
           <User className="w-3 h-3" />
           Logged in as Contractor: {currentUser.email}
         </div>
       )}
 
       {/* Left: 3D Visualizer */}
-      <div className="flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full bg-luxury-cream/30 overflow-hidden">
+      <div className={`flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
         <PergolaVisualizer
           width={width}
           depth={depth}
@@ -1302,7 +1315,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         <div className="absolute bottom-4 left-4 lg:bottom-8 lg:left-8 flex flex-col gap-1 md:gap-3 lg:gap-4 z-10">
           <div className="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-36 sm:w-44 lg:w-56">
             <div className="flex items-center justify-between mb-1 lg:mb-2">
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 flex items-center gap-1 lg:gap-1.5 leading-none">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 flex items-center gap-1 lg:gap-1.5 leading-none">
                 <Sun className="w-3 h-3" />
                 Louvers
               </span>
@@ -1316,14 +1329,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               onChange={(e) => setLouverAngle(Number(e.target.value))}
               aria-label="Louver angle in degrees"
               aria-valuetext={`${louverAngle} degrees`}
-              className="w-full h-[2px] lg:h-[1px] bg-luxury-black/10 appearance-none cursor-pointer accent-luxury-gold my-1 lg:my-0"
+              className="w-full h-[2px] lg:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold my-1 lg:my-0"
             />
           </div>
 
           {(selectedAccessories.has('screen_front') || selectedAccessories.has('screen_back') || selectedAccessories.has('screen_left') || selectedAccessories.has('screen_right')) && (
             <div className="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-36 sm:w-44 lg:w-56">
               <div className="flex items-center justify-between mb-1 lg:mb-2">
-                <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 flex items-center gap-1 lg:gap-1.5 leading-none">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 flex items-center gap-1 lg:gap-1.5 leading-none">
                   <Blinds className="w-3 h-3" />
                   Screens
                 </span>
@@ -1337,7 +1350,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 onChange={(e) => setScreenDrop(Number(e.target.value))}
                 aria-label="Screen drop percentage"
                 aria-valuetext={`${screenDrop} percent`}
-                className="w-full h-[2px] lg:h-[1px] bg-luxury-black/10 appearance-none cursor-pointer accent-luxury-gold my-1 lg:my-0"
+                className="w-full h-[2px] lg:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold my-1 lg:my-0"
               />
             </div>
           )}
@@ -1345,31 +1358,43 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       </div>
 
       {/* Right: Sidebar Controls */}
-      <div className="w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] bg-white border-t md:border-t-0 md:border-l border-luxury-cream flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0">
+      <div className={`w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
         {/* Step Indicator */}
-        <div className="px-3 py-3 lg:px-5 lg:py-5 border-b border-luxury-cream bg-luxury-paper/50 shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">Phase {currentStep} / 5</span>
-            <span className="text-xs font-serif font-medium text-luxury-black/40 truncate ml-2">
-              {currentStep === 1 && <span className="text-base sm:text-lg">Define your space</span>}
-              {currentStep === 2 && <span className="text-base sm:text-lg">The Palette</span>}
-              {currentStep === 3 && <span className="text-base sm:text-lg"><span className="sm:hidden">Privacy</span><span className="hidden sm:inline">Privacy & Protection</span></span>}
-              {currentStep === 4 && <span className="text-base sm:text-lg"><span className="sm:hidden">Features</span><span className="hidden sm:inline">Optional Features</span></span>}
-              {currentStep === 5 && <span className="text-base sm:text-lg"><span className="sm:hidden">Summary</span><span className="hidden sm:inline">Specification Summary</span></span>}
-            </span>
-          </div>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((step) => (
-              <button
-                key={step}
-                onClick={() => step <= currentStep && setCurrentStep(step)}
-                disabled={step > currentStep}
-                aria-label={`Go to step ${step}`}
-                className={`h-[3px] flex-1 transition-all duration-700 ${
-                  step <= currentStep ? 'bg-luxury-gold hover:bg-luxury-gold/80 cursor-pointer' : 'bg-luxury-black/5 cursor-not-allowed'
-                }`}
-              />
-            ))}
+        <div className={`px-3 py-3 lg:px-5 lg:py-5 border-b shrink-0 flex items-center gap-3 ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-luxury-paper dark:bg-[#111]/50'}`}>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="theme-toggle shrink-0"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <div className="theme-toggle-knob">
+              {isDark ? <Moon className="w-3 h-3 text-luxury-gold" /> : <Sun className="w-3 h-3 text-amber-500" />}
+            </div>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">Phase {currentStep} / 5</span>
+              <span className={`text-xs font-serif font-medium truncate ml-2 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                {currentStep === 1 && <span className="text-base sm:text-lg">Define your space</span>}
+                {currentStep === 2 && <span className="text-base sm:text-lg">The Palette</span>}
+                {currentStep === 3 && <span className="text-base sm:text-lg"><span className="sm:hidden">Privacy</span><span className="hidden sm:inline">Privacy & Protection</span></span>}
+                {currentStep === 4 && <span className="text-base sm:text-lg"><span className="sm:hidden">Features</span><span className="hidden sm:inline">Optional Features</span></span>}
+                {currentStep === 5 && <span className="text-base sm:text-lg"><span className="sm:hidden">Summary</span><span className="hidden sm:inline">Specification Summary</span></span>}
+              </span>
+            </div>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((step) => (
+                <button
+                  key={step}
+                  onClick={() => step <= currentStep && setCurrentStep(step)}
+                  disabled={step > currentStep}
+                  aria-label={`Go to step ${step}`}
+                  className={`h-[3px] flex-1 transition-all duration-700 ${
+                    step <= currentStep ? 'bg-luxury-gold hover:bg-luxury-gold/80 cursor-pointer' : isDark ? 'bg-white/5 cursor-not-allowed' : 'bg-luxury-black/5 cursor-not-allowed'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1385,7 +1410,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Foundation</label>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Foundation</label>
                     <div className="relative">
                       <select
                         value={foundationStatus}
@@ -1393,13 +1418,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                           setFoundationStatus(e.target.value);
                           setShowFoundationError(false);
                         }}
-                        className={`w-full border-b bg-transparent py-2 text-luxury-black font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm ${showFoundationError ? 'border-red-500' : 'border-luxury-black/10'}`}
+                        className={`w-full border-b bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm ${showFoundationError ? 'border-red-500' : 'border-luxury-black/10 dark:border-white/10'}`}
                       >
                         <option value="">Select</option>
                         <option value="existing">Existing</option>
                         <option value="needs">Needs</option>
                       </select>
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black">
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
                         <ChevronDown className="w-3 h-3" />
                       </div>
                     </div>
@@ -1409,12 +1434,12 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Structure</label>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
                     <div className="relative">
                       <select
                         value={houseWall}
                         onChange={(e) => setHouseWall(e.target.value as any)}
-                        className="w-full border-b border-luxury-black/10 bg-transparent py-2 text-luxury-black font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm"
+                        className="w-full border-b border-luxury-black/10 dark:border-white/10 bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm"
                       >
                         <option value="none">Freestanding</option>
                         <option value="back">Attached (Rear)</option>
@@ -1422,7 +1447,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         <option value="left">Attached (Left)</option>
                         <option value="right">Attached (Right)</option>
                       </select>
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black">
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
                         <ChevronDown className="w-3 h-3" />
                       </div>
                     </div>
@@ -1431,13 +1456,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Width</label>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Width</label>
                     <span className="text-lg font-serif font-medium text-luxury-gold">{width}'</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setWidth(Math.max(7, width - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
@@ -1450,11 +1475,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       onChange={(e) => setWidth(Number(e.target.value))}
                       aria-label="Pergola width in feet"
                       aria-valuetext={`${width} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 appearance-none cursor-pointer accent-luxury-gold"
+                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
                     />
                     <button 
                       onClick={() => setWidth(Math.min(100, width + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -1463,13 +1488,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Depth</label>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Depth</label>
                     <span className="text-lg font-serif font-medium text-luxury-gold">{depth}'</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setDepth(Math.max(8, depth - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
@@ -1482,11 +1507,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       onChange={(e) => setDepth(Number(e.target.value))}
                       aria-label="Pergola depth in feet"
                       aria-valuetext={`${depth} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 appearance-none cursor-pointer accent-luxury-gold"
+                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
                     />
                     <button 
                       onClick={() => setDepth(Math.min(40, depth + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -1495,13 +1520,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Height</label>
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Height</label>
                     <span className="text-lg font-serif font-medium text-luxury-gold">{height}'</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setHeight(Math.max(8, height - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
@@ -1514,19 +1539,19 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       onChange={(e) => setHeight(Number(e.target.value))}
                       aria-label="Pergola height in feet"
                       aria-valuetext={`${height} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 appearance-none cursor-pointer accent-luxury-gold"
+                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
                     />
                     <button 
                       onClick={() => setHeight(Math.min(11, height + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60">Base Price</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
+                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
                   <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
                 </div>
               </div>
@@ -1542,13 +1567,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               <div>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 mb-2">Frame Finish</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 mb-2">Frame Finish</h4>
                     <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 sm:gap-1">
                       {COLORS.filter(c => c.type !== 'wood').map(color => (
                         <button
                           key={`frame-${color.id}`}
                           onClick={() => handleColorSelection(color, setFrameColor, 'frame')}
-                          className={`group flex flex-col items-center p-1 transition-all border relative ${frameColor === color.hex ? 'border-luxury-gold bg-luxury-paper' : 'border-transparent hover:border-luxury-cream'}`}
+                          className={`group flex flex-col items-center p-1 transition-all border relative ${frameColor === color.hex ? 'border-luxury-gold bg-luxury-paper dark:bg-[#111]' : 'border-transparent hover:border-luxury-cream dark:hover:border-white/20'}`}
                         >
                           {color.isStandard && (
                             <div className="absolute top-0 right-0 px-1 py-0.5 bg-luxury-gold/10 border border-luxury-gold/20 rounded-[2px]">
@@ -1560,17 +1585,17 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
+                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
 
                   <div>
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 mb-2">Louver Finish</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 mb-2">Louver Finish</h4>
                     <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 sm:gap-1">
                       {COLORS.map(color => (
                         <button
                           key={`louver-${color.id}`}
                           onClick={() => handleColorSelection(color, setLouverColor, 'louver')}
-                          className={`group flex flex-col items-center p-1 transition-all border relative ${louverColor === color.hex ? 'border-luxury-gold bg-luxury-paper' : 'border-transparent hover:border-luxury-cream'}`}
+                          className={`group flex flex-col items-center p-1 transition-all border relative ${louverColor === color.hex ? 'border-luxury-gold bg-luxury-paper dark:bg-[#111]' : 'border-transparent hover:border-luxury-cream dark:hover:border-white/20'}`}
                         >
                           {color.isStandard && (
                             <div className="absolute top-0 right-0 px-1 py-0.5 bg-luxury-gold/10 border border-luxury-gold/20 rounded-[2px]">
@@ -1582,22 +1607,22 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
+                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
 
                 </div>
 
-                <div className="mt-4 p-2 bg-luxury-paper border border-luxury-gold/10 rounded-lg space-y-1">
-                  <p className="text-[10px] italic text-luxury-black/60 font-medium">
+                <div className="mt-4 p-2 bg-luxury-paper dark:bg-[#111] border border-luxury-gold/10 rounded-lg space-y-1">
+                  <p className="text-[10px] italic text-luxury-black/60 dark:text-white/60 font-medium">
                     *Other colours may affect lead time and pricing
                   </p>
-                  <p className="text-[10px] italic text-luxury-black/60 font-medium">
+                  <p className="text-[10px] italic text-luxury-black/60 dark:text-white/60 font-medium">
                     *Woodgrain finish may affect lead time as well as cost
                   </p>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60">Base Price</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
+                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
                   <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
                 </div>
               </div>
@@ -1613,23 +1638,23 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               <div>
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Motorized Systems</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Motorized Systems</h4>
                     {renderGroupedAccessory('Motorized Screens', 'screen', Blinds, '/motorizedscreens.png')}
                   </div>
                   
                   <div className="space-y-4">
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Fixed Privacy</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Fixed Privacy</h4>
                     {renderGroupedAccessory('Privacy Walls', 'wall', PanelRight, '/privacywall.png')}
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Privacy Wall Finish</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Privacy Wall Finish</h4>
                     <div className="grid grid-cols-4 sm:grid-cols-[repeat(7,minmax(0,1fr))] gap-2 sm:gap-1">
                       {COLORS.map(color => (
                         <button
                           key={`wall-${color.id}`}
                           onClick={() => handleColorSelection(color, setWallColor, 'wall')}
-                          className={`group flex flex-col items-center p-1 transition-all border relative ${wallColor === color.hex ? 'border-luxury-gold bg-luxury-paper' : 'border-transparent hover:border-luxury-cream'}`}
+                          className={`group flex flex-col items-center p-1 transition-all border relative ${wallColor === color.hex ? 'border-luxury-gold bg-luxury-paper dark:bg-[#111]' : 'border-transparent hover:border-luxury-cream dark:hover:border-white/20'}`}
                         >
                           {color.isStandard && (
                             <div className="absolute top-0 right-0 px-1 py-0.5 bg-luxury-gold/10 border border-luxury-gold/20 rounded-[2px]">
@@ -1645,12 +1670,12 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
+                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60">Base Price</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
+                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
                   <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
                 </div>
               </div>
@@ -1665,7 +1690,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             >
               <div>
                 <div className="space-y-4">
-                  <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Enhance Your Experience</h4>
+                  <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Enhance Your Experience</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {ACCESSORIES.filter(a => ['sensor', 'app_control', 'fan', 'heater'].includes(a.id))
                       .sort((a, b) => {
@@ -1675,8 +1700,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       .map(renderAccessory)}
                   </div>
                 </div>
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60">Base Price</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
+                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
                   <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
                 </div>
               </div>
@@ -1717,8 +1742,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       </div>
                       {louverColor === '#8B5A2B' && (
                         <div className="flex justify-between items-center text-[10px] pl-3 mt-2">
-                          <span className="font-serif text-luxury-black/60 italic font-bold">Woodgrain Louver Upgrade</span>
-                          <span className="font-serif text-luxury-black/60 italic font-bold">{formatCurrency(calculateLouverCount(width, depth) * 150)}</span>
+                          <span className="font-serif text-luxury-black/60 dark:text-white/60 italic font-bold">Woodgrain Louver Upgrade</span>
+                          <span className="font-serif text-luxury-black/60 dark:text-white/60 italic font-bold">{formatCurrency(calculateLouverCount(width, depth) * 150)}</span>
                         </div>
                       )}
                     </div>
@@ -1808,7 +1833,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                           }, {} as Record<string, { price: number, count: number }>);
 
                           breakdownRender = (
-                            <div className="pl-3 mt-1 space-y-0.5 border-l border-luxury-black/10">
+                            <div className="pl-3 mt-1 space-y-0.5 border-l border-luxury-black/10 dark:border-white/10">
                               {Object.values(grouped).map((item, i) => {
                                 const itemName = accessory.type.includes('wall') 
                                   ? (item.count === 1 ? 'wall' : 'walls') 
@@ -1827,14 +1852,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         return (
                           <div key={id} className="flex flex-col">
                             <div className="flex justify-between items-center text-[11px]">
-                              <span className="font-serif text-luxury-black/60">{accessory.name} {accessory.type.includes('wall') && `(${COLORS.find(c => c.hex === wallColor)?.name})`}</span>
+                              <span className="font-serif text-luxury-black/60 dark:text-white/60">{accessory.name} {accessory.type.includes('wall') && `(${COLORS.find(c => c.hex === wallColor)?.name})`}</span>
                               <span className="font-serif text-luxury-black/80">{formatCurrency(cost)}</span>
                             </div>
                             {breakdownRender}
                             {wallWoodgrainCost > 0 && (
                               <div className="flex justify-between items-center text-[10px] pl-3 mt-1">
                                 <span className="font-serif text-luxury-black/40 italic font-bold">Woodgrain Upgrade</span>
-                                <span className="font-serif text-luxury-black/60 italic font-bold">{formatCurrency(wallWoodgrainCost)}</span>
+                                <span className="font-serif text-luxury-black/60 dark:text-white/60 italic font-bold">{formatCurrency(wallWoodgrainCost)}</span>
                               </div>
                             )}
                           </div>
@@ -1842,7 +1867,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       })}
                     </div>
 
-                    <div className="pt-4 border-t border-luxury-black/10 flex justify-between items-end">
+                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
                       <div className="flex flex-col">
                         <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">Total Investment</span>
                       </div>
@@ -1851,13 +1876,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40">Contact Information</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Contact Information</h4>
                     <div className="grid grid-cols-1 gap-2">
-                      <div className="border-b border-luxury-black/10 py-1">
+                      <div className="border-b border-luxury-black/10 dark:border-white/10 py-1">
                         <span className="text-[10px] uppercase text-luxury-black/40 block mb-1">Name</span>
                         <span className="font-serif text-sm">{name}</span>
                       </div>
-                      <div className="border-b border-luxury-black/10 py-1">
+                      <div className="border-b border-luxury-black/10 dark:border-white/10 py-1">
                         <span className="text-[10px] uppercase text-luxury-black/40 block mb-1">Email</span>
                         <span className="font-serif text-sm">{email}</span>
                       </div>
@@ -1871,7 +1896,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         </div>
 
         {/* Footer Navigation */}
-        <div className="px-4 py-3 lg:px-6 lg:py-4 border-t border-luxury-cream bg-white shrink-0 relative">
+        <div className={`px-4 py-3 lg:px-6 lg:py-4 border-t shrink-0 relative ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-white'}`}>
           {/* Sticky Price Display */}
           {currentStep < 5 && (
             <div className="flex items-center justify-between mb-2 pb-2 border-b border-luxury-cream/50">
@@ -1883,7 +1908,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute bottom-full left-4 right-4 mb-2 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg border border-emerald-200 text-[10px] font-medium flex items-center gap-2 z-50"
+              className="absolute bottom-full left-4 right-4 mb-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 px-3 py-2 rounded-lg border border-emerald-200 text-[10px] font-medium flex items-center gap-2 z-50"
             >
               <Check className="w-3 h-3" />
               Submitted successfully!
@@ -1967,14 +1992,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white p-8 max-w-md w-full shadow-2xl border border-luxury-gold/20 text-center space-y-6"
+              className={`p-8 max-w-md w-full shadow-2xl border border-luxury-gold/20 text-center space-y-6 ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
             >
               <div className="w-16 h-16 bg-luxury-gold/10 rounded-full flex items-center justify-center mx-auto">
                 <MapPin className="w-8 h-8 text-luxury-gold" />
               </div>
               <div className="space-y-2">
                 <h3 className="text-2xl font-serif text-luxury-black">Foundation Required</h3>
-                <p className="text-sm text-luxury-black/60 leading-relaxed">
+                <p className="text-sm text-luxury-black/60 dark:text-white/60 leading-relaxed">
                   Please select a Foundation Status to continue with your architectural specification.
                 </p>
               </div>

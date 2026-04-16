@@ -8,7 +8,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/configurator" element={<Home />} />
+        <Route path="/configurator" element={<Home skipIntro />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/contractor" element={
           <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">

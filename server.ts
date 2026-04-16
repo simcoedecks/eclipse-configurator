@@ -667,6 +667,26 @@ export async function createExpressApp() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    // Pro portal SPA fallback
+    app.get("/pro.html", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    app.get("/login", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    app.get("/signup", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    app.get("/dashboard", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    app.get("/quotes*", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    app.get("/account", (_req: Request, res: Response) =>
+      res.sendFile(path.join(distPath, "pro.html"))
+    );
+    // Retail SPA fallback (catch-all)
     app.get("*", (_req: Request, res: Response) =>
       res.sendFile(path.join(distPath, "index.html"))
     );
@@ -681,6 +701,4 @@ async function startServer() {
     console.log(`✅ Server running on http://localhost:${PORT}`)
   );
 }
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startServer();
-}
+startServer();

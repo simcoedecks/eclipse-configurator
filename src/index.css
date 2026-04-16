@@ -1,10 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-serif: "Outfit", sans-serif;
   --font-sans: "Inter", sans-serif;
-  
+
   --color-luxury-gold: #C5A059;
   --color-luxury-gold-text: #9B7D3B;
   --color-luxury-black: #1A1A1A;
@@ -17,44 +19,76 @@
   body {
     @apply bg-luxury-paper text-luxury-black font-sans antialiased;
   }
-  
+
+  .dark body,
+  body:where(.dark *) {
+    @apply bg-[#0a0a0a] text-[#e5e5e5];
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif tracking-tight;
   }
 }
 
+/* ─── Glass Panel ───────────────────────────────────────────── */
 .glass-panel {
   @apply bg-white/70 backdrop-blur-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.05)];
 }
+.dark .glass-panel {
+  @apply bg-white/10 border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
+}
 
+/* ─── Buttons ───────────────────────────────────────────────── */
 .luxury-button {
   @apply bg-luxury-black text-white px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:bg-luxury-gold hover:tracking-[0.25em] disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.dark .luxury-button {
+  @apply bg-white text-black hover:bg-luxury-gold hover:text-black;
 }
 
 .luxury-button-outline {
   @apply border border-luxury-black/20 text-luxury-black px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:border-luxury-gold hover:text-luxury-gold;
 }
+.dark .luxury-button-outline {
+  @apply border-white/20 text-white/80 hover:border-luxury-gold hover:text-luxury-gold;
+}
 
+/* ─── Inputs ────────────────────────────────────────────────── */
 .luxury-input {
   @apply bg-transparent border-b border-luxury-black/10 py-4 px-0 rounded-none focus:border-luxury-gold focus:ring-0 transition-all font-serif text-lg placeholder:text-luxury-black/20;
 }
+.dark .luxury-input {
+  @apply border-white/10 text-white placeholder:text-white/20;
+}
 
+/* ─── Cards ─────────────────────────────────────────────────── */
 .luxury-card {
   @apply bg-white border border-luxury-cream p-10 transition-all duration-700 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:-translate-y-2;
 }
+.dark .luxury-card {
+  @apply bg-[#141414] border-white/10 hover:shadow-[0_20px_50px_rgba(0,0,0,0.3)];
+}
 
+/* ─── Labels & Values ───────────────────────────────────────── */
 .luxury-label {
   @apply text-[10px] uppercase tracking-[0.2em] font-bold text-luxury-black/40 mb-2 block;
+}
+.dark .luxury-label {
+  @apply text-white/40;
 }
 
 .luxury-value {
   @apply text-2xl font-serif text-luxury-gold font-medium;
 }
 
-/* Custom Scrollbar for Luxury Feel */
+/* ─── Scrollbar ─────────────────────────────────────────────── */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(197, 160, 89, 0.3) var(--color-luxury-paper);
+}
+
+.dark * {
+  scrollbar-color: rgba(197, 160, 89, 0.3) #0a0a0a;
 }
 
 ::-webkit-scrollbar {
@@ -64,12 +98,15 @@
 ::-webkit-scrollbar-track {
   @apply bg-luxury-paper;
 }
+.dark ::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
 
 ::-webkit-scrollbar-thumb {
   @apply bg-luxury-gold/30 rounded-full hover:bg-luxury-gold/50 transition-all;
 }
 
-/* Improve range input touch targets on mobile */
+/* ─── Touch Targets ─────────────────────────────────────────── */
 @media (pointer: coarse) {
   input[type="range"]::-webkit-slider-thumb {
     width: 20px;
@@ -79,4 +116,23 @@
     width: 20px;
     height: 20px;
   }
+}
+
+/* ─── Theme Toggle ──────────────────────────────────────────── */
+.theme-toggle {
+  @apply relative w-12 h-6 rounded-full cursor-pointer transition-all duration-500;
+  background: linear-gradient(135deg, #e8e4dd, #d4cfc6);
+}
+.dark .theme-toggle {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+}
+.theme-toggle-knob {
+  @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all duration-500 flex items-center justify-center text-[10px];
+  background: linear-gradient(135deg, #fff8e7, #fff);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.dark .theme-toggle-knob {
+  @apply left-[26px];
+  background: linear-gradient(135deg, #1a1a2e, #2d2d44);
+  box-shadow: 0 0 8px rgba(197, 160, 89, 0.3);
 }
