@@ -1453,7 +1453,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         <span className={`text-sm font-serif font-medium block ${foundationStatus === 'needs' ? 'text-luxury-gold' : 'text-luxury-black/80 dark:text-white/80'}`}>
                           No, I need one
                         </span>
-                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">We'll include a quote</span>
+                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">*Additional cost may occur</span>
                       </div>
                     </button>
                   </div>
