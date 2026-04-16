@@ -38,8 +38,15 @@ if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_CLIENT_E
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+let __filename: string;
+let __dirname: string;
+try {
+  __filename = fileURLToPath(import.meta.url);
+  __dirname  = path.dirname(__filename);
+} catch {
+  __filename = process.cwd();
+  __dirname  = process.cwd();
+}
 const resend      = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "test@example.com";
 const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || "test@example.com";
