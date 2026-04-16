@@ -1986,22 +1986,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Quote to CRM'}
                     </button>
                   ) : (
-                    <>
-                      <button 
-                        onClick={() => handleSubmission('email')}
-                        disabled={isSubmitting || isGeneratingPDF}
-                        className="luxury-button-outline flex-1 lg:flex-none lg:px-8 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Email Quote'}
-                      </button>
-                      <button 
-                        onClick={() => handleSubmission('consultation')}
-                        disabled={isSubmitting || isGeneratingPDF}
-                        className="luxury-button flex-1 lg:flex-none lg:px-8 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Request Consultation'}
-                      </button>
-                    </>
+                    <button
+                      onClick={() => handleSubmission('email')}
+                      disabled={isSubmitting || isGeneratingPDF}
+                      className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Email Quote'}
+                    </button>
                   )}
                 </>
               )}
