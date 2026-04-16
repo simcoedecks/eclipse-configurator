@@ -326,6 +326,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [hasStarted, setHasStarted] = useState(skipIntro);
+  const [showContactModal, setShowContactModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
@@ -1987,7 +1988,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleSubmission('email')}
+                      onClick={() => {
+                        if (!name || !email || !phone || !city) {
+                          setShowContactModal(true);
+                        } else {
+                          handleSubmission('email');
+                        }
+                      }}
                       disabled={isSubmitting || isGeneratingPDF}
                       className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
@@ -2033,6 +2040,74 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
         )}
       </AnimatePresence>
+      {/* Contact Info Modal (for standalone /configurator route) */}
+      <AnimatePresence>
+        {showContactModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-luxury-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`p-6 lg:p-8 max-w-md w-full shadow-2xl border border-luxury-gold/20 rounded-lg ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
+            >
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-luxury-gold/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Mail className="w-6 h-6 text-luxury-gold" />
+                </div>
+                <h3 className={`text-xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>Your Contact Details</h3>
+                <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>We'll send your personalized quote to your email.</p>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setShowContactModal(false);
+                  handleSubmission('email');
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Name *</label>
+                  <input type="text" required value={name} onChange={e => setName(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="John Doe" />
+                </div>
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Phone Number *</label>
+                  <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="(555) 123-4567" />
+                </div>
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Email Address *</label>
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="john@example.com" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Address</label>
+                    <input type="text" value={address} onChange={e => setAddress(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="123 Main St" />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>City *</label>
+                    <input type="text" required value={city} onChange={e => setCity(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="Toronto" />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowContactModal(false)}
+                    className="luxury-button-outline flex-1 !px-4 !py-2.5 text-[11px]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="luxury-button flex-1 !px-4 !py-2.5 text-[11px]"
+                  >
+                    Send My Quote
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <ProposalDocument data={pdfData} isGeneratingPDF={isGeneratingPDF} />
       <Toaster position="top-center" />
       
