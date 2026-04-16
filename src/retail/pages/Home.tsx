@@ -1408,48 +1408,77 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               className="space-y-4"
             >
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Foundation</label>
-                    <div className="relative">
-                      <select
-                        value={foundationStatus}
-                        onChange={(e) => {
-                          setFoundationStatus(e.target.value);
-                          setShowFoundationError(false);
-                        }}
-                        className={`w-full border-b bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm ${showFoundationError ? 'border-red-500' : 'border-luxury-black/10 dark:border-white/10'}`}
-                      >
-                        <option value="">Select</option>
-                        <option value="existing">Existing</option>
-                        <option value="needs">Needs</option>
-                      </select>
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
-                        <ChevronDown className="w-3 h-3" />
+                {/* Foundation Selection */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Do you have a foundation?</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => { setFoundationStatus('existing'); setShowFoundationError(false); }}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left ${
+                        foundationStatus === 'existing'
+                          ? 'border-luxury-gold bg-luxury-gold/5 dark:bg-luxury-gold/10 ring-1 ring-luxury-gold'
+                          : showFoundationError
+                            ? 'border-red-400 dark:border-red-500/50'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:border-white/15 dark:hover:border-white/20'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        foundationStatus === 'existing' ? 'border-luxury-gold' : showFoundationError ? 'border-red-400' : 'border-slate-300 dark:border-white/15 dark:border-white/20'
+                      }`}>
+                        {foundationStatus === 'existing' && <div className="w-2 h-2 rounded-full bg-luxury-gold" />}
                       </div>
-                    </div>
-                    {showFoundationError && (
-                      <p className="text-red-500 text-[10px] mt-1">Please select a foundation status</p>
-                    )}
+                      <div>
+                        <span className={`text-sm font-serif font-medium block ${foundationStatus === 'existing' ? 'text-luxury-gold' : 'text-luxury-black/80 dark:text-white/80'}`}>
+                          Yes, existing
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">Deck, patio, or concrete pad</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => { setFoundationStatus('needs'); setShowFoundationError(false); }}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left ${
+                        foundationStatus === 'needs'
+                          ? 'border-luxury-gold bg-luxury-gold/5 dark:bg-luxury-gold/10 ring-1 ring-luxury-gold'
+                          : showFoundationError
+                            ? 'border-red-400 dark:border-red-500/50'
+                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:border-white/15 dark:hover:border-white/20'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        foundationStatus === 'needs' ? 'border-luxury-gold' : showFoundationError ? 'border-red-400' : 'border-slate-300 dark:border-white/15 dark:border-white/20'
+                      }`}>
+                        {foundationStatus === 'needs' && <div className="w-2 h-2 rounded-full bg-luxury-gold" />}
+                      </div>
+                      <div>
+                        <span className={`text-sm font-serif font-medium block ${foundationStatus === 'needs' ? 'text-luxury-gold' : 'text-luxury-black/80 dark:text-white/80'}`}>
+                          No, I need one
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">We'll include a quote</span>
+                      </div>
+                    </button>
                   </div>
+                  {showFoundationError && (
+                    <p className="text-red-500 text-[10px]">Please select your foundation status to continue</p>
+                  )}
+                </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
-                    <div className="relative">
-                      <select
-                        value={houseWall}
-                        onChange={(e) => setHouseWall(e.target.value as any)}
-                        className="w-full border-b border-luxury-black/10 dark:border-white/10 bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm"
-                      >
-                        <option value="none">Freestanding</option>
-                        <option value="back">Attached (Rear)</option>
-                        <option value="front">Attached (Front)</option>
-                        <option value="left">Attached (Left)</option>
-                        <option value="right">Attached (Right)</option>
-                      </select>
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
-                        <ChevronDown className="w-3 h-3" />
-                      </div>
+                {/* Structure */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
+                  <div className="relative">
+                    <select
+                      value={houseWall}
+                      onChange={(e) => setHouseWall(e.target.value as any)}
+                      className="w-full border-b border-luxury-black/10 dark:border-white/10 bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm"
+                    >
+                      <option value="none">Freestanding</option>
+                      <option value="back">Attached (Rear)</option>
+                      <option value="front">Attached (Front)</option>
+                      <option value="left">Attached (Left)</option>
+                      <option value="right">Attached (Right)</option>
+                    </select>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
+                      <ChevronDown className="w-3 h-3" />
                     </div>
                   </div>
                 </div>
