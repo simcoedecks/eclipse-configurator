@@ -705,6 +705,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
   const handleSubmission = async (type: 'email' | 'consultation') => {
     setIsSubmitting(true);
+    let finalLeadId = leadId;
     try {
       const baseData = {
         name,
@@ -741,13 +742,35 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         });
         submissionId = submissionRef.id;
 
-        // Update Pipedrive lead
-        if (leadId) {
+        // Create or update Pipedrive lead
+        let currentLeadId = leadId;
+        let currentIsDuplicate = isDuplicateLead;
+        if (!currentLeadId) {
+          // Standalone /configurator route — no lead yet, create one now
+          try {
+            const createRes = await fetch('/api/create-lead', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, email, phone, address, city })
+            });
+            const createData = await createRes.json();
+            if (createData.success && createData.leadId) {
+              currentLeadId = createData.leadId;
+              currentIsDuplicate = createData.isDuplicate || false;
+              finalLeadId = createData.leadId;
+              setLeadId(createData.leadId);
+              setIsDuplicateLead(currentIsDuplicate);
+            }
+          } catch (error) {
+            console.error("Failed to create Pipedrive lead:", error);
+          }
+        }
+        if (currentLeadId) {
           try {
             await fetch('/api/update-lead', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ leadId, configuration: baseData.configuration, isDuplicate: isDuplicateLead })
+              body: JSON.stringify({ leadId: currentLeadId, configuration: baseData.configuration, isDuplicate: currentIsDuplicate })
             });
           } catch (error) {
             console.error("Failed to update Pipedrive lead:", error);
@@ -848,8 +871,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             pdf.save(`Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}.pdf`);
           }
           
-          if (leadId) {
-            await updatePipedrive(leadId, [{ name: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`, data: pdfBase64 }]);
+          if (finalLeadId) {
+            await updatePipedrive(finalLeadId, [{ name: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`, data: pdfBase64 }]);
           }
         } catch (pdfError) {
           console.error("Failed to generate PDF", pdfError);
