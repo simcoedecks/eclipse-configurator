@@ -108,6 +108,18 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
           <div className="text-right font-bold">${fmt(basePrice)}</div>
         </div>
 
+        {accessories.find((a: any) => a.id === 'louver-upgrade' || a.name?.toLowerCase().includes('woodgrain louver')) && (() => {
+          const upgrade = accessories.find((a: any) => a.id === 'louver-upgrade' || a.name?.toLowerCase().includes('woodgrain louver'))!;
+          return (
+            <div className="grid grid-cols-[1fr_100px_50px_100px] px-3 text-[10px] py-2 border-b border-[#e5e7eb] bg-[#FAF9F6]">
+              <div className="pl-4"><span className="text-[#666]">↳</span> <span className="font-bold">{upgrade.name}</span></div>
+              <div className="text-center">${fmt(upgrade.cost / (upgrade.quantity || 1))}</div>
+              <div className="text-center">{upgrade.quantity || 1}</div>
+              <div className="text-right font-bold">${fmt(upgrade.cost)}</div>
+            </div>
+          );
+        })()}
+
         {/* Specifications */}
         <div className="px-3 text-[10px] leading-relaxed space-y-3 mt-4">
           <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
@@ -166,12 +178,17 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
         <Header pageNum={3} totalPages={totalPagesCount} />
 
         {accessories.length > 0 && (() => {
-          const wallCoverages = accessories.filter((acc: any) =>
+          // Exclude louver upgrade — shown on Page 2 under pergola
+          const filteredAccessories = accessories.filter((acc: any) =>
+            acc.id !== 'louver-upgrade' &&
+            !acc.name?.toLowerCase().includes('woodgrain louver')
+          );
+          const wallCoverages = filteredAccessories.filter((acc: any) =>
             acc.name?.toLowerCase().includes('screen') ||
             acc.name?.toLowerCase().includes('wall') ||
             acc.name?.toLowerCase().includes('guillotine')
           );
-          const otherAccessories = accessories.filter((acc: any) =>
+          const otherAccessories = filteredAccessories.filter((acc: any) =>
             !acc.name?.toLowerCase().includes('screen') &&
             !acc.name?.toLowerCase().includes('wall') &&
             !acc.name?.toLowerCase().includes('guillotine')
