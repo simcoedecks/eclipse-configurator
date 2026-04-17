@@ -315,9 +315,11 @@ export async function createExpressApp() {
       const domain = getPipedriveDomain();
       if (Array.isArray(images)) {
         for (const image of images) {
+          if (!image?.data || typeof image.data !== "string") continue;
           const b64  = image.data.split(",")[1];
           const mime = image.data.split(";")[0].split(":")[1] || "image/png";
           const ext  = mime === "application/pdf" ? "pdf" : "png";
+          if (!b64) continue;
           const fd   = new FormData();
           fd.append(
             "file",
@@ -325,23 +327,29 @@ export async function createExpressApp() {
             `${image.name}.${ext}`
           );
           fd.append("lead_id", leadId);
-          await fetch(`${domain}/api/v1/files`, {
+          const fileRes = await fetch(`${domain}/api/v1/files`, {
             method: "POST",
             headers: { "x-api-token": process.env.PIPEDRIVE_API_TOKEN! },
             body: fd,
           });
+          if (!fileRes.ok) {
+            console.error("Pipedrive file upload failed:",
+              fileRes.status, await fileRes.text());
+          }
         }
       }
-      const warn = isDuplicate
-        ? "⚠️ WARNING: Duplicate submission.\n\n" : "";
-      await fetch(`${domain}/api/v1/notes`, {
-        method: "POST",
-        headers: pipedriveHeaders(),
-        body: JSON.stringify({
-          content: `${warn}Full Summary:\n${summary}\n\nTotal Price: ${price}`,
-          lead_id: leadId,
-        }),
-      });
+      if (summary) {
+        const warn = isDuplicate
+          ? "⚠️ WARNING: Duplicate submission.\n\n" : "";
+        await fetch(`${domain}/api/v1/notes`, {
+          method: "POST",
+          headers: pipedriveHeaders(),
+          body: JSON.stringify({
+            content: `${warn}Full Summary:\n${summary}\n\nTotal Price: ${price}`,
+            lead_id: leadId,
+          }),
+        });
+      }
       return res.json({ success: true });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";

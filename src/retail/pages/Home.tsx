@@ -807,6 +807,17 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
       // Background task for PDF and Email
       const processBackground = async () => {
+        // 1. Upload the 3D preview image to Pipedrive FIRST (fast, reliable)
+        //    Do this BEFORE rendering the PDF — otherwise the canvas is replaced
+        if (finalLeadId) {
+          try {
+            await updatePipedrive(finalLeadId);
+            console.log("Preview image uploaded to Pipedrive");
+          } catch (e) {
+            console.error("Failed to upload preview image to Pipedrive:", e);
+          }
+        }
+
         // 2. Generate PDF
         let pdfBase64 = null;
         let pdfInstance: jsPDF | null = null;
@@ -871,8 +882,24 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             pdf.save(`Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}.pdf`);
           }
           
-          if (finalLeadId) {
-            await updatePipedrive(finalLeadId, [{ name: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`, data: pdfBase64 }]);
+          // Upload PDF to Pipedrive (separate call — may be slow/large)
+          if (finalLeadId && pdfBase64) {
+            try {
+              await fetch('/api/update-pipedrive-lead', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  leadId: finalLeadId,
+                  images: [{ name: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`, data: pdfBase64 }],
+                  summary: '',
+                  price: totalPrice,
+                  isDuplicate: isDuplicateLead
+                })
+              });
+              console.log("PDF uploaded to Pipedrive");
+            } catch (e) {
+              console.error("Failed to upload PDF to Pipedrive:", e);
+            }
           }
         } catch (pdfError) {
           console.error("Failed to generate PDF", pdfError);
