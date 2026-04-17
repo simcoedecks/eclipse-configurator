@@ -887,6 +887,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         let emailSent = false;
         try {
           console.log("Attempting to send email via /api/submit...");
+          const canvasImages = await captureImages();
+          const previewImage = canvasImages[0]?.data || null;
           const response = await fetch('/api/submit', {
             method: 'POST',
             headers: {
@@ -895,6 +897,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             body: JSON.stringify({
               ...baseData,
               pdfAttachment: pdfBase64,
+              previewImage,
               isDuplicate: isDuplicateLead
             }),
           });

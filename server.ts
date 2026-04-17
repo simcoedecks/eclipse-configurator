@@ -355,7 +355,7 @@ export async function createExpressApp() {
     try {
       const {
         name, email, phone, address, city,
-        configuration, pdfAttachment, isDuplicate,
+        configuration, pdfAttachment, previewImage, isDuplicate,
       } = req.body;
 
       if (!name || !email || !configuration) {
@@ -437,34 +437,54 @@ export async function createExpressApp() {
         ? "<p style='color:red;font-weight:bold;'>⚠️ WARNING: Duplicate submission.</p>"
         : "";
 
+      const previewImgHtml = previewImage
+        ? `<div style="text-align:center;margin:24px 0;">
+             <img src="cid:pergola-preview" alt="Your Pergola Design" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;" />
+           </div>`
+        : "";
+
       const makePayload = (to: string | string[]) => ({
         from: FROM_EMAIL,
         to,
         subject: `${isDuplicate ? "[DUPLICATE] " : ""}New Pergola Quote: ${name}`,
         html: `
-          <h1>New Pergola Quote</h1>
-          ${warnHtml}
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Address:</strong> ${address}, ${city}</p>
-          <h2>Configuration</h2>
-          <ul>
-            <li><strong>Dimensions:</strong> ${configuration.width}' x `
-              + `${configuration.depth}' x ${configuration.height}'</li>
-            <li><strong>Frame Color:</strong> ${configuration.frameColor}</li>
-            <li><strong>Louver Color:</strong> ${configuration.louverColor}</li>
-            <li><strong>Total Price:</strong> ${configuration.totalPrice}</li>
-          </ul>
-          <h3>Accessories</h3>
-          <ul>
-            ${configuration.accessories
-              .map((a: string) => `<li>${a}</li>`).join("")}
-          </ul>`,
-        attachments: pdfAttachment ? [{
-          filename: `Eclipse_Proposal_${name.replace(/\s+/g, "_")}.pdf`,
-          content:  pdfAttachment.split(",")[1] || pdfAttachment,
-        }] : [],
+          <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
+            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Pergola Quote</h1>
+            ${warnHtml}
+            ${previewImgHtml}
+            <h2 style="color:#C5A059;font-size:16px;margin-top:28px;">Customer</h2>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Phone:</strong> ${phone}</p>
+            <p><strong>Address:</strong> ${address}, ${city}</p>
+            <h2 style="color:#C5A059;font-size:16px;margin-top:28px;">Configuration</h2>
+            <ul>
+              <li><strong>Dimensions:</strong> ${configuration.width}' x `
+                + `${configuration.depth}' x ${configuration.height}'</li>
+              <li><strong>Frame Color:</strong> ${configuration.frameColor}</li>
+              <li><strong>Louver Color:</strong> ${configuration.louverColor}</li>
+              <li><strong>Total Price:</strong> ${configuration.totalPrice}</li>
+            </ul>
+            <h3 style="color:#C5A059;font-size:14px;margin-top:20px;">Accessories</h3>
+            <ul>
+              ${configuration.accessories
+                .map((a: string) => `<li>${a}</li>`).join("")}
+            </ul>
+            <p style="color:#666;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:12px;">
+              Full proposal with all rendering views, specifications, and pricing is attached as a PDF.
+            </p>
+          </div>`,
+        attachments: [
+          ...(pdfAttachment ? [{
+            filename: `Eclipse_Proposal_${name.replace(/\s+/g, "_")}.pdf`,
+            content:  pdfAttachment.split(",")[1] || pdfAttachment,
+          }] : []),
+          ...(previewImage ? [{
+            filename: "pergola-preview.png",
+            content:  previewImage.split(",")[1] || previewImage,
+            content_id: "pergola-preview",
+          }] : []),
+        ],
       });
 
       let adminEmailId: string | undefined;
