@@ -882,23 +882,21 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             pdf.save(`Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}.pdf`);
           }
           
-          // Upload PDF to Pipedrive (separate call — may be slow/large)
+          // Upload PDF to Pipedrive via background function (15min timeout)
           if (finalLeadId && pdfBase64) {
             try {
-              await fetch('/api/update-pipedrive-lead', {
+              const pdfRes = await fetch('/.netlify/functions/upload-pdf-background', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   leadId: finalLeadId,
-                  images: [{ name: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`, data: pdfBase64 }],
-                  summary: '',
-                  price: totalPrice,
-                  isDuplicate: isDuplicateLead
+                  fileName: `Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}`,
+                  fileData: pdfBase64,
                 })
               });
-              console.log("PDF uploaded to Pipedrive");
+              console.log(`PDF upload queued (${pdfRes.status})`);
             } catch (e) {
-              console.error("Failed to upload PDF to Pipedrive:", e);
+              console.error("Failed to queue PDF upload:", e);
             }
           }
         } catch (pdfError) {
