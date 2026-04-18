@@ -1034,7 +1034,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}
+          className={`tv-root flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}
         >
           {currentUser && (
             <div className={`absolute top-0 left-0 w-full py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md ${isDark ? 'bg-[#141414] text-white/70' : 'bg-luxury-black text-luxury-cream'}`}>
@@ -1044,7 +1044,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           )}
 
           {/* Left: 3D Visualizer */}
-          <div className={`flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
+          <div className={`tv-visualizer flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
             <PergolaVisualizer
               width={width}
               depth={depth}
@@ -1074,7 +1074,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
 
           {/* Right: Lead Capture Form (Sidebar) */}
-          <div className={`w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
+          <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
             <div className="p-6 lg:p-8 flex flex-col justify-center min-h-full relative">
               {/* Theme Toggle */}
               <button
@@ -1363,7 +1363,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   };
 
   return (
-    <div className={`flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}>
+    <div className={`tv-root flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}>
       <Toaster position="top-center" theme={isDark ? 'dark' : 'light'} />
 
       {currentUser && (
@@ -1374,7 +1374,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       )}
 
       {/* Left: 3D Visualizer */}
-      <div className={`flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
+      <div className={`tv-visualizer flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
         <PergolaVisualizer
           width={width}
           depth={depth}
@@ -1448,7 +1448,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       </div>
 
       {/* Right: Sidebar Controls */}
-      <div className={`w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
+      <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
         {/* Step Indicator */}
         <div className={`px-3 py-3 lg:px-5 lg:py-5 border-b shrink-0 flex items-center gap-3 ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-luxury-paper dark:bg-[#111]/50'}`}>
           {/* Theme Toggle */}
@@ -2320,7 +2320,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       <Toaster position="top-center" />
       
       {/* Admin Link */}
-      <div className="fixed bottom-2 left-1/2 -translate-x-1/2 z-[60] opacity-20 hover:opacity-100 transition-opacity">
+      <div className="admin-link fixed bottom-2 left-1/2 -translate-x-1/2 z-[60] opacity-20 hover:opacity-100 transition-opacity">
         <a href="/admin" className="text-[10px] text-luxury-black/40 hover:text-luxury-gold font-medium">
           Admin Dashboard
         </a>

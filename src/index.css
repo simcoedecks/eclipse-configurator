@@ -136,3 +136,47 @@
   background: linear-gradient(135deg, #1a1a2e, #2d2d44);
   box-shadow: 0 0 8px rgba(197, 160, 89, 0.3);
 }
+
+/* ─── Vertical TV / Portrait Kiosk (e.g. 1080×1920) ─────────── */
+/* Activates on any tall display wider than a phone (tablets, rotated monitors, vertical TVs).
+   Forces column layout + scales type up for distance viewing. */
+@media (orientation: portrait) and (min-width: 900px) {
+  /* Force the main two-column layout into a stacked portrait layout */
+  .tv-root {
+    flex-direction: column !important;
+  }
+  .tv-visualizer {
+    width: 100% !important;
+    height: 60vh !important;
+    flex: none !important;
+    border-left: none !important;
+  }
+  .tv-sidebar {
+    width: 100% !important;
+    height: 40vh !important;
+    border-left: none !important;
+    border-top: 1px solid var(--color-luxury-cream);
+  }
+  .dark .tv-sidebar {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Scale type up for viewing distance */
+  html { font-size: 22px; }
+  h1, h2, h3, h4 { letter-spacing: -0.02em; }
+
+  /* Bigger touch targets / buttons for TV */
+  .luxury-button,
+  .luxury-button-outline {
+    padding: 1rem 2rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  /* Hide the admin link on TV */
+  .admin-link { display: none !important; }
+
+  /* Wider sidebar padding so content breathes */
+  .tv-sidebar .sidebar-content {
+    padding: 2rem 3rem !important;
+  }
+}
