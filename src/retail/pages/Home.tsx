@@ -1933,11 +1933,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      {Array.from(selectedAccessories).map(id => {
+                    {(() => {
+                      const renderAccessoryRow = (id: string) => {
                         const accessory = ACCESSORIES.find(a => a.id === id);
                         if (!accessory) return null;
-                        
+
                         let cost = 0;
                         let breakdown: { price: number }[] | null = null;
                         let wallWoodgrainCost = 0;
@@ -1975,7 +1975,6 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         } else if (accessory.type === 'wall_width') {
                           const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
                           cost = width * height * wallUnitPrice;
-                          
                           const base = Math.floor(width / numScreenBaysX);
                           const remainder = width % numScreenBaysX;
                           const numPanelsPerBay = Math.ceil((height * 12) / 7);
@@ -1992,7 +1991,6 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         } else if (accessory.type === 'wall_depth') {
                           const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
                           cost = depth * height * wallUnitPrice;
-                          
                           const base = Math.floor(depth / numScreenBaysZ);
                           const remainder = depth % numScreenBaysZ;
                           const numPanelsPerBay = Math.ceil((height * 12) / 7);
@@ -2020,8 +2018,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                           breakdownRender = (
                             <div className="pl-3 mt-1 space-y-0.5 border-l border-luxury-black/10 dark:border-white/10">
                               {Object.values(grouped).map((item, i) => {
-                                const itemName = accessory.type.includes('wall') 
-                                  ? (item.count === 1 ? 'wall' : 'walls') 
+                                const itemName = accessory.type.includes('wall')
+                                  ? (item.count === 1 ? 'wall' : 'walls')
                                   : (item.count === 1 ? 'screen' : 'screens');
                                 return (
                                   <div key={i} className="flex justify-between items-center text-[10px] text-luxury-black/50">
@@ -2049,8 +2047,46 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                             )}
                           </div>
                         );
-                      })}
-                    </div>
+                      };
+
+                      const isWallCoverage = (id: string) => {
+                        const acc = ACCESSORIES.find(a => a.id === id);
+                        if (!acc) return false;
+                        return acc.type === 'screen_width' || acc.type === 'screen_depth' ||
+                               acc.type === 'wall_width' || acc.type === 'wall_depth' ||
+                               acc.id.includes('guillotine');
+                      };
+
+                      const wallCoverageIds = Array.from(selectedAccessories).filter(isWallCoverage);
+                      const addOnIds = Array.from(selectedAccessories).filter(id => !isWallCoverage(id));
+
+                      return (
+                        <>
+                          {wallCoverageIds.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 pb-1">
+                                <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Wall Coverages</span>
+                                <div className="flex-1 h-px bg-luxury-gold/20" />
+                              </div>
+                              <div className="space-y-2">
+                                {wallCoverageIds.map(renderAccessoryRow)}
+                              </div>
+                            </div>
+                          )}
+                          {addOnIds.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 pb-1">
+                                <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Add-Ons & Features</span>
+                                <div className="flex-1 h-px bg-luxury-gold/20" />
+                              </div>
+                              <div className="space-y-2">
+                                {addOnIds.map(renderAccessoryRow)}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
                       <div className="flex flex-col">
