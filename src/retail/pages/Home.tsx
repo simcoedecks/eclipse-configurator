@@ -1482,16 +1482,34 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               </span>
             </div>
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((step) => (
+              {[
+                { step: 1, label: 'Size' },
+                { step: 2, label: 'Colors' },
+                { step: 3, label: 'Privacy' },
+                { step: 4, label: 'Extras' },
+                { step: 5, label: 'Review' },
+              ].map(({ step, label }) => (
                 <button
                   key={step}
                   onClick={() => step <= currentStep && setCurrentStep(step)}
                   disabled={step > currentStep}
-                  aria-label={`Go to step ${step}`}
-                  className={`h-[3px] flex-1 transition-all duration-700 ${
-                    step <= currentStep ? 'bg-luxury-gold hover:bg-luxury-gold/80 cursor-pointer' : isDark ? 'bg-white/5 cursor-not-allowed' : 'bg-luxury-black/5 cursor-not-allowed'
-                  }`}
-                />
+                  aria-label={`Go to ${label}`}
+                  title={`Phase ${step}: ${label}`}
+                  className="group flex flex-col items-center gap-1 flex-1 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <div className={`h-[3px] w-full transition-all duration-700 ${
+                    step <= currentStep ? 'bg-luxury-gold group-hover:bg-luxury-gold/80' : isDark ? 'bg-white/5' : 'bg-luxury-black/5'
+                  }`} />
+                  <span className={`text-[8px] uppercase tracking-wider font-bold transition-colors ${
+                    step === currentStep
+                      ? 'text-luxury-gold'
+                      : step < currentStep
+                        ? (isDark ? 'text-white/50 group-hover:text-luxury-gold' : 'text-luxury-black/40 group-hover:text-luxury-gold')
+                        : (isDark ? 'text-white/20' : 'text-luxury-black/20')
+                  }`}>
+                    {label}
+                  </span>
+                </button>
               ))}
             </div>
           </div>
@@ -1564,21 +1582,60 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 {/* Structure */}
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
-                  <div className="relative">
-                    <select
-                      value={houseWall}
-                      onChange={(e) => setHouseWall(e.target.value as any)}
-                      className="w-full border-b border-luxury-black/10 dark:border-white/10 bg-transparent py-2 text-luxury-black dark:text-white font-serif focus:border-luxury-gold focus:outline-none appearance-none cursor-pointer pr-6 text-sm"
-                    >
-                      <option value="none">Freestanding</option>
-                      <option value="back">Attached (Rear)</option>
-                      <option value="front">Attached (Front)</option>
-                      <option value="left">Attached (Left)</option>
-                      <option value="right">Attached (Right)</option>
-                    </select>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-luxury-black dark:text-white">
-                      <ChevronDown className="w-3 h-3" />
-                    </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[
+                      { value: 'none', label: 'Free', sub: 'standing', diagram: (
+                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="4" y="4" width="16" height="16" rx="1" />
+                        </svg>
+                      ) },
+                      { value: 'back', label: 'Rear', sub: 'wall', diagram: (
+                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <line x1="2" y1="4" x2="22" y2="4" strokeWidth="2.5" />
+                          <rect x="4" y="4" width="16" height="16" rx="1" />
+                        </svg>
+                      ) },
+                      { value: 'front', label: 'Front', sub: 'wall', diagram: (
+                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="4" y="4" width="16" height="16" rx="1" />
+                          <line x1="2" y1="20" x2="22" y2="20" strokeWidth="2.5" />
+                        </svg>
+                      ) },
+                      { value: 'left', label: 'Left', sub: 'wall', diagram: (
+                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <line x1="4" y1="2" x2="4" y2="22" strokeWidth="2.5" />
+                          <rect x="4" y="4" width="16" height="16" rx="1" />
+                        </svg>
+                      ) },
+                      { value: 'right', label: 'Right', sub: 'wall', diagram: (
+                        <svg viewBox="0 0 24 24" className="w-full h-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="4" y="4" width="16" height="16" rx="1" />
+                          <line x1="20" y1="2" x2="20" y2="22" strokeWidth="2.5" />
+                        </svg>
+                      ) },
+                    ].map((opt) => {
+                      const selected = houseWall === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => setHouseWall(opt.value as any)}
+                          aria-label={`${opt.label} ${opt.sub}`}
+                          className={`flex flex-col items-center gap-1 py-2 px-1 rounded-md border transition-all ${
+                            selected
+                              ? 'border-luxury-gold bg-luxury-gold/5 dark:bg-luxury-gold/10 text-luxury-gold'
+                              : (isDark
+                                  ? 'border-white/10 text-white/60 hover:border-white/30 hover:text-white'
+                                  : 'border-slate-200 text-luxury-black/60 hover:border-luxury-black/30')
+                          }`}
+                        >
+                          <div className="w-6 h-6">{opt.diagram}</div>
+                          <span className="text-[8px] font-bold uppercase tracking-wider leading-tight text-center">
+                            {opt.label}
+                            <span className="block text-[7px] font-normal opacity-70">{opt.sub}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2025,13 +2082,28 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
         {/* Footer Navigation */}
         <div className={`px-4 py-3 lg:px-6 lg:py-4 border-t shrink-0 relative ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-white'}`}>
-          {/* Sticky Price Display */}
-          {currentStep < 5 && (
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-luxury-cream/50">
-              <span className="text-[9px] uppercase tracking-widest font-bold text-luxury-black/40">Estimate</span>
-              <span className="text-lg font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+          {/* Sticky Running Total */}
+          <div className={`flex items-center justify-between mb-2 pb-2 border-b ${isDark ? 'border-white/10' : 'border-luxury-cream/50'}`}>
+            <div className="flex items-center gap-2">
+              <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                {currentStep === 5 ? 'Grand Total' : 'Running Total'}
+              </span>
+              {currentStep < 5 && (
+                <span className={`text-[8px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>
+                  (pre-tax)
+                </span>
+              )}
             </div>
-          )}
+            <motion.span
+              key={totalPrice || 0}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="text-lg font-serif font-medium text-luxury-gold"
+            >
+              {totalPrice !== null ? formatCurrency(totalPrice) : '—'}
+            </motion.span>
+          </div>
           {submitSuccess && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
