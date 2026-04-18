@@ -698,14 +698,24 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     return total;
   }, [basePrice, louverColor, width, depth, currentStep, selectedAccessories, height, numScreenBaysX, numScreenBaysZ, wallColor, heaterControl]);
 
+  const heaterCardRef = useRef<HTMLButtonElement>(null);
+
   const toggleAccessory = (id: string) => {
     const next = new Set(selectedAccessories);
-    if (next.has(id)) {
+    const wasSelected = next.has(id);
+    if (wasSelected) {
       next.delete(id);
     } else {
       next.add(id);
     }
     setSelectedAccessories(next);
+
+    // Auto-scroll to reveal the Smart Control sub-option when heater is first selected
+    if (id === 'heater' && !wasSelected) {
+      setTimeout(() => {
+        heaterCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
   };
 
   useEffect(() => {
@@ -1296,10 +1306,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     return (
       <button
         key={accessory.id}
+        ref={accessory.id === 'heater' ? heaterCardRef : undefined}
         onClick={() => toggleAccessory(accessory.id)}
         className={`flex flex-col items-start rounded-xl border text-left transition-all overflow-hidden ${
-          isSelected 
-            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30/50 dark:bg-emerald-900/20 ring-1 ring-emerald-500' 
+          isSelected
+            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30/50 dark:bg-emerald-900/20 ring-1 ring-emerald-500'
             : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] hover:border-slate-300 dark:border-white/15 hover:bg-slate-50 dark:hover:bg-white/5 dark:hover:bg-white/5'
         }`}
       >
