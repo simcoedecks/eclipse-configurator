@@ -20,7 +20,8 @@ import {
   MapPin,
   Plus,
   Minus,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
@@ -313,6 +314,42 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [customModels, setCustomModels] = useState<{ post?: string; beam?: string; louver?: string }>({});
 
+  const resetConfigurator = () => {
+    // Reset all configuration state to defaults
+    setCurrentStep(1);
+    setDepth(16);
+    setWidth(12);
+    setHeight(9);
+    setFrameColor('#0A0A0A');
+    setLouverColor('#F6F6F6');
+    setLouverAngle(60);
+    setScreenDrop(100);
+    setGuillotineOpen(0);
+    setHouseWall('none');
+    setSelectedAccessories(new Set());
+    setWallColor('#0A0A0A');
+    setHouseWallColor('#82A0C2');
+    setHeaterControl('switch');
+    setCustomModels({});
+    setFoundationStatus('');
+    setShowFoundationError(false);
+    setSubmitSuccess(false);
+    setIsDuplicateLead(false);
+    setLeadId(null);
+    // Reset customer info
+    setName('');
+    setPhone('');
+    setEmail('');
+    setAddress('');
+    setCity('');
+    // For the full flow, return to welcome screen. For /configurator, stay in builder.
+    if (!skipIntro) {
+      setHasStarted(false);
+    }
+    setShowResetModal(false);
+    toast.success('Configurator reset');
+  };
+
   const handleColorSelection = (color: any, setter: (hex: string) => void, prefix: string) => {
     setter(color.hex);
     if (prefix === 'frame') {
@@ -327,6 +364,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [city, setCity] = useState('');
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
@@ -1423,6 +1461,15 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               {isDark ? <Moon className="w-3 h-3 text-luxury-gold" /> : <Sun className="w-3 h-3 text-amber-500" />}
             </div>
           </button>
+          {/* Reset Button */}
+          <button
+            onClick={() => setShowResetModal(true)}
+            className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${isDark ? 'text-white/50 hover:text-luxury-gold hover:bg-white/5' : 'text-luxury-black/40 dark:text-white/40 hover:text-luxury-gold hover:bg-luxury-cream'}`}
+            aria-label="Start over"
+            title="Start over"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">Phase {currentStep} / 5</span>
@@ -2091,6 +2138,44 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
         )}
       </AnimatePresence>
+      {/* Reset Confirmation Modal */}
+      <AnimatePresence>
+        {showResetModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-luxury-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`p-6 lg:p-8 max-w-sm w-full shadow-2xl border border-luxury-gold/20 rounded-lg ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
+            >
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-luxury-gold/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <RotateCcw className="w-6 h-6 text-luxury-gold" />
+                </div>
+                <h3 className={`text-xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>Start Over?</h3>
+                <p className={`text-sm mt-2 leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-500 dark:text-white/50'}`}>
+                  This will clear your current configuration and return to the beginning. This can't be undone.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowResetModal(false)}
+                  className="luxury-button-outline flex-1 !px-4 !py-2.5 text-[11px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={resetConfigurator}
+                  className="luxury-button flex-1 !px-4 !py-2.5 text-[11px]"
+                >
+                  Yes, Start Over
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Contact Info Modal (for standalone /configurator route) */}
       <AnimatePresence>
         {showContactModal && (
