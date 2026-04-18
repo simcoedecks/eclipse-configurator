@@ -9,7 +9,7 @@ export interface ColorOption {
 
 export const COLORS: ColorOption[] = [
   { id: 'ral9005', name: 'Midnight Onyx', hex: '#0A0A0A', ral: 'RAL 9005', type: 'solid', isStandard: true },
-  { id: 'ral9016', name: 'Alabaster Ivory', hex: '#F6F6F6', ral: 'RAL 9016', type: 'solid', isStandard: true },
+  { id: 'ral9016', name: 'Moonstone White', hex: '#F6F6F6', ral: 'RAL 9016', type: 'solid', isStandard: true },
   { id: 'ral9006', name: 'Platinum Mist', hex: '#A5A5A5', ral: 'RAL 9006', type: 'solid', isStandard: false },
   { id: 'ral7016', name: 'Graphite Slate', hex: '#383E42', ral: 'RAL 7016', type: 'solid', isStandard: false },
   { id: 'ral8017', name: 'Espresso Bronze', hex: '#44322D', ral: 'RAL 8017', type: 'solid', isStandard: false },
