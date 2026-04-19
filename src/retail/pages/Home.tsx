@@ -382,7 +382,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
   // Listen for kiosk QR code scan submissions — auto-fill form when mobile user submits
   useEffect(() => {
-    if (hasStarted || skipIntro) return;
+    // Active when on welcome screen, OR when contact modal is open on /configurator Phase 5
+    const shouldListen = (!hasStarted && !skipIntro) || showContactModal;
+    if (!shouldListen) return;
     const unsub = onSnapshot(doc(db, 'kiosk-sessions', scanSessionId), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data() as any;
@@ -393,11 +395,18 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       setAddress(data.address || '');
       setCity(data.city || '');
       setScanReceived(true);
+      // Auto-submit when the modal is open and we received the data
+      if (showContactModal) {
+        setTimeout(() => {
+          setShowContactModal(false);
+          handleSubmission('email');
+        }, 800);
+      }
       // Delete the session doc to clean up
       deleteDoc(doc(db, 'kiosk-sessions', scanSessionId)).catch(() => {});
     });
     return () => unsub();
-  }, [scanSessionId, hasStarted, skipIntro]);
+  }, [scanSessionId, hasStarted, skipIntro, showContactModal]);
 
   const postFileInputRef = useRef<HTMLInputElement>(null);
   const beamFileInputRef = useRef<HTMLInputElement>(null);
@@ -2370,6 +2379,37 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 </div>
                 <h3 className={`text-xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>Your Contact Details</h3>
                 <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>We'll send your personalized quote to your email.</p>
+              </div>
+
+              {/* QR code handoff */}
+              <div className={`mb-5 rounded-lg border p-3 flex items-center gap-3 ${isDark ? 'bg-white/[0.02] border-white/10' : 'bg-luxury-paper border-luxury-cream'}`}>
+                <div className={`p-1.5 rounded-md shrink-0 ${scanReceived ? 'bg-emerald-50 dark:bg-emerald-900/30 ring-2 ring-emerald-500' : 'bg-white'}`}>
+                  <QRCodeSVG
+                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/scan/${scanSessionId}`}
+                    size={64}
+                    level="M"
+                    bgColor="#ffffff"
+                    fgColor="#1A1A1A"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {scanReceived ? (
+                    <>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 text-emerald-600 dark:text-emerald-400`}>✓ Details received</p>
+                      <p className={`text-[11px] leading-relaxed ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>Sending your quote now…</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 text-luxury-gold`}>Faster on Mobile</p>
+                      <p className={`text-[11px] leading-relaxed ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>Scan to fill these fields on your phone — no typing required.</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className={`flex-1 h-px ${isDark ? 'bg-white/10' : 'bg-luxury-black/10'}`} />
+                <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>or type manually</span>
+                <div className={`flex-1 h-px ${isDark ? 'bg-white/10' : 'bg-luxury-black/10'}`} />
               </div>
               <form
                 onSubmit={(e) => {
