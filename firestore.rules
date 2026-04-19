@@ -164,6 +164,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // ── Kiosk Sessions ─────────────────────────────────────────
+    // Short-lived QR code handoff: main kiosk creates a session ID,
+    // mobile device writes customer info, kiosk listens, then deletes.
+    // No auth required so mobile visitors can submit.
+    match /kiosk-sessions/{sessionId} {
+      function isValidKioskData(data) {
+        return data.keys().hasOnly(['name', 'phone', 'email', 'address', 'city', 'status', 'submittedAt']) &&
+               data.name is string && data.name.size() <= 100 &&
+               data.phone is string && data.phone.size() <= 40 &&
+               data.email is string && data.email.size() <= 200 &&
+               (!('address' in data) || data.address is string && data.address.size() <= 200) &&
+               (!('city' in data) || data.city is string && data.city.size() <= 100) &&
+               data.status in ['completed'];
+      }
+      allow read: if true;
+      allow create, update: if isValidKioskData(request.resource.data);
+      allow delete: if true;
+    }
+
     match /{path=**} {
       allow read, write: if false;
     }

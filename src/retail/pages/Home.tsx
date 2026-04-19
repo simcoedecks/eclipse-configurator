@@ -26,7 +26,8 @@ import {
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import html2canvas from 'html2canvas';
-import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs } from '../../shared/firebase';
+import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs, onSnapshot, deleteDoc } from '../../shared/firebase';
+import { QRCodeSVG } from 'qrcode.react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
 import { toPng, toJpeg } from 'html-to-image';
@@ -366,6 +367,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [showContactModal, setShowContactModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [scanSessionId] = useState<string>(() => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  });
+  const [scanReceived, setScanReceived] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -373,6 +379,25 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     });
     return () => unsubscribe();
   }, []);
+
+  // Listen for kiosk QR code scan submissions — auto-fill form when mobile user submits
+  useEffect(() => {
+    if (hasStarted || skipIntro) return;
+    const unsub = onSnapshot(doc(db, 'kiosk-sessions', scanSessionId), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as any;
+      if (data.status !== 'completed') return;
+      setName(data.name || '');
+      setPhone(data.phone || '');
+      setEmail(data.email || '');
+      setAddress(data.address || '');
+      setCity(data.city || '');
+      setScanReceived(true);
+      // Delete the session doc to clean up
+      deleteDoc(doc(db, 'kiosk-sessions', scanSessionId)).catch(() => {});
+    });
+    return () => unsub();
+  }, [scanSessionId, hasStarted, skipIntro]);
 
   const postFileInputRef = useRef<HTMLInputElement>(null);
   const beamFileInputRef = useRef<HTMLInputElement>(null);
@@ -1097,7 +1122,41 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 </div>
               </button>
               <h3 className={`text-2xl font-serif mb-2 ${isDark ? 'text-white' : 'text-luxury-black'}`}>Welcome</h3>
-              <p className={`text-sm mb-8 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>Please enter your details to start configuring your bespoke pergola.</p>
+              <p className={`text-sm mb-6 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>Please enter your details to start configuring your bespoke pergola.</p>
+
+              {/* QR code scan helper */}
+              <div className={`mb-6 rounded-lg border p-4 flex items-center gap-4 ${isDark ? 'bg-white/[0.02] border-white/10' : 'bg-luxury-paper border-luxury-cream'}`}>
+                <div className={`p-2 rounded-md shrink-0 ${scanReceived ? 'bg-emerald-50 dark:bg-emerald-900/30 ring-2 ring-emerald-500' : 'bg-white'}`}>
+                  <QRCodeSVG
+                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/scan/${scanSessionId}`}
+                    size={78}
+                    level="M"
+                    bgColor="#ffffff"
+                    fgColor="#1A1A1A"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {scanReceived ? (
+                    <>
+                      <p className={`text-[11px] font-bold uppercase tracking-widest mb-1 text-emerald-600 dark:text-emerald-400`}>
+                        ✓ Details received
+                      </p>
+                      <p className={`text-xs leading-relaxed ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
+                        Review below, then tap Start Designing.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 text-luxury-gold`}>
+                        Faster on Mobile
+                      </p>
+                      <p className={`text-xs leading-relaxed ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
+                        Scan to fill these fields on your phone — no typing on screen.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
               <form 
                 onSubmit={async (e) => {
                   e.preventDefault();
