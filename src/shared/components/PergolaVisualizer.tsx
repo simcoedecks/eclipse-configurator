@@ -853,12 +853,12 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
             })()}
 
             {/* Structure walls — 2' above pergola.
-                If no perpendicular structure wall intersects an end, that end
-                extends 10' past the pergola (original "house extends past" look).
-                If another structure wall meets the end, trim it to meet flush. */}
+                Outside-corner join: when two structure walls meet, each one
+                extends a small amount PAST the pergola edge on that end so
+                their outside faces meet cleanly. No inside-corner trim. */}
             {Array.from(structureSides).map(side => {
-              const EXT = 10;           // ft past pergola if no intersection
-              const TRIM = 0.25;        // ft inset when two structure walls meet
+              const EXT = 10;              // ft past pergola if no intersection
+              const CORNER_EXT = 0.15;     // ft past pergola edge when meeting another wall
 
               const isSide = side === 'left' || side === 'right';
               const perpEnd1 = isSide ? 'back' : 'left';   // -Z or -X end
@@ -868,8 +868,8 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
               const end1Intersects = structureSides.has(perpEnd1);
               const end2Intersects = structureSides.has(perpEnd2);
 
-              const end1 = end1Intersects ? -baseDim / 2 + TRIM : -baseDim / 2 - EXT;
-              const end2 = end2Intersects ?  baseDim / 2 - TRIM :  baseDim / 2 + EXT;
+              const end1 = end1Intersects ? -baseDim / 2 - CORNER_EXT : -baseDim / 2 - EXT;
+              const end2 = end2Intersects ?  baseDim / 2 + CORNER_EXT :  baseDim / 2 + EXT;
               const wallLength = end2 - end1;
               const wallCenter = (end1 + end2) / 2;
 
