@@ -809,19 +809,27 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         <GuillotineWindow key={`gf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} openPercentage={guillotineOpen} staticMode={staticMode} />
       ))}
 
-      {/* Privacy Walls */}
-      {accessories.has('wall_front') && screenCentersX.map((x, i) => (
-        <PrivacyWall key={`wf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
-      ))}
-      {accessories.has('wall_back') && screenCentersX.map((x, i) => (
-        <PrivacyWall key={`wb-${i}`} width={screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
-      ))}
-      {accessories.has('wall_right') && screenCentersZ.map((z, i) => (
-        <PrivacyWall key={`wr-${i}`} width={screenWidthZ} height={height} position={[xOffset - 0.2, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
-      ))}
-      {accessories.has('wall_left') && screenCentersZ.map((z, i) => (
-        <PrivacyWall key={`wl-${i}`} width={screenWidthZ} height={height} position={[-xOffset + 0.2, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
-      ))}
+      {/* Privacy Walls — extend 2' above pergola top for added privacy/windbreak */}
+      {(() => {
+        const wallHeight = height + 2;
+        const wallY = wallHeight / 2;
+        return (
+          <>
+            {accessories.has('wall_front') && screenCentersX.map((x, i) => (
+              <PrivacyWall key={`wf-${i}`} width={screenWidthX} height={wallHeight} position={[x, wallY, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+            ))}
+            {accessories.has('wall_back') && screenCentersX.map((x, i) => (
+              <PrivacyWall key={`wb-${i}`} width={screenWidthX} height={wallHeight} position={[x, wallY, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+            ))}
+            {accessories.has('wall_right') && screenCentersZ.map((z, i) => (
+              <PrivacyWall key={`wr-${i}`} width={screenWidthZ} height={wallHeight} position={[xOffset - 0.2, wallY, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
+            ))}
+            {accessories.has('wall_left') && screenCentersZ.map((z, i) => (
+              <PrivacyWall key={`wl-${i}`} width={screenWidthZ} height={wallHeight} position={[-xOffset + 0.2, wallY, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
+            ))}
+          </>
+        );
+      })()}
 
       {/* House Wall */}
       {houseWall && houseWall !== 'none' && (
