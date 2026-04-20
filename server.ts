@@ -229,21 +229,48 @@ export async function createExpressApp() {
       }
 
       const domain = getPipedriveDomain();
-      let personId: number | null = null;
-      let isDuplicate = false;
 
-      const searchRes = await fetch(
-        `${domain}/api/v1/persons/search`
-        + `?term=${encodeURIComponent(email)}&fields=email&exact_match=true`,
-        { headers: pipedriveHeaders() }
-      );
-      if (searchRes.ok) {
-        const sr = await searchRes.json();
-        if (sr.data?.items?.length > 0) {
-          personId = sr.data.items[0].item.id;
-          isDuplicate = true;
+      // ── Duplicate detection: search by email, phone, and name ─────────────
+      const searchPerson = async (term: string, field: 'email' | 'phone' | 'name') => {
+        try {
+          const exact = field !== 'name'; // email/phone: exact match; name: fuzzy
+          const res = await fetch(
+            `${domain}/api/v1/persons/search?term=${encodeURIComponent(term)}&fields=${field}&exact_match=${exact}`,
+            { headers: pipedriveHeaders() }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          const items = data.data?.items || [];
+          return items.length > 0 ? items[0].item : null;
+        } catch {
+          return null;
         }
-      }
+      };
+
+      const [emailMatch, phoneMatch, nameMatch] = await Promise.all([
+        email ? searchPerson(email, 'email') : Promise.resolve(null),
+        phone ? searchPerson(phone, 'phone') : Promise.resolve(null),
+        name  ? searchPerson(name,  'name')  : Promise.resolve(null),
+      ]);
+
+      // Collect which fields matched and which Pipedrive person IDs are involved
+      const matchedFields: string[] = [];
+      const matchedPersons = new Map<number, { id: number; name?: string; fields: string[] }>();
+      const record = (item: any, field: string) => {
+        if (!item) return;
+        matchedFields.push(field);
+        const existing = matchedPersons.get(item.id) || { id: item.id, name: item.name, fields: [] };
+        existing.fields.push(field);
+        matchedPersons.set(item.id, existing);
+      };
+      record(emailMatch, 'email');
+      record(phoneMatch, 'phone');
+      record(nameMatch,  'name');
+
+      const isDuplicate = matchedFields.length > 0;
+
+      // Prefer email match > phone match > name match for linking the lead
+      let personId: number | null = emailMatch?.id ?? phoneMatch?.id ?? nameMatch?.id ?? null;
 
       if (!personId) {
         const pRes = await fetch(`${domain}/api/v1/persons`, {
@@ -281,8 +308,22 @@ export async function createExpressApp() {
         });
       }
       const leadId = (await leadRes.json()).data.id;
-      const warn = isDuplicate
-        ? "⚠️ WARNING: Duplicate submission.\n\n" : "";
+
+      // Build a detailed duplicate warning describing exactly what matched
+      let warn = "";
+      if (isDuplicate) {
+        const fieldsList = Array.from(new Set(matchedFields)).join(", ");
+        const personLines = Array.from(matchedPersons.values()).map(p =>
+          `  • Person #${p.id}${p.name ? ` (${p.name})` : ''} — matched on: ${p.fields.join(', ')}`
+        ).join("\n");
+        const multiPerson = matchedPersons.size > 1
+          ? `\n⚠️ Matches multiple existing people in CRM — please review manually.\n`
+          : "";
+        warn = `⚠️ WARNING: Duplicate submission.\n`
+             + `Matched fields: ${fieldsList}\n${multiPerson}`
+             + `Existing match(es):\n${personLines}\n\n`;
+      }
+
       await fetch(`${domain}/api/v1/notes`, {
         method: "POST",
         headers: pipedriveHeaders(),
@@ -292,7 +333,7 @@ export async function createExpressApp() {
           lead_id: leadId,
         }),
       });
-      return res.json({ success: true, leadId, isDuplicate });
+      return res.json({ success: true, leadId, isDuplicate, matchedFields: Array.from(new Set(matchedFields)) });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("create-lead error:", msg);
