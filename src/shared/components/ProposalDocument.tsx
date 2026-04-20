@@ -311,6 +311,9 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
             <p className="text-[8px] italic text-[#666] leading-relaxed mt-2 pt-2 border-t border-[#f0f0f0]">
               Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
             </p>
+            <p className="text-[8px] italic text-[#666] leading-relaxed mt-1.5">
+              Please note that the configurator is provided for budgetary purposes only. Each pergola must be finalized with a site visit so we can provide an accurate final quote based on the specific site conditions and project details.
+            </p>
           </div>
 
           <GoldBar>Payment Terms</GoldBar>

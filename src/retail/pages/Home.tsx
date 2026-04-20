@@ -2253,6 +2253,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                     <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed pt-2">
                       Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
                     </p>
+                    <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed">
+                      Please note that the configurator is provided for budgetary purposes only. Each pergola must be finalized with a site visit so we can provide an accurate final quote based on the specific site conditions and project details.
+                    </p>
                   </div>
 
                   <div className="space-y-4">
