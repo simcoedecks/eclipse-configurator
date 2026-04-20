@@ -123,8 +123,8 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidSubmissionUpdate(data, prevData) {
-      // Allow updating email tracking fields, PDF URL, viewedAt.
-      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt'];
+      // Allow updating email tracking fields, PDF URL, viewedAt, submitterIp, geo.
+      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt', 'submitterIp', 'geo'];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return affectedKeys.hasOnly(allowedFields);
     }

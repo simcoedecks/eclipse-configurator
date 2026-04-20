@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X, Eye, EyeOff, CheckCheck } from 'lucide-react';
+import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X, Eye, EyeOff, CheckCheck, Map as MapIcon } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import LeadMap from '../components/LeadMap';
 
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
@@ -13,7 +14,7 @@ export default function Admin() {
   const [contractors, setContractors] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'submissions' | 'jobs' | 'contractors'>('submissions');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'jobs' | 'contractors'>('submissions');
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   // Submissions search + filter + sort
@@ -323,6 +324,15 @@ export default function Admin() {
             )}
           </button>
           <button
+            onClick={() => setActiveTab('map')}
+            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 inline-flex items-center gap-1.5 ${
+              activeTab === 'map' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <MapIcon className="w-4 h-4" />
+            Map
+          </button>
+          <button
             onClick={() => setActiveTab('jobs')}
             className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 ${
               activeTab === 'jobs' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -350,6 +360,8 @@ export default function Admin() {
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
           </div>
+        ) : activeTab === 'map' ? (
+          <LeadMap submissions={submissions} />
         ) : activeTab === 'contractors' ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">

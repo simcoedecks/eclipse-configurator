@@ -945,6 +945,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               setLeadId(createData.leadId);
               setIsDuplicateLead(currentIsDuplicate);
             }
+            // Save the submitter IP back to the submission doc for map geolocation
+            if (submissionId && createData.submitterIp) {
+              try {
+                await setDoc(doc(db, 'submissions', submissionId), {
+                  submitterIp: createData.submitterIp,
+                }, { merge: true });
+              } catch (e) { console.warn('Failed to save submitter IP', e); }
+            }
           } catch (error) {
             console.error("Failed to create Pipedrive lead:", error);
           }

@@ -496,7 +496,14 @@ export async function createExpressApp() {
           deal_id: leadId,
         }),
       });
-      return res.json({ success: true, leadId, isDuplicate, matchedFields: Array.from(new Set(matchedFields)) });
+      // Capture the submitter's IP so the admin dashboard can geolocate
+      // leads on the map, and return it so the client can save to Firestore.
+      const submitterIp = (req.headers["x-forwarded-for"] as string || "").split(",")[0].trim()
+        || (req.headers["x-nf-client-connection-ip"] as string || "")
+        || req.ip
+        || "unknown";
+
+      return res.json({ success: true, leadId, isDuplicate, matchedFields: Array.from(new Set(matchedFields)), submitterIp });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("create-lead error:", msg);
