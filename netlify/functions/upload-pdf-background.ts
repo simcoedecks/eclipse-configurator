@@ -33,7 +33,7 @@ export const handler = async (event: any) => {
       new Blob([Buffer.from(b64, "base64")], { type: mime }),
       `${fileName}.${ext}`
     );
-    fd.append("lead_id", leadId);
+    fd.append("deal_id", leadId);
 
     const res = await fetch(`${domain}/api/v1/files`, {
       method: "POST",

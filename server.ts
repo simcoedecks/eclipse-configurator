@@ -67,6 +67,94 @@ function hasPipedriveConfig(): boolean {
   return !!(process.env.PIPEDRIVE_API_TOKEN && process.env.PIPEDRIVE_DOMAIN);
 }
 
+// ─── Pipeline / Stage Setup Cache ────────────────────────────────────────────
+// Submissions are created as Deals in a pipeline. We use two stages:
+//   "Incoming Lead"     — fresh, non-duplicate submissions
+//   "Duplicate — Review" — flagged duplicates needing manual review
+// Stages are auto-discovered or created on first use.
+let pipedriveSetupCache: {
+  pipelineId: number;
+  incomingStageId: number;
+  duplicateStageId: number;
+} | null = null;
+
+const INCOMING_STAGE_NAME = "Incoming Lead";
+const DUPLICATE_STAGE_NAME = "Duplicate — Review";
+
+// Normalize stage names for fuzzy matching — lowercase, strip punctuation,
+// collapse whitespace, and treat em-dash/hyphen identically.
+function normalizeStageName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[—–\-]/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function ensurePipedriveSetup(): Promise<typeof pipedriveSetupCache> {
+  if (pipedriveSetupCache) return pipedriveSetupCache;
+  if (!hasPipedriveConfig()) return null;
+
+  const domain = getPipedriveDomain();
+
+  // 1. Pick the pipeline — env override or first one we find
+  let pipelineId: number | null = null;
+  if (process.env.PIPEDRIVE_PIPELINE_ID) {
+    pipelineId = parseInt(process.env.PIPEDRIVE_PIPELINE_ID, 10);
+  } else {
+    const pRes = await fetch(`${domain}/api/v1/pipelines`, { headers: pipedriveHeaders() });
+    if (!pRes.ok) {
+      console.error("Pipedrive pipelines fetch failed:", pRes.status);
+      return null;
+    }
+    const pData = await pRes.json();
+    pipelineId = pData.data?.[0]?.id ?? null;
+  }
+  if (!pipelineId) {
+    console.error("No Pipedrive pipeline available");
+    return null;
+  }
+
+  // 2. Fetch existing stages for this pipeline
+  const sRes = await fetch(`${domain}/api/v1/stages?pipeline_id=${pipelineId}`, { headers: pipedriveHeaders() });
+  if (!sRes.ok) {
+    console.error("Pipedrive stages fetch failed:", sRes.status);
+    return null;
+  }
+  const sData = await sRes.json();
+  const stages: any[] = sData.data || [];
+
+  const findOrCreate = async (name: string, orderHint: number): Promise<number | null> => {
+    const target = normalizeStageName(name);
+    const existing = stages.find((s: any) => normalizeStageName(s.name) === target);
+    if (existing) {
+      console.log(`Pipedrive stage matched: "${existing.name}" → ${existing.id}`);
+      return existing.id;
+    }
+    const createRes = await fetch(`${domain}/api/v1/stages`, {
+      method: "POST",
+      headers: pipedriveHeaders(),
+      body: JSON.stringify({ name, pipeline_id: pipelineId, order_nr: orderHint }),
+    });
+    if (!createRes.ok) {
+      console.error(`Failed to create stage "${name}":`, await createRes.text());
+      return null;
+    }
+    const created = (await createRes.json()).data;
+    return created?.id ?? null;
+  };
+
+  const incomingStageId = await findOrCreate(INCOMING_STAGE_NAME, 0);
+  const duplicateStageId = await findOrCreate(DUPLICATE_STAGE_NAME, 1);
+
+  if (!incomingStageId || !duplicateStageId) return null;
+
+  pipedriveSetupCache = { pipelineId, incomingStageId, duplicateStageId };
+  console.log(`Pipedrive setup: pipeline=${pipelineId}, incoming=${incomingStageId}, duplicate=${duplicateStageId}`);
+  return pipedriveSetupCache;
+}
+
 // ─── App Factory ──────────────────────────────────────────────────────────────
 export async function createExpressApp() {
   const app = express();
@@ -181,18 +269,20 @@ export async function createExpressApp() {
         ? parseFloat(configuration.totalPrice.replace(/[^0-9.-]+/g, ""))
         : parseFloat(configuration.totalPrice);
 
-      const updateRes = await fetch(`${domain}/api/v1/leads/${leadId}`, {
+      // Update Deal price (leadId variable now holds a Deal ID)
+      const updateRes = await fetch(`${domain}/api/v1/deals/${leadId}`, {
         method: "PATCH",
         headers: pipedriveHeaders(),
         body: JSON.stringify({
-          value: { amount: isNaN(price) ? 0 : price, currency: "CAD" },
+          value: isNaN(price) ? 0 : price,
+          currency: "CAD",
         }),
       });
       if (!updateRes.ok) {
-        console.error("Pipedrive update-lead error:",
+        console.error("Pipedrive update-deal error:",
           JSON.stringify(await updateRes.json()));
         return res.status(500).json({
-          success: false, error: "Failed to update Pipedrive lead",
+          success: false, error: "Failed to update Pipedrive deal",
         });
       }
       const warn = isDuplicate
@@ -204,7 +294,7 @@ export async function createExpressApp() {
           content: `${warn}Configuration: ${configuration.width}'x`
             + `${configuration.depth}'x${configuration.height}'\n`
             + `Accessories: ${configuration.accessories.join(", ")}`,
-          lead_id: leadId,
+          deal_id: leadId,
         }),
       });
       return res.json({ success: true });
@@ -292,22 +382,33 @@ export async function createExpressApp() {
         personId = (await pRes.json()).data.id;
       }
 
-      const leadRes = await fetch(`${domain}/api/v1/leads`, {
+      // Ensure pipeline + stages exist, then create a DEAL in the correct stage
+      const setup = await ensurePipedriveSetup();
+      if (!setup) {
+        return res.status(500).json({
+          success: false, error: "Failed to configure Pipedrive pipeline",
+        });
+      }
+      const targetStageId = isDuplicate ? setup.duplicateStageId : setup.incomingStageId;
+
+      const dealRes = await fetch(`${domain}/api/v1/deals`, {
         method: "POST",
         headers: pipedriveHeaders(),
         body: JSON.stringify({
           title: `${isDuplicate ? "[DUPLICATE] " : ""}Pergola Quote: ${name}`,
           person_id: personId,
+          pipeline_id: setup.pipelineId,
+          stage_id: targetStageId,
         }),
       });
-      if (!leadRes.ok) {
-        console.error("Pipedrive lead error:",
-          JSON.stringify(await leadRes.json()));
+      if (!dealRes.ok) {
+        console.error("Pipedrive deal error:",
+          JSON.stringify(await dealRes.json()));
         return res.status(500).json({
-          success: false, error: "Failed to create Pipedrive lead",
+          success: false, error: "Failed to create Pipedrive deal",
         });
       }
-      const leadId = (await leadRes.json()).data.id;
+      const leadId = (await dealRes.json()).data.id;
 
       // Build a detailed duplicate warning describing exactly what matched
       let warn = "";
@@ -330,7 +431,7 @@ export async function createExpressApp() {
         body: JSON.stringify({
           content: `${warn}Customer: ${name}\nPhone: ${phone}\n`
             + `Address: ${address}, ${city}`,
-          lead_id: leadId,
+          deal_id: leadId,
         }),
       });
       return res.json({ success: true, leadId, isDuplicate, matchedFields: Array.from(new Set(matchedFields)) });
@@ -367,7 +468,7 @@ export async function createExpressApp() {
             new Blob([Buffer.from(b64, "base64")], { type: mime }),
             `${image.name}.${ext}`
           );
-          fd.append("lead_id", leadId);
+          fd.append("deal_id", leadId);
           const fileRes = await fetch(`${domain}/api/v1/files`, {
             method: "POST",
             headers: { "x-api-token": process.env.PIPEDRIVE_API_TOKEN! },
@@ -387,7 +488,7 @@ export async function createExpressApp() {
           headers: pipedriveHeaders(),
           body: JSON.stringify({
             content: `${warn}Full Summary:\n${summary}\n\nTotal Price: ${price}`,
-            lead_id: leadId,
+            deal_id: leadId,
           }),
         });
       }
