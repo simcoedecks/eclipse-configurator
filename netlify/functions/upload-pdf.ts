@@ -1,5 +1,6 @@
-// Netlify Background Function: runs up to 15 minutes, returns 202 immediately
-// Used for uploading large PDFs to Pipedrive without hitting the 10s sync timeout
+// Netlify sync function (10s timeout) — uploads a PDF to a Pipedrive Deal.
+// Kept separate from the main Express-wrapped /api handler so it can receive
+// a large base64 payload without going through the express body parser stack.
 
 function getPipedriveDomain(): string {
   const d = process.env.PIPEDRIVE_DOMAIN || "";

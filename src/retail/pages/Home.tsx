@@ -957,9 +957,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
             // Use very high quality JPEG for the 3D views page
             // Now the 5th page (index 4)
             if (i === 4) { 
-              imgData = await toJpeg(pageElement, { 
-                pixelRatio: 5,
-                quality: 0.98,
+              imgData = await toJpeg(pageElement, {
+                pixelRatio: 3,
+                quality: 0.92,
                 backgroundColor: '#ffffff'
               });
               format = 'JPEG';
@@ -1002,7 +1002,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           // Upload PDF to Pipedrive via background function (15min timeout)
           if (finalLeadId && pdfBase64) {
             try {
-              const pdfRes = await fetch('/.netlify/functions/upload-pdf-background', {
+              const pdfRes = await fetch('/.netlify/functions/upload-pdf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
