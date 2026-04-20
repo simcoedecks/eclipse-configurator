@@ -810,53 +810,75 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         <GuillotineWindow key={`gf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} openPercentage={guillotineOpen} staticMode={staticMode} />
       ))}
 
-      {/* Privacy Walls — extend 2' above pergola top for added privacy/windbreak */}
+      {/* Walls — Privacy (stop at beam) + Structure (extend 2' above). Corners
+          join cleanly: front/back walls span full width, left/right walls are
+          shortened to fit between them. */}
       {(() => {
-        const wallHeight = height + 2;
-        const wallY = wallHeight / 2;
+        const privacyHeight = height;           // meets bottom of gutter beam
+        const structureHeight = height + 2;     // extends 2' above pergola
+
+        // Gather which sides have any wall (privacy OR structure) for corner math
+        const structureSides = new Set<string>();
+        if (houseWalls) houseWalls.forEach(s => structureSides.add(s));
+        if (houseWall && houseWall !== 'none') structureSides.add(houseWall);
+
+        const hasWallOn = (side: string) => accessories.has(`wall_${side}`) || structureSides.has(side);
+        const CORNER_INSET = 0.25; // ft — trim at corners so walls meet flush
+
+        const frontInset = hasWallOn('front') ? CORNER_INSET : 0;
+        const backInset = hasWallOn('back') ? CORNER_INSET : 0;
+        const lrLengthDelta = frontInset + backInset;
+        const lrCenterShift = (backInset - frontInset) / 2;
+
         return (
           <>
+            {/* Front/back privacy walls — always full width of the bay */}
             {accessories.has('wall_front') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wf-${i}`} width={screenWidthX} height={wallHeight} position={[x, wallY, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              <PrivacyWall key={`wf-${i}`} width={screenWidthX} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
             ))}
             {accessories.has('wall_back') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wb-${i}`} width={screenWidthX} height={wallHeight} position={[x, wallY, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              <PrivacyWall key={`wb-${i}`} width={screenWidthX} height={privacyHeight} position={[x, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
             ))}
-            {accessories.has('wall_right') && screenCentersZ.map((z, i) => (
-              <PrivacyWall key={`wr-${i}`} width={screenWidthZ} height={wallHeight} position={[xOffset - 0.2, wallY, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
-            ))}
-            {accessories.has('wall_left') && screenCentersZ.map((z, i) => (
-              <PrivacyWall key={`wl-${i}`} width={screenWidthZ} height={wallHeight} position={[-xOffset + 0.2, wallY, z]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />
-            ))}
+
+            {/* Left/right privacy walls — one continuous wall, shortened where corners meet */}
+            {accessories.has('wall_right') && (() => {
+              const adjustedWidth = Math.max(0.5, screenWidthZ * screenCentersZ.length - lrLengthDelta);
+              const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
+              return <PrivacyWall key="wr-joined" width={adjustedWidth} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
+            })()}
+            {accessories.has('wall_left') && (() => {
+              const adjustedWidth = Math.max(0.5, screenWidthZ * screenCentersZ.length - lrLengthDelta);
+              const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
+              return <PrivacyWall key="wl-joined" width={adjustedWidth} height={privacyHeight} position={[-xOffset + 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
+            })()}
+
+            {/* Structure walls — 2' above pergola; left/right shortened to meet corners flush */}
+            {Array.from(structureSides).map(side => {
+              const isSide = side === 'left' || side === 'right';
+              let wallWidthVal: number;
+              let posZ: number;
+              if (isSide) {
+                wallWidthVal = Math.max(0.5, depth - lrLengthDelta);
+                posZ = lrCenterShift;
+              } else {
+                wallWidthVal = width;
+                posZ = side === 'back' ? -depth / 2 : side === 'front' ? depth / 2 : 0;
+              }
+              const posX = side === 'right' ? width / 2 : side === 'left' ? -width / 2 : 0;
+              const rotY = side === 'right' ? -Math.PI / 2 : side === 'left' ? Math.PI / 2 : side === 'front' ? Math.PI : 0;
+              return (
+                <HouseWall
+                  key={`structure-${side}`}
+                  width={wallWidthVal}
+                  height={structureHeight}
+                  position={[posX, structureHeight / 2, posZ]}
+                  rotation={[0, rotY, 0]}
+                  color={houseWallColor}
+                />
+              );
+            })}
           </>
         );
-      })()}
-
-      {/* House / Structure Walls — 2' taller than the pergola, multi-side supported */}
-      {(() => {
-        // Merge legacy single-side prop with new multi-select set
-        const sides = new Set<string>();
-        if (houseWalls) houseWalls.forEach(s => sides.add(s));
-        if (houseWall && houseWall !== 'none') sides.add(houseWall);
-        const structureHeight = height + 2;
-        return Array.from(sides).map(side => (
-          <HouseWall
-            key={`structure-${side}`}
-            width={side === 'left' || side === 'right' ? depth + 20 : width + 20}
-            height={structureHeight}
-            position={[
-              side === 'right' ? width / 2 : side === 'left' ? -width / 2 : 0,
-              structureHeight / 2,
-              side === 'back' ? -depth / 2 : side === 'front' ? depth / 2 : 0
-            ]}
-            rotation={[
-              0,
-              side === 'right' ? -Math.PI / 2 : side === 'left' ? Math.PI / 2 : side === 'front' ? Math.PI : 0,
-              0
-            ]}
-            color={houseWallColor}
-          />
-        ));
       })()}
     </group>
   );
