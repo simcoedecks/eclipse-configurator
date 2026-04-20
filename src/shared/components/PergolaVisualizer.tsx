@@ -853,12 +853,13 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
             })()}
 
             {/* Structure walls — 2' above pergola.
-                Outside-corner join: when two structure walls meet, each one
-                extends a small amount PAST the pergola edge on that end so
-                their outside faces meet cleanly. No inside-corner trim. */}
+                Outside-corner join: each wall extends past the pergola edge
+                by the full wall thickness on any end that meets another
+                structure wall, so the corner fully overlaps and each wall
+                terminates at the outer face of its perpendicular neighbour. */}
             {Array.from(structureSides).map(side => {
               const EXT = 10;              // ft past pergola if no intersection
-              const CORNER_EXT = 0.15;     // ft past pergola edge when meeting another wall
+              const CORNER_EXT = 1;        // matches HouseWall backing thickness (1ft)
 
               const isSide = side === 'left' || side === 'right';
               const perpEnd1 = isSide ? 'back' : 'left';   // -Z or -X end
