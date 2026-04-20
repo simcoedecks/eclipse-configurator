@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../shared/firebase';
 import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
@@ -451,22 +451,60 @@ function SignatureModal({
         ? canvasRef.current.toDataURL('image/png')
         : null;
 
-      const res = await fetch('/api/accept-proposal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          submissionId,
-          signedName: typedName.trim(),
-          signatureDataUrl,
-          acceptedTerms: true,
-        }),
-      });
-      const result = await res.json();
-      if (!res.ok || !result.success) {
-        setError(result.error || 'Unable to record your acceptance. Please try again.');
-        setSubmitting(false);
-        return;
+      // Try server endpoint first (captures IP, sends admin email, updates Pipedrive)
+      let savedByServer = false;
+      try {
+        const res = await fetch('/api/accept-proposal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submissionId,
+            signedName: typedName.trim(),
+            signatureDataUrl,
+            acceptedTerms: true,
+          }),
+        });
+        const result = await res.json();
+        savedByServer = !!result.success;
+        // If the only error is that admin SDK isn't configured, silently fall
+        // back to the client-side write below. Other errors (e.g. already
+        // signed) we surface.
+        if (!savedByServer) {
+          const isAdminMissing = /admin not initialized|firebase admin/i.test(result.error || '');
+          if (!isAdminMissing) {
+            setError(result.error || 'Unable to record your acceptance. Please try again.');
+            setSubmitting(false);
+            return;
+          }
+          console.warn('Server admin SDK unavailable — falling back to client signature write.');
+        }
+      } catch (e) {
+        console.warn('Server accept endpoint unreachable — falling back to client write:', e);
       }
+
+      // Client-side fallback: write the signature directly to Firestore
+      // (Firestore rules allow this only when no prior signature exists)
+      if (!savedByServer) {
+        try {
+          await setDoc(doc(db, 'submissions', submissionId), {
+            status: 'accepted',
+            acceptance: {
+              signedName: typedName.trim(),
+              signatureDataUrl,
+              signedAt: serverTimestamp(),
+              acceptedTerms: true,
+              signerIp: 'client-recorded',
+              signerUserAgent: navigator.userAgent.slice(0, 500),
+            },
+          }, { merge: true });
+        } catch (e: any) {
+          console.error('Client signature write failed:', e);
+          setError('Unable to record your acceptance. Please contact us at info@eclipsepergola.ca to sign.');
+          setSubmitting(false);
+          return;
+        }
+      }
+
       onAccepted({
         signedName: typedName.trim(),
         signatureDataUrl,

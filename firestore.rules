@@ -124,10 +124,23 @@ service cloud.firestore {
 
     function isValidSubmissionUpdate(data, prevData) {
       // Allow updating email tracking fields, PDF URL, viewedAt.
-      // Signature writes happen server-side via Admin SDK (bypasses rules).
       let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt'];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return affectedKeys.hasOnly(allowedFields);
+    }
+
+    function isValidSignatureWrite(data, prevData) {
+      // Customer signs a proposal client-side (when server admin SDK is unavailable).
+      // Only allowed if no prior signature exists and only acceptance + status are written.
+      let affectedKeys = data.diff(prevData).affectedKeys();
+      return !('acceptance' in prevData || (prevData.keys().hasAny(['acceptance']))) &&
+             affectedKeys.hasOnly(['acceptance', 'status']) &&
+             data.status == 'accepted' &&
+             data.acceptance is map &&
+             data.acceptance.acceptedTerms == true &&
+             data.acceptance.signedName is string &&
+             data.acceptance.signedName.size() > 0 &&
+             data.acceptance.signedName.size() < 100;
     }
 
     match /submissions/{submissionId} {
@@ -137,7 +150,9 @@ service cloud.firestore {
       // Listing all submissions still requires admin.
       allow get: if true;
       allow list: if isAdmin();
-      allow update: if isAdmin() || isValidSubmissionUpdate(request.resource.data, resource.data);
+      allow update: if isAdmin()
+                    || isValidSubmissionUpdate(request.resource.data, resource.data)
+                    || isValidSignatureWrite(request.resource.data, resource.data);
       allow delete: if isAdmin();
     }
 
