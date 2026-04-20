@@ -1092,6 +1092,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           console.log("Attempting to send email via /api/submit...");
           const canvasImages = await captureImages();
           const previewImage = canvasImages[0]?.data || null;
+          const proposalUrl = submissionId
+            ? `${window.location.origin}/proposal/${submissionId}`
+            : null;
           const response = await fetch('/api/submit', {
             method: 'POST',
             headers: {
@@ -1101,6 +1104,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               ...baseData,
               pdfAttachment: pdfBase64,
               previewImage,
+              proposalUrl,
               isDuplicate: isDuplicateLead
             }),
           });

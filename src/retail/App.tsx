@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import ProposalPreview from './pages/ProposalPreview';
 import Scan from './pages/Scan';
+import Proposal from './pages/Proposal';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/configurator" element={<Home skipIntro />} />
         <Route path="/scan/:sessionId" element={<Scan />} />
+        <Route path="/proposal/:id" element={<Proposal />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/contractor" element={
           <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">

@@ -837,6 +837,15 @@ export default function Admin() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`/proposal/${d.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-luxury-black bg-luxury-gold/10 hover:bg-luxury-gold hover:text-white rounded-lg border border-luxury-gold/20"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Open Customer View
+                  </a>
                   <button
                     onClick={() => { markAsUnread(d.id); setDetailSub(null); }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"

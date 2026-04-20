@@ -131,7 +131,11 @@ service cloud.firestore {
 
     match /submissions/{submissionId} {
       allow create: if isValidSubmission(request.resource.data);
-      allow read: if isAdmin();
+      // Single-doc reads are public (the submission ID is a hard-to-guess token
+      // and acts as the access key for the customer-facing proposal URL).
+      // Listing all submissions still requires admin.
+      allow get: if true;
+      allow list: if isAdmin();
       allow update: if isAdmin() || isValidSubmissionUpdate(request.resource.data, resource.data);
       allow delete: if isAdmin();
     }

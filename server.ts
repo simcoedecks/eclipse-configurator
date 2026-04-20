@@ -509,7 +509,7 @@ export async function createExpressApp() {
     try {
       const {
         name, email, phone, address, city,
-        configuration, pdfAttachment, previewImage, isDuplicate,
+        configuration, pdfAttachment, previewImage, proposalUrl, isDuplicate,
       } = req.body;
 
       if (!name || !email || !configuration) {
@@ -597,6 +597,15 @@ export async function createExpressApp() {
            </div>`
         : "";
 
+      const proposalLinkHtml = proposalUrl
+        ? `<div style="text-align:center;margin:28px 0;">
+             <a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:8px;letter-spacing:.05em;">
+               View Your Interactive Proposal →
+             </a>
+             <p style="color:#999;font-size:11px;margin:10px 0 0;">Opens a live view with your 3D design, pricing breakdown, and all available upgrades.</p>
+           </div>`
+        : "";
+
       const makePayload = (to: string | string[]) => ({
         from: FROM_EMAIL,
         to,
@@ -606,6 +615,7 @@ export async function createExpressApp() {
             <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Pergola Quote</h1>
             ${warnHtml}
             ${previewImgHtml}
+            ${proposalLinkHtml}
             <h2 style="color:#C5A059;font-size:16px;margin-top:28px;">Customer</h2>
             <p><strong>Name:</strong> ${name}</p>
             <p><strong>Email:</strong> ${email}</p>
