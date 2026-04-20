@@ -451,8 +451,9 @@ function SignatureModal({
         ? canvasRef.current.toDataURL('image/png')
         : null;
 
-      // Try server endpoint first (captures IP, sends admin email, updates Pipedrive)
-      let savedByServer = false;
+      // 1. Hit server endpoint to capture client IP and fire admin email + Pipedrive note
+      let signerIp = 'client-recorded';
+      let signerUserAgent = navigator.userAgent.slice(0, 500);
       try {
         const res = await fetch('/api/accept-proposal', {
           method: 'POST',
@@ -460,55 +461,47 @@ function SignatureModal({
           body: JSON.stringify({
             submissionId,
             signedName: typedName.trim(),
-            signatureDataUrl,
             acceptedTerms: true,
           }),
         });
         const result = await res.json();
-        savedByServer = !!result.success;
-        // If the only error is that admin SDK isn't configured, silently fall
-        // back to the client-side write below. Other errors (e.g. already
-        // signed) we surface.
-        if (!savedByServer) {
-          const isAdminMissing = /admin not initialized|firebase admin/i.test(result.error || '');
-          if (!isAdminMissing) {
-            setError(result.error || 'Unable to record your acceptance. Please try again.');
-            setSubmitting(false);
-            return;
-          }
-          console.warn('Server admin SDK unavailable — falling back to client signature write.');
+        if (result.success) {
+          signerIp = result.signerIp || signerIp;
+          signerUserAgent = result.signerUserAgent || signerUserAgent;
+        } else {
+          console.warn('Accept meta endpoint error (non-fatal):', result.error);
         }
       } catch (e) {
-        console.warn('Server accept endpoint unreachable — falling back to client write:', e);
+        console.warn('Accept meta endpoint unreachable (non-fatal):', e);
       }
 
-      // Client-side fallback: write the signature directly to Firestore
-      // (Firestore rules allow this only when no prior signature exists)
-      if (!savedByServer) {
-        try {
-          await setDoc(doc(db, 'submissions', submissionId), {
-            status: 'accepted',
-            acceptance: {
-              signedName: typedName.trim(),
-              signatureDataUrl,
-              signedAt: serverTimestamp(),
-              acceptedTerms: true,
-              signerIp: 'client-recorded',
-              signerUserAgent: navigator.userAgent.slice(0, 500),
-            },
-          }, { merge: true });
-        } catch (e: any) {
-          console.error('Client signature write failed:', e);
-          setError('Unable to record your acceptance. Please contact us at info@eclipsepergola.ca to sign.');
-          setSubmitting(false);
-          return;
-        }
+      // 2. Write the signature to Firestore from the client
+      // (Firestore rules: allowed only when no prior signature exists)
+      try {
+        await setDoc(doc(db, 'submissions', submissionId), {
+          status: 'accepted',
+          acceptance: {
+            signedName: typedName.trim(),
+            signatureDataUrl,
+            signedAt: serverTimestamp(),
+            acceptedTerms: true,
+            signerIp,
+            signerUserAgent,
+          },
+        }, { merge: true });
+      } catch (e: any) {
+        console.error('Signature write failed:', e);
+        setError('Unable to record your acceptance. Please contact us at info@eclipsepergola.ca to sign.');
+        setSubmitting(false);
+        return;
       }
 
       onAccepted({
         signedName: typedName.trim(),
         signatureDataUrl,
         signedAt: { toDate: () => new Date() },
+        signerIp,
+        signerUserAgent,
         acceptedTerms: true,
       });
     } catch {

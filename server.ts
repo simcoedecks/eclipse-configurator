@@ -797,27 +797,16 @@ export async function createExpressApp() {
 
   // ── Accept Proposal (customer signature) ────────────────────────────────────
   // Called from the public /proposal/:id page when a customer signs.
-  // Server captures IP/UA/timestamp (more trustworthy than client-reported)
-  // and writes the signature to Firestore via Admin SDK.
+  // Captures the client IP (server-side, trustworthy), triggers admin email +
+  // Pipedrive note. Returns the captured IP to the client which writes the
+  // full signature to Firestore itself (via client SDK, guarded by rules).
+  // This avoids requiring the Firebase Admin SDK to be provisioned — useful
+  // when GCP org policy blocks service-account key creation.
   app.post("/api/accept-proposal", async (req: Request, res: Response) => {
     try {
-      const { submissionId, signedName, signatureDataUrl, acceptedTerms } = req.body;
-
+      const { submissionId, signedName, acceptedTerms } = req.body;
       if (!submissionId || !signedName || !acceptedTerms) {
         return res.status(400).json({ success: false, error: "Missing submissionId, signedName, or terms acceptance." });
-      }
-      if (!adminDb) {
-        return res.status(500).json({ success: false, error: "Firebase Admin not initialized on server." });
-      }
-
-      const ref = adminDb.collection("submissions").doc(submissionId);
-      const snap = await ref.get();
-      if (!snap.exists) {
-        return res.status(404).json({ success: false, error: "Proposal not found." });
-      }
-      const existing = snap.data() || {};
-      if (existing.acceptance?.signedAt) {
-        return res.status(409).json({ success: false, error: "This proposal has already been signed." });
       }
 
       // Capture server-side signer metadata
@@ -827,21 +816,24 @@ export async function createExpressApp() {
         || "unknown";
       const signerUserAgent = (req.headers["user-agent"] as string || "unknown").slice(0, 500);
 
-      const acceptance = {
-        signedName: String(signedName).slice(0, 100),
-        signatureDataUrl: signatureDataUrl ? String(signatureDataUrl).slice(0, 200_000) : null,
-        signedAt: FieldValue.serverTimestamp(),
-        signerIp,
-        signerUserAgent,
-        acceptedTerms: true,
+      // Look up the submission for name/email/leadId if admin is available;
+      // otherwise fall back to the values the client passed.
+      let existing: any = {
+        name: signedName,
+        email: req.body.customerEmail || null,
+        leadId: req.body.leadId || null,
       };
+      if (adminDb) {
+        try {
+          const snap = await adminDb.collection("submissions").doc(submissionId).get();
+          if (snap.exists) existing = { ...snap.data(), ...existing };
+        } catch (e) {
+          console.warn("Admin doc lookup skipped:", e);
+        }
+      }
 
-      await ref.set({ acceptance, status: "accepted" }, { merge: true });
-
-      // If this submission is linked to a Pipedrive deal, move it to a
-      // "Signed / Accepted" stage and drop a note. Fire-and-forget —
-      // don't block the customer if Pipedrive is slow.
-      const leadId = existing.leadId || null;
+      // Fire-and-forget: Pipedrive deal note
+      const leadId = existing.leadId || req.body.leadId || null;
       if (leadId && hasPipedriveConfig()) {
         const domain = getPipedriveDomain();
         (async () => {
@@ -854,13 +846,11 @@ export async function createExpressApp() {
                 deal_id: leadId,
               }),
             });
-          } catch (e) {
-            console.error("Pipedrive accept note error:", e);
-          }
+          } catch (e) { console.error("Pipedrive accept note error:", e); }
         })();
       }
 
-      // Notify admin by email (fire-and-forget)
+      // Fire-and-forget: admin email alert
       if (resend) {
         (async () => {
           try {
@@ -875,16 +865,21 @@ export async function createExpressApp() {
                 <p><strong>Customer:</strong> ${existing.name || 'N/A'} (${existing.email || 'N/A'})</p>
                 <p><strong>Accepted:</strong> ${new Date().toLocaleString()}</p>
                 <p><strong>IP:</strong> ${signerIp}</p>
-                <p><a href="${process.env.ALLOWED_ORIGINS || 'https://eclipsepergola.netlify.app'}/admin" style="display:inline-block;background:#C5A059;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;">Open in CRM</a></p>
+                <p><strong>Device:</strong> ${signerUserAgent.slice(0, 120)}</p>
+                <p><a href="https://eclipsepergola.netlify.app/admin" style="display:inline-block;background:#C5A059;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;">Open in CRM</a></p>
               `,
             });
-          } catch (e) {
-            console.error("Accept email error:", e);
-          }
+          } catch (e) { console.error("Accept email error:", e); }
         })();
       }
 
-      return res.json({ success: true });
+      // Return captured metadata so the client can include it in its
+      // Firestore signature write.
+      return res.json({
+        success: true,
+        signerIp,
+        signerUserAgent,
+      });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("accept-proposal error:", msg);
