@@ -892,66 +892,8 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
 
   return (
     <div className="w-full h-full bg-[#f1f5f9] relative cursor-move">
-      {!props.staticMode && (
-        <div className="absolute top-4 right-4 lg:top-8 lg:right-8 z-10 flex flex-col md:flex-row flex-wrap justify-end gap-2 md:gap-3 w-auto">
-          {/* Mobile Dropdown Button */}
-          <div className="md:hidden relative">
-            <button 
-              onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-              className="px-4 py-2 rounded-none shadow-sm transition-all text-[10px] uppercase tracking-[0.2em] font-bold border bg-luxury-black text-white border-luxury-black flex items-center gap-2"
-            >
-              {view === 'perspective' ? '3D View' : view === 'top' ? 'Top View' : view === 'front' ? 'Front View' : 'Side View'}
-              <ChevronDown className={`w-3 h-3 transition-transform ${isViewMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {isViewMenuOpen && (
-              <div className="absolute top-full right-0 mt-1 flex flex-col bg-white border border-luxury-black/10 shadow-xl w-full">
-                {['perspective', 'top', 'front', 'side'].map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => handleViewChange(v)}
-                    className={`px-4 py-3 text-[10px] uppercase tracking-[0.2em] font-bold text-left ${view === v ? 'bg-luxury-black/5 text-luxury-gold' : 'text-luxury-black hover:bg-luxury-black/5'}`}
-                  >
-                    {v === 'perspective' ? '3D View' : v === 'top' ? 'Top View' : v === 'front' ? 'Front View' : 'Side View'}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Desktop/Tablet Buttons */}
-          <div className="hidden md:flex flex-row gap-3">
-            <button 
-              onClick={() => handleViewChange('perspective')}
-              className={`px-6 py-2.5 rounded-none shadow-sm transition-all text-[10px] uppercase tracking-[0.2em] font-bold border ${view === 'perspective' ? 'bg-luxury-black text-white border-luxury-black' : 'bg-white/80 backdrop-blur-md text-luxury-black border-luxury-black/10 hover:bg-white'}`}
-              title="3D Perspective View"
-            >
-              3D View
-            </button>
-            <button 
-              onClick={() => handleViewChange('top')}
-              className={`px-6 py-2.5 rounded-none shadow-sm transition-all text-[10px] uppercase tracking-[0.2em] font-bold border ${view === 'top' ? 'bg-luxury-black text-white border-luxury-black' : 'bg-white/80 backdrop-blur-md text-luxury-black border-luxury-black/10 hover:bg-white'}`}
-              title="Top View"
-            >
-              Top View
-            </button>
-            <button 
-              onClick={() => handleViewChange('front')}
-              className={`px-6 py-2.5 rounded-none shadow-sm transition-all text-[10px] uppercase tracking-[0.2em] font-bold border ${view === 'front' ? 'bg-luxury-black text-white border-luxury-black' : 'bg-white/80 backdrop-blur-md text-luxury-black border-luxury-black/10 hover:bg-white'}`}
-              title="Front View"
-            >
-              Front View
-            </button>
-            <button 
-              onClick={() => handleViewChange('side')}
-              className={`px-6 py-2.5 rounded-none shadow-sm transition-all text-[10px] uppercase tracking-[0.2em] font-bold border ${view === 'side' ? 'bg-luxury-black text-white border-luxury-black' : 'bg-white/80 backdrop-blur-md text-luxury-black border-luxury-black/10 hover:bg-white'}`}
-              title="Side View"
-            >
-              Side View
-            </button>
-          </div>
-        </div>
-      )}
+      {/* View toggles hidden — live configurator shows 3D perspective only.
+          All 4 views still render in the PDF via the `view` prop. */}
 
       {/* Loading Overlay */}
       {!isCanvasReady && !props.staticMode && (
