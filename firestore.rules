@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt']) &&
              data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -123,8 +123,8 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidSubmissionUpdate(data, prevData) {
-      // Allow updating email tracking fields + PDF attachment URL
-      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename'];
+      // Allow updating email tracking fields + PDF attachment URL + viewedAt
+      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt'];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return affectedKeys.hasOnly(allowedFields);
     }

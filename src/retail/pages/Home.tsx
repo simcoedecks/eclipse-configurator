@@ -850,11 +850,28 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       let submissionId: string | null = null;
 
       // 1. Save to Firestore (without PDF to save space)
+      // Include full pricing breakdown so the admin detail view can show it
+      const pricingBreakdown = {
+        basePrice: pdfData.basePrice,
+        subtotal: pdfData.subtotal,
+        hst: pdfData.hst,
+        total: pdfData.total,
+        itemizedAccessories: pdfData.accessories?.map((a: any) => ({
+          id: a.id || null,
+          name: a.name || '',
+          cost: typeof a.cost === 'number' ? a.cost : 0,
+          quantity: a.quantity || 1,
+        })) || [],
+      };
+      const summaryText = getQuoteSummary();
       try {
         const submissionRef = await addDoc(collection(db, 'submissions'), {
           ...baseData,
           contractorId,
           isDuplicate: isDuplicateLead,
+          pricingBreakdown,
+          summary: summaryText,
+          viewedAt: null,
           createdAt: serverTimestamp()
         });
         submissionId = submissionRef.id;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
-import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X } from 'lucide-react';
+import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X, Eye, EyeOff, CheckCheck } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function Admin() {
@@ -22,6 +22,8 @@ export default function Admin() {
   const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'unique'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
+  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [detailSub, setDetailSub] = useState<any | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -124,6 +126,9 @@ export default function Admin() {
       // Duplicate filter
       if (duplicateFilter === 'duplicates' && !sub.isDuplicate) return false;
       if (duplicateFilter === 'unique' && sub.isDuplicate) return false;
+      // Read filter
+      if (readFilter === 'unread' && sub.viewedAt) return false;
+      if (readFilter === 'read' && !sub.viewedAt) return false;
       // Date filter
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
         const created = sub.createdAt.toDate().getTime();
@@ -148,7 +153,7 @@ export default function Admin() {
       }
     });
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy]);
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -156,8 +161,43 @@ export default function Admin() {
     setDuplicateFilter('all');
     setDateFilter('all');
     setSortBy('date-desc');
+    setReadFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all';
+
+  const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
+
+  const markAsViewed = async (submissionId: string) => {
+    try {
+      await setDoc(doc(db, 'submissions', submissionId), { viewedAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+      console.error('Failed to mark as viewed', e);
+    }
+  };
+
+  const markAsUnread = async (submissionId: string) => {
+    try {
+      await setDoc(doc(db, 'submissions', submissionId), { viewedAt: null }, { merge: true });
+    } catch (e) {
+      console.error('Failed to mark as unread', e);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (unreadCount === 0) return;
+    if (!confirm(`Mark all ${unreadCount} unread submissions as read?`)) return;
+    try {
+      const batch = writeBatch(db);
+      submissions.filter(s => !s.viewedAt).forEach(s => {
+        batch.set(doc(db, 'submissions', s.id), { viewedAt: serverTimestamp() }, { merge: true });
+      });
+      await batch.commit();
+      toast.success('All submissions marked as read');
+    } catch (e) {
+      console.error('Failed to mark all as read', e);
+      toast.error('Failed to mark all as read');
+    }
+  };
 
   const downloadCSV = () => {
     const dataset = filteredSubmissions.length > 0 ? filteredSubmissions : submissions;
@@ -269,6 +309,11 @@ export default function Admin() {
             }`}
           >
             Submissions ({submissions.length})
+            {unreadCount > 0 && activeTab !== 'submissions' && (
+              <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-luxury-gold text-white text-[10px] font-bold">
+                {unreadCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('jobs')}
@@ -471,6 +516,11 @@ export default function Admin() {
                   <option value="unique">Unique Only</option>
                   <option value="duplicates">Duplicates Only</option>
                 </select>
+                <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="all">All (Read & Unread)</option>
+                  <option value="unread">Unread Only</option>
+                  <option value="read">Read Only</option>
+                </select>
                 <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
                   <option value="all">Any Time</option>
                   <option value="7d">Last 7 Days</option>
@@ -494,8 +544,24 @@ export default function Admin() {
                   </button>
                 )}
               </div>
-              <div className="text-xs text-gray-500 mt-3">
-                Showing <span className="font-semibold text-gray-800">{filteredSubmissions.length}</span> of {submissions.length} submissions
+              <div className="flex items-center justify-between mt-3">
+                <div className="text-xs text-gray-500">
+                  Showing <span className="font-semibold text-gray-800">{filteredSubmissions.length}</span> of {submissions.length} submissions
+                  {unreadCount > 0 && (
+                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-luxury-gold/10 text-luxury-gold text-[10px] font-bold uppercase tracking-wider">
+                      {unreadCount} new
+                    </span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-luxury-gold font-medium"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    Mark all read
+                  </button>
+                )}
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -524,12 +590,23 @@ export default function Admin() {
                   ) : (
                     filteredSubmissions.map((sub) => {
                       const config = sub.configuration || {};
+                      const isUnread = !sub.viewedAt;
                       return (
-                        <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors">
+                        <tr
+                          key={sub.id}
+                          onClick={() => {
+                            setDetailSub(sub);
+                            if (isUnread) markAsViewed(sub.id);
+                          }}
+                          className={`cursor-pointer transition-colors ${isUnread ? 'bg-luxury-gold/[0.04] hover:bg-luxury-gold/10 border-l-4 border-luxury-gold' : 'hover:bg-gray-50/50 border-l-4 border-transparent'}`}
+                        >
                           <td className="p-4 align-top whitespace-nowrap">
                             <div className="flex items-center gap-2 text-gray-600">
+                              {isUnread && <span className="w-2 h-2 rounded-full bg-luxury-gold" title="Unread" />}
                               <Calendar className="w-4 h-4" />
-                              {sub.createdAt ? new Date(sub.createdAt.toDate()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                              <span className={isUnread ? 'font-semibold text-gray-900' : ''}>
+                                {sub.createdAt ? new Date(sub.createdAt.toDate()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                              </span>
                             </div>
                           </td>
                           <td className="p-4 align-top">
@@ -602,6 +679,7 @@ export default function Admin() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 download={sub.pdfFilename || undefined}
+                                onClick={(e) => e.stopPropagation()}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white font-medium text-xs transition-colors border border-luxury-gold/20"
                               >
                                 <FileText className="w-3.5 h-3.5" />
@@ -623,8 +701,9 @@ export default function Admin() {
                               )}
                               
                               {(sub.adminEmailId || sub.customerEmailId) && (
-                                <button 
+                                <button
                                   onClick={async (e) => {
+                                    e.stopPropagation();
                                     const btn = e.currentTarget;
                                     const originalText = btn.innerText;
                                     btn.disabled = true;
@@ -730,6 +809,149 @@ export default function Admin() {
           </div>
         )}
       </div>
+
+      {/* Submission Detail Modal */}
+      {detailSub && (() => {
+        const d = detailSub;
+        const cfg = d.configuration || {};
+        const pb = d.pricingBreakdown || {};
+        const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setDetailSub(null)}>
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-xl font-bold text-gray-900">{d.name}</h2>
+                    {d.isDuplicate && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">⚠ Duplicate</span>
+                    )}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${d.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{d.type}</span>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Submitted {d.createdAt ? new Date(d.createdAt.toDate()).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { markAsUnread(d.id); setDetailSub(null); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                    Mark unread
+                  </button>
+                  <button
+                    onClick={() => setDetailSub(null)}
+                    className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left column: details + pricing */}
+                <div className="space-y-5">
+                  {/* Contact */}
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Contact</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${d.email}`} className="text-gray-900 hover:underline">{d.email}</a></div>
+                      {d.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${d.phone}`} className="text-gray-900 hover:underline">{d.phone}</a></div>}
+                      {(d.address || d.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span className="text-gray-900">{[d.address, d.city].filter(Boolean).join(', ')}</span></div>}
+                    </div>
+                  </section>
+
+                  {/* Configuration */}
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Configuration</h3>
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                      <div><span className="text-gray-500">Size:</span> <span className="font-medium">{cfg.width}' × {cfg.depth}' × {cfg.height}'</span></div>
+                      <div><span className="text-gray-500">Frame:</span> <span className="font-medium">{cfg.frameColor}</span></div>
+                      <div><span className="text-gray-500">Louvers:</span> <span className="font-medium">{cfg.louverColor}</span></div>
+                    </div>
+                  </section>
+
+                  {/* Pricing Breakdown */}
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Pricing Breakdown</h3>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          <tr>
+                            <td className="px-3 py-2 text-gray-700">Bespoke Pergola</td>
+                            <td className="px-3 py-2 text-right font-medium">{fmt(pb.basePrice)}</td>
+                          </tr>
+                          {(pb.itemizedAccessories || []).map((a: any, i: number) => (
+                            <tr key={i}>
+                              <td className="px-3 py-2 text-gray-700 pl-6">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td>
+                              <td className="px-3 py-2 text-right font-medium">{fmt(a.cost)}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-50">
+                            <td className="px-3 py-2 font-medium">Subtotal</td>
+                            <td className="px-3 py-2 text-right font-semibold">{fmt(pb.subtotal)}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-2 text-gray-500">HST (13%)</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{fmt(pb.hst)}</td>
+                          </tr>
+                          <tr className="bg-luxury-gold/5 border-t-2 border-luxury-gold/30">
+                            <td className="px-3 py-3 font-bold text-luxury-black">Total</td>
+                            <td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(pb.total)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    {!pb.basePrice && (
+                      <p className="text-xs text-gray-400 italic mt-2">Detailed breakdown unavailable for submissions created before this feature was added.</p>
+                    )}
+                  </section>
+
+                  {d.summary && (
+                    <section>
+                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Full Summary</h3>
+                      <pre className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap font-sans text-gray-700">{d.summary}</pre>
+                    </section>
+                  )}
+                </div>
+
+                {/* Right column: PDF */}
+                <div>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Proposal Document</h3>
+                  {d.pdfUrl ? (
+                    <div className="space-y-2">
+                      <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-100" style={{ height: '65vh' }}>
+                        <iframe src={d.pdfUrl} className="w-full h-full" title={`Proposal ${d.name}`} />
+                      </div>
+                      <a
+                        href={d.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={d.pdfFilename || undefined}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-luxury-gold text-white hover:bg-luxury-gold/90 font-medium text-sm"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="h-64 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 text-sm italic">
+                      PDF not available for this submission
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
