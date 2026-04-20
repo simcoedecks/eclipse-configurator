@@ -142,11 +142,12 @@ export default function Home({ skipIntro = false }: { skipIntro?: boolean }) {
         let cost = 0;
         let breakdown: { price: number }[] = [];
         
+        const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
         if (accessory.type === 'flat') {
-          cost = accessory.price;
+          cost = accessory.price * qty;
           if (id === 'heater' && heaterControl === 'dimmer') cost += 1031;
         } else if (accessory.type === 'sqft') {
-          cost = accessory.price * (depth * width);
+          cost = accessory.price * (depth * width) * qty;
         } else if (accessory.type === 'screen_width') {
           cost = calculateScreenPrice(width, height, numScreenBaysX);
           if (numScreenBaysX > 1) {
@@ -189,7 +190,8 @@ export default function Home({ skipIntro = false }: { skipIntro?: boolean }) {
           }
         }
         
-        let itemText = `- ${accessory.name}: $${cost.toFixed(2)}`;
+        const qtyLabel = (accessory.quantifiable && qty > 1) ? ` × ${qty}` : '';
+        let itemText = `- ${accessory.name}${qtyLabel}: $${cost.toFixed(2)}`;
         
         if (breakdown.length > 1 && (accessory.type.includes('screen') || accessory.type.includes('wall'))) {
           const grouped = breakdown.reduce((acc, item) => {
@@ -309,6 +311,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [guillotineOpen, setGuillotineOpen] = useState<number>(0);
   const [houseWalls, setHouseWalls] = useState<Set<'back' | 'left' | 'right' | 'front'>>(new Set());
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
+  const [accessoryQuantities, setAccessoryQuantities] = useState<Record<string, number>>({});
   const [wallColor, setWallColor] = useState<string>('#0A0A0A');
   const [houseWallColor, setHouseWallColor] = useState<string>('#82A0C2'); // Light Blue Siding
   const [heaterControl, setHeaterControl] = useState<'switch' | 'dimmer'>('switch');
@@ -328,6 +331,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     setGuillotineOpen(0);
     setHouseWalls(new Set());
     setSelectedAccessories(new Set());
+    setAccessoryQuantities({});
     setWallColor('#0A0A0A');
     setHouseWallColor('#82A0C2');
     setHeaterControl('switch');
@@ -511,17 +515,18 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     let total = 0;
     const sqft = depth * width;
     const wallUnitPrice = sqft < 120 ? 60 : 55;
-    
+
     selectedAccessories.forEach(id => {
       const accessory = ACCESSORIES.find(a => a.id === id);
       if (accessory) {
+        const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
         if (accessory.type === 'flat') {
-          total += accessory.price;
+          total += accessory.price * qty;
           if (id === 'heater' && heaterControl === 'dimmer') {
-            total += 1031; // Bromic Dimmer cost
+            total += 1031; // Bromic Dimmer cost (one controller regardless of heater qty)
           }
         } else if (accessory.type === 'sqft') {
-          total += accessory.price * sqft;
+          total += accessory.price * sqft * qty;
         } else if (accessory.type === 'screen_width') {
           total += calculateScreenPrice(width, height, numScreenBaysX);
         } else if (accessory.type === 'screen_depth') {
@@ -534,7 +539,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       }
     });
     return total;
-  }, [selectedAccessories, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ]);
+  }, [selectedAccessories, accessoryQuantities, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ]);
 
   const woodgrainUpgrade = useMemo(() => {
     let total = 0;
@@ -636,12 +641,13 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         return walls;
       }
 
-      let cost = acc.price;
-      if (acc.type === 'sqft') cost = acc.price * (width * depth);
+      const qty = acc.quantifiable ? (accessoryQuantities[id] || 1) : 1;
+      let cost = acc.price * qty;
+      if (acc.type === 'sqft') cost = acc.price * (width * depth) * qty;
       if (id === 'heater' && heaterControl === 'dimmer') {
-        cost += 1031;
+        cost += 1031; // dimmer is one controller regardless of heater count
       }
-      return [{ ...acc, cost, quantity: 1 }];
+      return [{ ...acc, cost, quantity: qty }];
     }) as any[];
 
     if (louverUpgrade > 0) {
@@ -705,7 +711,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         houseWall: 'none' as any, houseWalls, staticMode: true
       }
     };
-  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, heaterControl, numScreenBaysX, numScreenBaysZ]);
+  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ]);
 
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
@@ -721,11 +727,12 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       selectedAccessories.forEach(id => {
         const accessory = ACCESSORIES.find(a => a.id === id);
         if (accessory) {
+          const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
           if (accessory.type === 'flat') {
-            total += accessory.price;
+            total += accessory.price * qty;
             if (id === 'heater' && heaterControl === 'dimmer') total += 1031;
           } else if (accessory.type === 'sqft') {
-            total += accessory.price * (width * depth);
+            total += accessory.price * (width * depth) * qty;
           } else if (accessory.type === 'screen_width') {
             total += calculateScreenPrice(width, height, numScreenBaysX);
           } else if (accessory.type === 'screen_depth') {
@@ -756,7 +763,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     }
     
     return total;
-  }, [basePrice, louverColor, width, depth, currentStep, selectedAccessories, height, numScreenBaysX, numScreenBaysZ, wallColor, heaterControl]);
+  }, [basePrice, louverColor, width, depth, currentStep, selectedAccessories, accessoryQuantities, height, numScreenBaysX, numScreenBaysZ, wallColor, heaterControl]);
 
   const heaterCardRef = useRef<HTMLButtonElement>(null);
 
@@ -787,6 +794,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     const wasSelected = next.has(id);
     if (wasSelected) {
       next.delete(id);
+      // Clear any stored quantity for this item
+      const { [id]: _removed, ...rest } = accessoryQuantities;
+      setAccessoryQuantities(rest);
     } else {
       next.add(id);
     }
@@ -798,6 +808,18 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         heaterCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 150);
     }
+  };
+
+  // Quantity helpers for quantifiable accessories (heaters, fans, lighting, audio)
+  const getQty = (id: string): number => {
+    if (!selectedAccessories.has(id)) return 0;
+    return accessoryQuantities[id] || 1;
+  };
+  const setQty = (id: string, qty: number) => {
+    const acc = ACCESSORIES.find(a => a.id === id);
+    const max = acc?.maxQuantity || 4;
+    const clamped = Math.max(1, Math.min(max, qty));
+    setAccessoryQuantities({ ...accessoryQuantities, [id]: clamped });
   };
 
   const toggleAccessory = (id: string) => {
@@ -866,7 +888,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           totalPrice: totalPrice ? formatCurrency(totalPrice) : 'N/A',
           accessories: Array.from(selectedAccessories).map(id => {
             const acc = ACCESSORIES.find(a => a.id === id);
-            return acc ? acc.name : id;
+            const qty = acc?.quantifiable ? (accessoryQuantities[id] || 1) : 1;
+            if (!acc) return id;
+            return qty > 1 ? `${acc.name} × ${qty}` : acc.name;
           })
         }
       };
@@ -1512,9 +1536,37 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           <p className="text-xs text-slate-500 dark:text-white/50 mb-3 flex-1 mt-2">{description}</p>
           <div className="flex justify-between items-center w-full">
             <p className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
-              +{formatCurrency(accessoryCost)}
+              {isSelected && accessory.quantifiable
+                ? <>+{formatCurrency(accessoryCost * getQty(accessory.id))}{getQty(accessory.id) > 1 && <span className="text-[10px] opacity-60 ml-1">({formatCurrency(accessoryCost)} × {getQty(accessory.id)})</span>}</>
+                : <>+{formatCurrency(accessoryCost)}</>}
             </p>
           </div>
+          {accessory.quantifiable && isSelected && (
+            <div className="w-full mt-3 pt-3 border-t border-emerald-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800">Quantity</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setQty(accessory.id, getQty(accessory.id) - 1); }}
+                  disabled={getQty(accessory.id) <= 1}
+                  className="w-8 h-8 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                  aria-label="Decrease quantity"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="w-6 text-center text-sm font-bold text-emerald-900">{getQty(accessory.id)}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setQty(accessory.id, getQty(accessory.id) + 1); }}
+                  disabled={getQty(accessory.id) >= (accessory.maxQuantity || 4)}
+                  className="w-8 h-8 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                  aria-label="Increase quantity"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
           {accessory.id === 'heater' && isSelected && (
             <div className="w-full mt-3 pt-3 border-t border-emerald-100" onClick={(e) => e.stopPropagation()}>
               <label className="block text-[10px] font-bold text-emerald-800 mb-2">Add Smart Control?</label>
@@ -2164,11 +2216,12 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         let wallWoodgrainCost = 0;
                         let wallWoodgrainCount = 0;
 
+                        const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
                         if (accessory.type === 'flat') {
-                          cost = accessory.price;
+                          cost = accessory.price * qty;
                           if (id === 'heater' && heaterControl === 'dimmer') cost += 1031;
                         } else if (accessory.type === 'sqft') {
-                          cost = accessory.price * (depth * width);
+                          cost = accessory.price * (depth * width) * qty;
                         } else if (accessory.type === 'screen_width') {
                           cost = calculateScreenPrice(width, height, numScreenBaysX);
                           if (numScreenBaysX > 1) {
@@ -2256,7 +2309,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         return (
                           <div key={id} className="flex flex-col">
                             <div className="flex justify-between items-center text-[11px]">
-                              <span className="font-serif text-luxury-black/60 dark:text-white/60">{accessory.name} {accessory.type.includes('wall') && `(${COLORS.find(c => c.hex === wallColor)?.name})`}</span>
+                              <span className="font-serif text-luxury-black/60 dark:text-white/60">{accessory.name}{accessory.quantifiable && qty > 1 ? ` × ${qty}` : ''} {accessory.type.includes('wall') && `(${COLORS.find(c => c.hex === wallColor)?.name})`}</span>
                               <span className="font-serif text-luxury-black/80">{formatCurrency(cost)}</span>
                             </div>
                             {breakdownRender}

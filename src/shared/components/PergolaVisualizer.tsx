@@ -830,24 +830,33 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         const lrLengthDelta = frontInset + backInset;
         const lrCenterShift = (backInset - frontInset) / 2;
 
+        // Walls span post-center-to-post-center so they visually extend
+        // through the posts with no gap. Bay span includes one postSize extra
+        // (half a post at each end of the bay).
+        const frontBackBayWidth = screenWidthX + postSize;
+        const leftRightBayWidth = screenWidthZ + postSize;
+
         return (
           <>
-            {/* Front/back privacy walls — always full width of the bay */}
+            {/* Front/back privacy walls — span post-to-post */}
             {accessories.has('wall_front') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wf-${i}`} width={screenWidthX} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              <PrivacyWall key={`wf-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
             ))}
             {accessories.has('wall_back') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wb-${i}`} width={screenWidthX} height={privacyHeight} position={[x, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              <PrivacyWall key={`wb-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
             ))}
 
-            {/* Left/right privacy walls — one continuous wall, shortened where corners meet */}
+            {/* Left/right privacy walls — one continuous panel spanning all bays,
+                post-to-post, shortened at corners where another wall exists */}
             {accessories.has('wall_right') && (() => {
-              const adjustedWidth = Math.max(0.5, screenWidthZ * screenCentersZ.length - lrLengthDelta);
+              const fullSpan = leftRightBayWidth * screenCentersZ.length;
+              const adjustedWidth = Math.max(0.5, fullSpan - lrLengthDelta);
               const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
               return <PrivacyWall key="wr-joined" width={adjustedWidth} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
             })()}
             {accessories.has('wall_left') && (() => {
-              const adjustedWidth = Math.max(0.5, screenWidthZ * screenCentersZ.length - lrLengthDelta);
+              const fullSpan = leftRightBayWidth * screenCentersZ.length;
+              const adjustedWidth = Math.max(0.5, fullSpan - lrLengthDelta);
               const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
               return <PrivacyWall key="wl-joined" width={adjustedWidth} height={privacyHeight} position={[-xOffset + 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
             })()}
