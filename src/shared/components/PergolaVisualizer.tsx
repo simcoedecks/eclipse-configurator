@@ -852,24 +852,42 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
               return <PrivacyWall key="wl-joined" width={adjustedWidth} height={privacyHeight} position={[-xOffset + 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
             })()}
 
-            {/* Structure walls — 2' above pergola; left/right shortened to meet corners flush */}
+            {/* Structure walls — 2' above pergola.
+                If no perpendicular structure wall intersects an end, that end
+                extends 10' past the pergola (original "house extends past" look).
+                If another structure wall meets the end, trim it to meet flush. */}
             {Array.from(structureSides).map(side => {
+              const EXT = 10;           // ft past pergola if no intersection
+              const TRIM = 0.25;        // ft inset when two structure walls meet
+
               const isSide = side === 'left' || side === 'right';
-              let wallWidthVal: number;
-              let posZ: number;
+              const perpEnd1 = isSide ? 'back' : 'left';   // -Z or -X end
+              const perpEnd2 = isSide ? 'front' : 'right'; // +Z or +X end
+              const baseDim = isSide ? depth : width;
+
+              const end1Intersects = structureSides.has(perpEnd1);
+              const end2Intersects = structureSides.has(perpEnd2);
+
+              const end1 = end1Intersects ? -baseDim / 2 + TRIM : -baseDim / 2 - EXT;
+              const end2 = end2Intersects ?  baseDim / 2 - TRIM :  baseDim / 2 + EXT;
+              const wallLength = end2 - end1;
+              const wallCenter = (end1 + end2) / 2;
+
+              let posX: number, posZ: number, rotY: number;
               if (isSide) {
-                wallWidthVal = Math.max(0.5, depth - lrLengthDelta);
-                posZ = lrCenterShift;
+                posX = side === 'right' ? width / 2 : -width / 2;
+                posZ = wallCenter;
+                rotY = side === 'right' ? -Math.PI / 2 : Math.PI / 2;
               } else {
-                wallWidthVal = width;
-                posZ = side === 'back' ? -depth / 2 : side === 'front' ? depth / 2 : 0;
+                posX = wallCenter;
+                posZ = side === 'front' ? depth / 2 : -depth / 2;
+                rotY = side === 'front' ? Math.PI : 0;
               }
-              const posX = side === 'right' ? width / 2 : side === 'left' ? -width / 2 : 0;
-              const rotY = side === 'right' ? -Math.PI / 2 : side === 'left' ? Math.PI / 2 : side === 'front' ? Math.PI : 0;
+
               return (
                 <HouseWall
                   key={`structure-${side}`}
-                  width={wallWidthVal}
+                  width={wallLength}
                   height={structureHeight}
                   position={[posX, structureHeight / 2, posZ]}
                   rotation={[0, rotY, 0]}
