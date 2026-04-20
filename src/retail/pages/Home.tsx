@@ -307,7 +307,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [screenDrop, setScreenDrop] = useState<number>(100);
   const [activeColorWarning, setActiveColorWarning] = useState<string | null>(null);
   const [guillotineOpen, setGuillotineOpen] = useState<number>(0);
-  const [houseWall, setHouseWall] = useState<'none' | 'back' | 'left' | 'right' | 'front'>('none');
+  const [houseWalls, setHouseWalls] = useState<Set<'back' | 'left' | 'right' | 'front'>>(new Set());
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
   const [wallColor, setWallColor] = useState<string>('#0A0A0A');
   const [houseWallColor, setHouseWallColor] = useState<string>('#82A0C2'); // Light Blue Siding
@@ -326,7 +326,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     setLouverAngle(60);
     setScreenDrop(100);
     setGuillotineOpen(0);
-    setHouseWall('none');
+    setHouseWalls(new Set());
     setSelectedAccessories(new Set());
     setWallColor('#0A0A0A');
     setHouseWallColor('#82A0C2');
@@ -676,7 +676,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       visualizerProps: {
         width, depth, height, accessories: selectedAccessories, frameColor, louverColor,
         louverAngle: 0, screenDrop: 100, guillotineOpen: 50, wallColor: wallColor, houseWallColor: '#e2e8f0',
-        houseWall: 'none' as any, staticMode: true
+        houseWall: 'none' as any, houseWalls, staticMode: true
       }
     };
   }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, heaterControl, numScreenBaysX, numScreenBaysZ]);
@@ -734,7 +734,29 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
   const heaterCardRef = useRef<HTMLButtonElement>(null);
 
-  const toggleAccessory = (id: string) => {
+  // Conflict detection: structure walls and screens occupy sides
+  const getSideOfAccessory = (id: string): 'front' | 'back' | 'left' | 'right' | null => {
+    if (id.endsWith('_front')) return 'front';
+    if (id.endsWith('_back')) return 'back';
+    if (id.endsWith('_left')) return 'left';
+    if (id.endsWith('_right')) return 'right';
+    return null;
+  };
+
+  const getConflictReason = (id: string): 'structure' | 'screen' | null => {
+    const side = getSideOfAccessory(id);
+    if (!side) return null;
+    // Structure wall on same side → any vertical coverage is a conflict
+    if (houseWalls.has(side)) return 'structure';
+    // Screen on same side → privacy wall is a conflict
+    if (id.startsWith('wall_') && selectedAccessories.has(`screen_${side}`)) return 'screen';
+    return null;
+  };
+
+  // Pending conflict accessory, shown in modal before actually toggling
+  const [pendingConflict, setPendingConflict] = useState<{ id: string; reason: 'structure' | 'screen' } | null>(null);
+
+  const performToggle = (id: string) => {
     const next = new Set(selectedAccessories);
     const wasSelected = next.has(id);
     if (wasSelected) {
@@ -750,6 +772,19 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         heaterCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 150);
     }
+  };
+
+  const toggleAccessory = (id: string) => {
+    const alreadySelected = selectedAccessories.has(id);
+    // Only check for conflict on ADD, not remove
+    if (!alreadySelected) {
+      const reason = getConflictReason(id);
+      if (reason) {
+        setPendingConflict({ id, reason });
+        return;
+      }
+    }
+    performToggle(id);
   };
 
   useEffect(() => {
@@ -1102,7 +1137,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               wallColor={wallColor}
               houseWallColor={houseWallColor}
               customModels={customModels}
-              houseWall={houseWall}
+              houseWalls={houseWalls}
             />
 
             {/* Luxury Overlay Elements */}
@@ -1306,17 +1341,24 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                 cost = a.price;
               }
 
+              const conflict = !isSelected ? getConflictReason(a.id) : null;
               return (
                 <button
                   key={a.id}
                   onClick={() => toggleAccessory(a.id)}
+                  title={conflict === 'structure' ? 'A structure wall is on this side' : conflict === 'screen' ? 'A motorized screen is on this side' : undefined}
                   className={`flex items-center justify-between px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
-                    isSelected 
-                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700' 
-                      : 'border-slate-200 dark:border-white/10 bg-slate-50 text-slate-600 dark:text-white/60 hover:border-slate-300 dark:border-white/15'
+                    isSelected
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700'
+                      : conflict
+                        ? 'border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] text-slate-400 dark:text-white/30 opacity-60 hover:opacity-80 hover:border-amber-300'
+                        : 'border-slate-200 dark:border-white/10 bg-slate-50 text-slate-600 dark:text-white/60 hover:border-slate-300 dark:border-white/15'
                   }`}
                 >
-                  <span>{sideName}</span>
+                  <span className="flex items-center gap-1">
+                    {conflict && <span className="text-[9px] text-amber-500">⚠</span>}
+                    {sideName}
+                  </span>
                   <span className="opacity-70">+{formatCurrency(cost)}</span>
                 </button>
               );
@@ -1467,7 +1509,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           wallColor={wallColor}
           houseWallColor={houseWallColor}
           customModels={customModels}
-          houseWall={houseWall}
+          houseWalls={houseWalls}
         />
 
         {/* Luxury Overlay Elements */}
@@ -1660,7 +1702,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
 
                 {/* Structure */}
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Structure</label>
+                    <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Select one or more sides</span>
+                  </div>
                   <div className="grid grid-cols-5 gap-1.5">
                     {[
                       { value: 'none', label: 'Free', sub: 'standing', diagram: (
@@ -1693,11 +1738,20 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                         </svg>
                       ) },
                     ].map((opt) => {
-                      const selected = houseWall === opt.value;
+                      const selected = opt.value === 'none' ? houseWalls.size === 0 : houseWalls.has(opt.value as any);
                       return (
                         <button
                           key={opt.value}
-                          onClick={() => setHouseWall(opt.value as any)}
+                          onClick={() => {
+                            if (opt.value === 'none') {
+                              setHouseWalls(new Set());
+                            } else {
+                              const next = new Set(houseWalls);
+                              if (next.has(opt.value as any)) next.delete(opt.value as any);
+                              else next.add(opt.value as any);
+                              setHouseWalls(next);
+                            }
+                          }}
                           aria-label={`${opt.label} ${opt.sub}`}
                           className={`flex flex-col items-center gap-1 py-2 px-1 rounded-md border transition-all ${
                             selected
@@ -2348,6 +2402,53 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
         )}
       </AnimatePresence>
+      {/* Conflict Confirmation Modal */}
+      <AnimatePresence>
+        {pendingConflict && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-luxury-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`p-6 lg:p-8 max-w-sm w-full shadow-2xl border border-luxury-gold/20 rounded-lg ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
+            >
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl">⚠</span>
+                </div>
+                <h3 className={`text-xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>
+                  {pendingConflict.reason === 'structure' ? 'Existing Structure Wall' : 'Motorized Screen Selected'}
+                </h3>
+                <p className={`text-sm mt-2 leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-500 dark:text-white/50'}`}>
+                  {pendingConflict.reason === 'structure'
+                    ? 'A structure wall is already on this side. Are you sure you want to add a vertical coverage here as well?'
+                    : 'A motorized screen is already on this side. Are you sure you want to add a privacy wall here as well?'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPendingConflict(null)}
+                  className="luxury-button-outline flex-1 !px-4 !py-2.5 text-[11px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (pendingConflict) {
+                      performToggle(pendingConflict.id);
+                      setPendingConflict(null);
+                    }
+                  }}
+                  className="luxury-button flex-1 !px-4 !py-2.5 text-[11px]"
+                >
+                  Add Anyway
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Reset Confirmation Modal */}
       <AnimatePresence>
         {showResetModal && (

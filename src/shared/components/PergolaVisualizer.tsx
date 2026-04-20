@@ -110,6 +110,7 @@ interface PergolaVisualizerProps {
   houseWallColor: string;
   customModels?: { post?: string; beam?: string; louver?: string };
   houseWall?: 'none' | 'back' | 'left' | 'right' | 'front';
+  houseWalls?: Set<'back' | 'left' | 'right' | 'front'>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -564,7 +565,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -831,24 +832,32 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         );
       })()}
 
-      {/* House Wall */}
-      {houseWall && houseWall !== 'none' && (
-        <HouseWall 
-          width={houseWall === 'left' || houseWall === 'right' ? depth + 20 : width + 20}
-          height={height + 10}
-          position={[
-            houseWall === 'right' ? width / 2 : houseWall === 'left' ? -width / 2 : 0, 
-            height / 2 + 2, 
-            houseWall === 'back' ? -depth / 2 : houseWall === 'front' ? depth / 2 : 0
-          ]} 
-          rotation={[
-            0, 
-            houseWall === 'right' ? -Math.PI / 2 : houseWall === 'left' ? Math.PI / 2 : houseWall === 'front' ? Math.PI : 0, 
-            0
-          ]}
-          color={houseWallColor}
-        />
-      )}
+      {/* House / Structure Walls — 2' taller than the pergola, multi-side supported */}
+      {(() => {
+        // Merge legacy single-side prop with new multi-select set
+        const sides = new Set<string>();
+        if (houseWalls) houseWalls.forEach(s => sides.add(s));
+        if (houseWall && houseWall !== 'none') sides.add(houseWall);
+        const structureHeight = height + 2;
+        return Array.from(sides).map(side => (
+          <HouseWall
+            key={`structure-${side}`}
+            width={side === 'left' || side === 'right' ? depth + 20 : width + 20}
+            height={structureHeight}
+            position={[
+              side === 'right' ? width / 2 : side === 'left' ? -width / 2 : 0,
+              structureHeight / 2,
+              side === 'back' ? -depth / 2 : side === 'front' ? depth / 2 : 0
+            ]}
+            rotation={[
+              0,
+              side === 'right' ? -Math.PI / 2 : side === 'left' ? Math.PI / 2 : side === 'front' ? Math.PI : 0,
+              0
+            ]}
+            color={houseWallColor}
+          />
+        ));
+      })()}
     </group>
   );
 };
