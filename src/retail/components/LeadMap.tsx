@@ -30,16 +30,25 @@ const acceptedIcon = L.divIcon({
   iconAnchor: [13, 26],
 });
 
-// Heatmap layer overlay (uses leaflet.heat global plugin)
+// Heatmap layer overlay (uses leaflet.heat global plugin).
+// Tuned for sparse real-world data — larger radius + minOpacity keeps
+// single-point areas still visible as glowing hotspots.
 function HeatLayer({ points }: { points: [number, number, number][] }) {
   const map = useMap();
   useEffect(() => {
     if (!points.length) return;
     const layer = (L as any).heatLayer(points, {
-      radius: 35,
-      blur: 25,
-      maxZoom: 12,
-      gradient: { 0.2: '#C5A059', 0.5: '#ef8a00', 0.8: '#dc2626', 1.0: '#7f1d1d' },
+      radius: 60,
+      blur: 40,
+      minOpacity: 0.55,
+      max: 1.0,
+      gradient: {
+        0.0: '#fef3c7',  // soft pale gold
+        0.25: '#C5A059', // brand gold
+        0.5: '#f97316',  // orange
+        0.75: '#dc2626', // red
+        1.0: '#7f1d1d',  // deep crimson
+      },
     }).addTo(map);
     return () => {
       map.removeLayer(layer);
@@ -97,7 +106,8 @@ export default function LeadMap({ submissions }: { submissions: any[] }) {
       if (!geo) return;
       const p = geo.fromAddress || geo.fromIp;
       if (p && typeof p.lat === 'number' && typeof p.lng === 'number') {
-        const intensity = s.acceptance?.signedAt ? 1.0 : 0.5;
+        // Base weight 0.7 so every lead is visible; accepted deals pop higher
+        const intensity = s.acceptance?.signedAt ? 1.0 : 0.7;
         pts.push([p.lat, p.lng, intensity]);
       }
     });
