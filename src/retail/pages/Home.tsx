@@ -1814,9 +1814,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                  <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
+                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                  </div>
+                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
+                    Includes motorized louver system &amp; LED perimeter lighting
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -1885,9 +1890,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   </p>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                  <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
+                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                  </div>
+                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
+                    Includes motorized louver system &amp; LED perimeter lighting
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -1938,9 +1948,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                  <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
+                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                  </div>
+                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
+                    Includes motorized louver system &amp; LED perimeter lighting
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -1964,9 +1979,14 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       .map(renderAccessory)}
                   </div>
                 </div>
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-center">
-                  <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                  <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
+                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
+                  </div>
+                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
+                    Includes motorized louver system &amp; LED perimeter lighting
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -2000,6 +2020,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                                 <br />
                               </>
                             )}
+                          </p>
+                          <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
+                            Includes motorized louver system &amp; LED perimeter lighting
                           </p>
                         </div>
                         <span className="text-lg font-serif text-luxury-gold">{formatCurrency(basePrice || 0)}</span>

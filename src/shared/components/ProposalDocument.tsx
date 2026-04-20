@@ -102,7 +102,10 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
         </div>
 
         <div className="grid grid-cols-[1fr_100px_50px_100px] px-3 text-[10px] py-3 border-b border-[#e5e7eb]">
-          <div className="font-bold text-[11px]">Motorized Aluminum Louvered Pergola</div>
+          <div>
+            <div className="font-bold text-[11px]">Motorized Aluminum Louvered Pergola</div>
+            <div className="text-[8px] italic text-[#888] mt-0.5">Includes motorized louver system &amp; LED perimeter lighting</div>
+          </div>
           <div className="text-center">${fmt(basePrice)}</div>
           <div className="text-center">1</div>
           <div className="text-right font-bold">${fmt(basePrice)}</div>
