@@ -67,6 +67,64 @@ function hasPipedriveConfig(): boolean {
   return !!(process.env.PIPEDRIVE_API_TOKEN && process.env.PIPEDRIVE_DOMAIN);
 }
 
+// ─── Twilio SMS Helper ──────────────────────────────────────────────────────
+function hasTwilioConfig(): boolean {
+  return !!(
+    process.env.TWILIO_ACCOUNT_SID &&
+    process.env.TWILIO_AUTH_TOKEN &&
+    process.env.TWILIO_FROM_NUMBER
+  );
+}
+
+/** Normalize NA phone numbers to E.164 (+1XXXXXXXXXX).
+ *  Accepts '(555) 123-4567', '555-123-4567', '15551234567', '+15551234567', etc.
+ *  Returns null for anything that can't be turned into a valid 11-digit NA number. */
+function normalizePhoneNA(raw: string): string | null {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length >= 10 && digits.length <= 15 && String(raw).startsWith("+")) return `+${digits}`;
+  return null;
+}
+
+/** Send a plain SMS via Twilio REST API. Fire-and-forget friendly.
+ *  Returns { ok, sid, error } — never throws. */
+async function sendSms(toRaw: string, body: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
+  if (!hasTwilioConfig()) {
+    return { ok: false, error: "Twilio not configured" };
+  }
+  const to = normalizePhoneNA(toRaw);
+  if (!to) {
+    return { ok: false, error: `Invalid phone number: ${toRaw}` };
+  }
+  try {
+    const sid = process.env.TWILIO_ACCOUNT_SID!;
+    const token = process.env.TWILIO_AUTH_TOKEN!;
+    const from = process.env.TWILIO_FROM_NUMBER!;
+    const creds = Buffer.from(`${sid}:${token}`).toString("base64");
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
+    const form = new URLSearchParams({ To: to, From: from, Body: body });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${creds}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("Twilio SMS failed:", data);
+      return { ok: false, error: data.message || "SMS send failed" };
+    }
+    return { ok: true, sid: data.sid };
+  } catch (e: any) {
+    console.error("Twilio SMS exception:", e);
+    return { ok: false, error: e?.message || "Unknown SMS error" };
+  }
+}
+
 // ─── Pipeline / Stage Setup Cache ────────────────────────────────────────────
 // Submissions are created as Deals in a pipeline. We use two stages:
 //   "Incoming Lead"     — fresh, non-duplicate submissions
@@ -677,12 +735,41 @@ export async function createExpressApp() {
         }
       }
 
+      // ── SMS: text the proposal link to the customer (fire-and-forget) ──────
+      // Sends only if Twilio is configured, a phone was provided, and we have
+      // a proposal URL to link to.
+      let customerSmsSid: string | undefined;
+      let customerSmsError: string | null = null;
+      let adminSmsSid: string | undefined;
+      if (phone && proposalUrl && hasTwilioConfig()) {
+        const customerBody =
+          `Hi ${String(name || '').split(' ')[0] || 'there'}, thanks for designing your Eclipse Pergola! ` +
+          `View your interactive proposal and accept it here: ${proposalUrl}\n\n` +
+          `— Eclipse Pergola`;
+        const r = await sendSms(phone, customerBody);
+        if (r.ok) customerSmsSid = r.sid;
+        else customerSmsError = r.error || "SMS failed";
+
+        // Also text admin phone if configured (ADMIN_SMS_NUMBER env)
+        if (process.env.ADMIN_SMS_NUMBER) {
+          const adminBody =
+            `📨 New ${isDuplicate ? '[DUPLICATE] ' : ''}Pergola Quote from ${name} ` +
+            `(${configuration.width}'x${configuration.depth}'x${configuration.height}', ${configuration.totalPrice}). ` +
+            `Proposal: ${proposalUrl}`;
+          const a = await sendSms(process.env.ADMIN_SMS_NUMBER, adminBody);
+          if (a.ok) adminSmsSid = a.sid;
+        }
+      }
+
       return res.json({
         success: true,
         adminEmailId,
         adminError,
         customerEmailId,
         customerError,
+        customerSmsSid,
+        customerSmsError,
+        adminSmsSid,
         pandadocId: pandadocResult?.id,
       });
     } catch (error: unknown) {
