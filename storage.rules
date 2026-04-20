@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Proposal PDFs — writable by anyone who just created a submission
+    // (no auth on retail site), readable by anyone with the URL token.
+    // Max 15MB per file, PDF only.
+    match /proposals/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 15 * 1024 * 1024
+                   && request.resource.contentType == 'application/pdf';
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

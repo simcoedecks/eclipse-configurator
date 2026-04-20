@@ -26,7 +26,7 @@ import {
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import html2canvas from 'html2canvas';
-import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs, onSnapshot, deleteDoc } from '../../shared/firebase';
+import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs, onSnapshot, deleteDoc, storage, storageRef, uploadBytes, getDownloadURL } from '../../shared/firebase';
 import { QRCodeSVG } from 'qrcode.react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
@@ -998,7 +998,25 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           if (type !== 'email') {
             pdf.save(`Eclipse_Proposal_${name.replace(/\s+/g, '_') || 'Quote'}.pdf`);
           }
-          
+
+          // Upload PDF to Firebase Storage so admin can view later
+          if (submissionId && pdfBase64) {
+            try {
+              const pdfBlob = pdf.output('blob');
+              const filename = `${submissionId}_${(name || 'Quote').replace(/\s+/g, '_')}.pdf`;
+              const fileRef = storageRef(storage, `proposals/${filename}`);
+              await uploadBytes(fileRef, pdfBlob, { contentType: 'application/pdf' });
+              const url = await getDownloadURL(fileRef);
+              await setDoc(doc(db, 'submissions', submissionId), {
+                pdfUrl: url,
+                pdfFilename: filename,
+              }, { merge: true });
+              console.log('PDF saved to Firebase Storage:', url);
+            } catch (e) {
+              console.error('Failed to upload PDF to Firebase Storage:', e);
+            }
+          }
+
           // Upload PDF to Pipedrive via background function (15min timeout)
           if (finalLeadId && pdfBase64) {
             try {

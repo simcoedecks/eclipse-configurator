@@ -1,7 +1,7 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, getDocs, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send } from 'lucide-react';
+import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function Admin() {
@@ -16,6 +16,12 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'submissions' | 'jobs' | 'contractors'>('submissions');
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
+  // Submissions search + filter + sort
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'email' | 'consultation'>('all');
+  const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'unique'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -95,15 +101,74 @@ export default function Admin() {
     auth.signOut();
   };
 
+  // Apply search + filters + sort to submissions
+  const filteredSubmissions = useMemo(() => {
+    const parsePrice = (s: any): number => {
+      if (typeof s === 'number') return s;
+      if (!s) return 0;
+      return parseFloat(String(s).replace(/[^0-9.-]+/g, '')) || 0;
+    };
+    const nowMs = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const q = searchQuery.trim().toLowerCase();
+
+    let list = submissions.filter(sub => {
+      // Search
+      if (q) {
+        const hay = [sub.name, sub.email, sub.phone, sub.city, sub.address]
+          .filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      // Type filter
+      if (typeFilter !== 'all' && sub.type !== typeFilter) return false;
+      // Duplicate filter
+      if (duplicateFilter === 'duplicates' && !sub.isDuplicate) return false;
+      if (duplicateFilter === 'unique' && sub.isDuplicate) return false;
+      // Date filter
+      if (dateFilter !== 'all' && sub.createdAt?.toDate) {
+        const created = sub.createdAt.toDate().getTime();
+        const cutoff = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
+        if (nowMs - created > cutoff * dayMs) return false;
+      }
+      return true;
+    });
+
+    list.sort((a, b) => {
+      const aDate = a.createdAt?.toDate?.()?.getTime() || 0;
+      const bDate = b.createdAt?.toDate?.()?.getTime() || 0;
+      const aPrice = parsePrice(a.configuration?.totalPrice);
+      const bPrice = parsePrice(b.configuration?.totalPrice);
+      switch (sortBy) {
+        case 'date-asc':  return aDate - bDate;
+        case 'price-desc': return bPrice - aPrice;
+        case 'price-asc':  return aPrice - bPrice;
+        case 'name':       return (a.name || '').localeCompare(b.name || '');
+        case 'date-desc':
+        default:           return bDate - aDate;
+      }
+    });
+    return list;
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('all');
+    setDuplicateFilter('all');
+    setDateFilter('all');
+    setSortBy('date-desc');
+  };
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc';
+
   const downloadCSV = () => {
-    if (submissions.length === 0) return;
+    const dataset = filteredSubmissions.length > 0 ? filteredSubmissions : submissions;
+    if (dataset.length === 0) return;
 
     const headers = [
-      'Date', 'Type', 'Name', 'Email', 'Phone', 'Address', 'City',
-      'Width', 'Depth', 'Height', 'Frame Color', 'Louver Color', 'Total Price', 'Accessories'
+      'Date', 'Type', 'Duplicate', 'Name', 'Email', 'Phone', 'Address', 'City',
+      'Width', 'Depth', 'Height', 'Frame Color', 'Louver Color', 'Total Price', 'Accessories', 'PDF URL'
     ];
 
-    const rows = submissions.map(sub => {
+    const rows = dataset.map(sub => {
       const date = sub.createdAt ? new Date(sub.createdAt.toDate()).toLocaleDateString() : 'N/A';
       const config = sub.configuration || {};
       const accessories = config.accessories ? config.accessories.join('; ') : '';
@@ -111,6 +176,7 @@ export default function Admin() {
       return [
         date,
         sub.type || 'N/A',
+        sub.isDuplicate ? 'Yes' : 'No',
         sub.name || 'N/A',
         sub.email || 'N/A',
         sub.phone || 'N/A',
@@ -122,7 +188,8 @@ export default function Admin() {
         config.frameColor || 'N/A',
         config.louverColor || 'N/A',
         config.totalPrice || 'N/A',
-        accessories
+        accessories,
+        sub.pdfUrl || ''
       ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
     });
 
@@ -380,7 +447,58 @@ export default function Admin() {
             </div>
           </div>
         ) : activeTab === 'submissions' ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <>
+            {/* Search + Filters + Sort */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search by name, email, phone, city, or address…"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent"
+                  />
+                </div>
+                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="all">All Types</option>
+                  <option value="email">Email Quote</option>
+                  <option value="consultation">Consultation</option>
+                </select>
+                <select value={duplicateFilter} onChange={e => setDuplicateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="all">All Submissions</option>
+                  <option value="unique">Unique Only</option>
+                  <option value="duplicates">Duplicates Only</option>
+                </select>
+                <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="all">Any Time</option>
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="90d">Last 90 Days</option>
+                </select>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="date-desc">Newest First</option>
+                  <option value="date-asc">Oldest First</option>
+                  <option value="price-desc">Price: High → Low</option>
+                  <option value="price-asc">Price: Low → High</option>
+                  <option value="name">Name A–Z</option>
+                </select>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg border border-gray-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 mt-3">
+                Showing <span className="font-semibold text-gray-800">{filteredSubmissions.length}</span> of {submissions.length} submissions
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -392,18 +510,19 @@ export default function Admin() {
                     <th className="p-4 font-medium">Location</th>
                     <th className="p-4 font-medium">Configuration</th>
                     <th className="p-4 font-medium">Total Price</th>
+                    <th className="p-4 font-medium">PDF</th>
                     <th className="p-4 font-medium">Email Status</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100">
-                  {submissions.length === 0 ? (
+                  {filteredSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-500">
-                        No submissions found.
+                      <td colSpan={9} className="p-8 text-center text-gray-500">
+                        {submissions.length === 0 ? 'No submissions found.' : 'No submissions match your filters.'}
                       </td>
                     </tr>
                   ) : (
-                    submissions.map((sub) => {
+                    filteredSubmissions.map((sub) => {
                       const config = sub.configuration || {};
                       return (
                         <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors">
@@ -414,10 +533,17 @@ export default function Admin() {
                             </div>
                           </td>
                           <td className="p-4 align-top">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                              ${sub.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                              {sub.type}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize w-fit
+                                ${sub.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                                {sub.type}
+                              </span>
+                              {sub.isDuplicate && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 w-fit">
+                                  ⚠ Duplicate
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4 align-top">
                             <div className="font-medium text-gray-900">{sub.name}</div>
@@ -468,6 +594,22 @@ export default function Admin() {
                           </td>
                           <td className="p-4 align-top font-medium text-gray-900">
                             {config.totalPrice || 'N/A'}
+                          </td>
+                          <td className="p-4 align-top">
+                            {sub.pdfUrl ? (
+                              <a
+                                href={sub.pdfUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={sub.pdfFilename || undefined}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white font-medium text-xs transition-colors border border-luxury-gold/20"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                View PDF
+                              </a>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Not available</span>
+                            )}
                           </td>
                           <td className="p-4 align-top">
                             <div className="flex flex-col gap-2">
@@ -521,7 +663,8 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          </>
         ) : (
           <div className="space-y-6">
             {jobs.length === 0 ? (
