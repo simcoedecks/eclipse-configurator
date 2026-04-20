@@ -171,6 +171,8 @@ export default function Admin() {
   const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all';
 
   const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
+  const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
+  const acceptedCount = useMemo(() => submissions.filter(s => !!s.acceptance?.signedAt).length, [submissions]);
 
   const markAsViewed = async (submissionId: string) => {
     try {
@@ -498,6 +500,42 @@ export default function Admin() {
           </div>
         ) : activeTab === 'submissions' ? (
           <>
+            {/* Status Tabs — All / Pending / Accepted */}
+            <div className="flex gap-1 mb-3 border-b border-gray-200">
+              {[
+                { key: 'all', label: 'All Quotes', count: submissions.length, icon: '📋' },
+                { key: 'pending', label: 'Pending Signature', count: pendingCount, icon: '⏳' },
+                { key: 'signed', label: 'Accepted', count: acceptedCount, icon: '✅' },
+              ].map(tab => {
+                const active = signedFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setSignedFilter(tab.key as any)}
+                    className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                      active
+                        ? (tab.key === 'signed'
+                            ? 'border-emerald-500 text-emerald-700 bg-emerald-50/60'
+                            : tab.key === 'pending'
+                              ? 'border-luxury-gold text-luxury-black bg-luxury-gold/10'
+                              : 'border-luxury-black text-luxury-black bg-gray-50')
+                        : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                    } rounded-t-lg`}
+                  >
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                    <span className={`min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                      active
+                        ? (tab.key === 'signed' ? 'bg-emerald-500 text-white' : tab.key === 'pending' ? 'bg-luxury-gold text-white' : 'bg-luxury-black text-white')
+                        : 'bg-gray-200 text-gray-700'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Search + Filters + Sort */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
               <div className="flex flex-col md:flex-row md:items-center gap-3">
@@ -525,11 +563,6 @@ export default function Admin() {
                   <option value="all">All (Read & Unread)</option>
                   <option value="unread">Unread Only</option>
                   <option value="read">Read Only</option>
-                </select>
-                <select value={signedFilter} onChange={e => setSignedFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="all">All Statuses</option>
-                  <option value="signed">✓ Signed</option>
-                  <option value="pending">Awaiting Signature</option>
                 </select>
                 <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
                   <option value="all">Any Time</option>
