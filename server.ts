@@ -269,9 +269,11 @@ export async function createExpressApp() {
         ? parseFloat(configuration.totalPrice.replace(/[^0-9.-]+/g, ""))
         : parseFloat(configuration.totalPrice);
 
-      // Update Deal price (leadId variable now holds a Deal ID)
+      // Update Deal price (leadId variable now holds a Deal ID).
+      // Pipedrive v1 Deals API uses PUT (not PATCH). We still attempt the
+      // config note even if the price update fails.
       const updateRes = await fetch(`${domain}/api/v1/deals/${leadId}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: pipedriveHeaders(),
         body: JSON.stringify({
           value: isNaN(price) ? 0 : price,
@@ -279,15 +281,13 @@ export async function createExpressApp() {
         }),
       });
       if (!updateRes.ok) {
-        console.error("Pipedrive update-deal error:",
-          JSON.stringify(await updateRes.json()));
-        return res.status(500).json({
-          success: false, error: "Failed to update Pipedrive deal",
-        });
+        const errText = await updateRes.text();
+        console.error(`Pipedrive update-deal ${updateRes.status}:`, errText);
       }
+
       const warn = isDuplicate
         ? "⚠️ WARNING: Duplicate submission.\n\n" : "";
-      await fetch(`${domain}/api/v1/notes`, {
+      const noteRes = await fetch(`${domain}/api/v1/notes`, {
         method: "POST",
         headers: pipedriveHeaders(),
         body: JSON.stringify({
@@ -297,6 +297,10 @@ export async function createExpressApp() {
           deal_id: leadId,
         }),
       });
+      if (!noteRes.ok) {
+        const errText = await noteRes.text();
+        console.error(`Pipedrive note (config) ${noteRes.status}:`, errText);
+      }
       return res.json({ success: true });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
