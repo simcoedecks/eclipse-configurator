@@ -708,6 +708,103 @@ export async function createExpressApp() {
     }
   });
 
+  // ── Accept Proposal (customer signature) ────────────────────────────────────
+  // Called from the public /proposal/:id page when a customer signs.
+  // Server captures IP/UA/timestamp (more trustworthy than client-reported)
+  // and writes the signature to Firestore via Admin SDK.
+  app.post("/api/accept-proposal", async (req: Request, res: Response) => {
+    try {
+      const { submissionId, signedName, signatureDataUrl, acceptedTerms } = req.body;
+
+      if (!submissionId || !signedName || !acceptedTerms) {
+        return res.status(400).json({ success: false, error: "Missing submissionId, signedName, or terms acceptance." });
+      }
+      if (!adminDb) {
+        return res.status(500).json({ success: false, error: "Firebase Admin not initialized on server." });
+      }
+
+      const ref = adminDb.collection("submissions").doc(submissionId);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        return res.status(404).json({ success: false, error: "Proposal not found." });
+      }
+      const existing = snap.data() || {};
+      if (existing.acceptance?.signedAt) {
+        return res.status(409).json({ success: false, error: "This proposal has already been signed." });
+      }
+
+      // Capture server-side signer metadata
+      const signerIp = (req.headers["x-forwarded-for"] as string || "").split(",")[0].trim()
+        || (req.headers["x-nf-client-connection-ip"] as string || "")
+        || req.ip
+        || "unknown";
+      const signerUserAgent = (req.headers["user-agent"] as string || "unknown").slice(0, 500);
+
+      const acceptance = {
+        signedName: String(signedName).slice(0, 100),
+        signatureDataUrl: signatureDataUrl ? String(signatureDataUrl).slice(0, 200_000) : null,
+        signedAt: FieldValue.serverTimestamp(),
+        signerIp,
+        signerUserAgent,
+        acceptedTerms: true,
+      };
+
+      await ref.set({ acceptance, status: "accepted" }, { merge: true });
+
+      // If this submission is linked to a Pipedrive deal, move it to a
+      // "Signed / Accepted" stage and drop a note. Fire-and-forget —
+      // don't block the customer if Pipedrive is slow.
+      const leadId = existing.leadId || null;
+      if (leadId && hasPipedriveConfig()) {
+        const domain = getPipedriveDomain();
+        (async () => {
+          try {
+            await fetch(`${domain}/api/v1/notes`, {
+              method: "POST",
+              headers: pipedriveHeaders(),
+              body: JSON.stringify({
+                content: `✅ Proposal accepted by ${signedName}\nAccepted: ${new Date().toISOString()}\nIP: ${signerIp}`,
+                deal_id: leadId,
+              }),
+            });
+          } catch (e) {
+            console.error("Pipedrive accept note error:", e);
+          }
+        })();
+      }
+
+      // Notify admin by email (fire-and-forget)
+      if (resend) {
+        (async () => {
+          try {
+            await resend.emails.send({
+              from: FROM_EMAIL,
+              to: ADMIN_EMAIL,
+              subject: `✅ Proposal Accepted — ${existing.name || signedName}`,
+              html: `
+                <h2 style="color:#1A1A1A;">Proposal Accepted</h2>
+                <p><strong>${signedName}</strong> has signed their Eclipse Pergola proposal.</p>
+                <p><strong>Submission ID:</strong> ${submissionId}</p>
+                <p><strong>Customer:</strong> ${existing.name || 'N/A'} (${existing.email || 'N/A'})</p>
+                <p><strong>Accepted:</strong> ${new Date().toLocaleString()}</p>
+                <p><strong>IP:</strong> ${signerIp}</p>
+                <p><a href="${process.env.ALLOWED_ORIGINS || 'https://eclipsepergola.netlify.app'}/admin" style="display:inline-block;background:#C5A059;color:#000;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;">Open in CRM</a></p>
+              `,
+            });
+          } catch (e) {
+            console.error("Accept email error:", e);
+          }
+        })();
+      }
+
+      return res.json({ success: true });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("accept-proposal error:", msg);
+      return res.status(500).json({ success: false, error: "Internal server error" });
+    }
+  });
+
   // ── Invite Contractor ───────────────────────────────────────────────────────
   app.post("/api/pro/invite-contractor", async (req: Request, res: Response) => {
     try {

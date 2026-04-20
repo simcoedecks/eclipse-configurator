@@ -23,6 +23,7 @@ export default function Admin() {
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [signedFilter, setSignedFilter] = useState<'all' | 'signed' | 'pending'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
 
   useEffect(() => {
@@ -129,6 +130,9 @@ export default function Admin() {
       // Read filter
       if (readFilter === 'unread' && sub.viewedAt) return false;
       if (readFilter === 'read' && !sub.viewedAt) return false;
+      // Signed filter
+      if (signedFilter === 'signed' && !sub.acceptance?.signedAt) return false;
+      if (signedFilter === 'pending' && sub.acceptance?.signedAt) return false;
       // Date filter
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
         const created = sub.createdAt.toDate().getTime();
@@ -153,7 +157,7 @@ export default function Admin() {
       }
     });
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter]);
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -162,8 +166,9 @@ export default function Admin() {
     setDateFilter('all');
     setSortBy('date-desc');
     setReadFilter('all');
+    setSignedFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all';
 
   const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
 
@@ -521,6 +526,11 @@ export default function Admin() {
                   <option value="unread">Unread Only</option>
                   <option value="read">Read Only</option>
                 </select>
+                <select value={signedFilter} onChange={e => setSignedFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
+                  <option value="all">All Statuses</option>
+                  <option value="signed">✓ Signed</option>
+                  <option value="pending">Awaiting Signature</option>
+                </select>
                 <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
                   <option value="all">Any Time</option>
                   <option value="7d">Last 7 Days</option>
@@ -615,6 +625,11 @@ export default function Admin() {
                                 ${sub.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
                                 {sub.type}
                               </span>
+                              {sub.acceptance?.signedAt && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 w-fit">
+                                  ✓ Signed
+                                </span>
+                              )}
                               {sub.isDuplicate && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 w-fit">
                                   ⚠ Duplicate
@@ -825,8 +840,11 @@ export default function Admin() {
               {/* Header */}
               <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h2 className="text-xl font-bold text-gray-900">{d.name}</h2>
+                    {d.acceptance?.signedAt && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">✓ Signed</span>
+                    )}
                     {d.isDuplicate && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">⚠ Duplicate</span>
                     )}
@@ -922,6 +940,49 @@ export default function Admin() {
                       <p className="text-xs text-gray-400 italic mt-2">Detailed breakdown unavailable for submissions created before this feature was added.</p>
                     )}
                   </section>
+
+                  {/* Acceptance / Signature */}
+                  {d.acceptance?.signedAt && (
+                    <section>
+                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Acceptance &amp; Signature</h3>
+                      <div className="border-2 border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
+                            <CheckCheck className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-emerald-800">Accepted by {d.acceptance.signedName}</p>
+                            <p className="text-[11px] text-gray-600">
+                              {d.acceptance.signedAt?.toDate ? d.acceptance.signedAt.toDate().toLocaleString() : 'Unknown date'}
+                            </p>
+                          </div>
+                        </div>
+                        {d.acceptance.signatureDataUrl ? (
+                          <div className="bg-white border border-emerald-200 rounded p-3 mb-2">
+                            <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mb-1">Drawn Signature</p>
+                            <img src={d.acceptance.signatureDataUrl} alt="Signature" className="h-16" />
+                          </div>
+                        ) : (
+                          <div className="bg-white border border-emerald-200 rounded p-3 mb-2">
+                            <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mb-1">Typed Signature</p>
+                            <p className="text-xl italic text-luxury-black" style={{ fontFamily: "'Outfit', 'Brush Script MT', cursive" }}>
+                              {d.acceptance.signedName}
+                            </p>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-600 mt-2">
+                          <div>
+                            <span className="font-semibold text-gray-400 block">IP Address</span>
+                            {d.acceptance.signerIp || 'unknown'}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-400 block">Device</span>
+                            <span className="break-all">{d.acceptance.signerUserAgent?.slice(0, 60) || 'unknown'}{(d.acceptance.signerUserAgent?.length || 0) > 60 ? '…' : ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  )}
 
                   {d.summary && (
                     <section>

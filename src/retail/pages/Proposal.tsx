@@ -1,8 +1,8 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../shared/firebase';
-import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock } from 'lucide-react';
+import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 
@@ -15,6 +15,7 @@ export default function Proposal() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any | null>(null);
   const [error, setError] = useState<string>('');
+  const [showSignModal, setShowSignModal] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -286,31 +287,350 @@ export default function Proposal() {
           </div>
         </section>
 
-        {/* Next Steps CTA */}
-        <section className="bg-luxury-black text-white rounded-2xl p-8 lg:p-12 text-center">
-          <h2 className="text-2xl lg:text-3xl font-serif mb-3">Ready to move forward?</h2>
-          <p className="text-sm text-white/70 mb-6 max-w-xl mx-auto">
-            Reach out to book your site visit and finalize your design. Once we confirm the specifications, we'll get your pergola into production.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="mailto:info@eclipsepergola.ca" className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90">
-              <Mail className="w-4 h-4" />
-              Email Us
-            </a>
-            <a href="tel:2898552977" className="inline-flex items-center justify-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-white/20 border border-white/20">
-              <Phone className="w-4 h-4" />
-              289-855-2977
-            </a>
-          </div>
-          <p className="text-[11px] text-white/40 mt-6 italic">
-            Interactive acceptance &amp; e-signature coming soon. Questions? Just reply to the email this proposal came with.
-          </p>
-        </section>
+        {/* Acceptance Section */}
+        {data.acceptance?.signedAt ? (
+          <section className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl border-2 border-emerald-500 p-8 lg:p-12 text-center">
+            <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-9 h-9 text-white" />
+            </div>
+            <h2 className="text-2xl lg:text-3xl font-serif text-luxury-black mb-2">Proposal Accepted</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Thank you, <span className="font-semibold">{data.acceptance.signedName}</span>. We've received your acceptance and will be in touch shortly to schedule your site visit.
+            </p>
+            <div className="inline-block bg-white rounded-lg border border-emerald-200 px-6 py-4 text-left">
+              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Signed By</p>
+              {data.acceptance.signatureDataUrl ? (
+                <img src={data.acceptance.signatureDataUrl} alt="Signature" className="h-14 mx-auto mb-2" />
+              ) : (
+                <p className="font-serif italic text-2xl text-luxury-black mb-1" style={{ fontFamily: 'Outfit, cursive' }}>
+                  {data.acceptance.signedName}
+                </p>
+              )}
+              <p className="text-[11px] text-gray-500">
+                {data.acceptance.signedAt?.toDate ? data.acceptance.signedAt.toDate().toLocaleString('en-US', {
+                  weekday: 'short', month: 'long', day: 'numeric', year: 'numeric',
+                  hour: 'numeric', minute: '2-digit'
+                }) : 'Signature on file'}
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="bg-luxury-black text-white rounded-2xl p-8 lg:p-12">
+            <div className="text-center">
+              <h2 className="text-2xl lg:text-3xl font-serif mb-3">Ready to move forward?</h2>
+              <p className="text-sm text-white/70 mb-8 max-w-xl mx-auto">
+                Accept this proposal to reserve your place in our production queue. We'll reach out to schedule your site visit within 2 business days.
+              </p>
+              <button
+                onClick={() => setShowSignModal(true)}
+                className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90 mb-4"
+              >
+                <PenLine className="w-4 h-4" />
+                Accept &amp; Sign Proposal
+              </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center mt-2">
+                <a href="mailto:info@eclipsepergola.ca" className="inline-flex items-center justify-center gap-2 bg-white/10 text-white px-5 py-2.5 rounded-lg text-xs font-medium hover:bg-white/20 border border-white/10">
+                  <Mail className="w-3.5 h-3.5" />
+                  Questions? Email us
+                </a>
+                <a href="tel:2898552977" className="inline-flex items-center justify-center gap-2 bg-white/10 text-white px-5 py-2.5 rounded-lg text-xs font-medium hover:bg-white/20 border border-white/10">
+                  <Phone className="w-3.5 h-3.5" />
+                  289-855-2977
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Footer */}
         <footer className="text-center text-xs text-gray-400 py-6">
           <p>© Eclipse Pergola Inc. — Proposal #{data.id.slice(0, 8).toUpperCase()}</p>
         </footer>
+      </div>
+
+      {showSignModal && (
+        <SignatureModal
+          customerName={data.name}
+          submissionId={data.id}
+          totalAmount={pb.total}
+          onClose={() => setShowSignModal(false)}
+          onAccepted={(acceptance) => {
+            setData({ ...data, acceptance, status: 'accepted' });
+            setShowSignModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Signature Modal ────────────────────────────────────────────────────────
+function SignatureModal({
+  customerName,
+  submissionId,
+  totalAmount,
+  onClose,
+  onAccepted,
+}: {
+  customerName: string;
+  submissionId: string;
+  totalAmount: number;
+  onClose: () => void;
+  onAccepted: (acceptance: any) => void;
+}) {
+  const [mode, setMode] = useState<'type' | 'draw'>('type');
+  const [typedName, setTypedName] = useState(customerName || '');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+
+  // Canvas drawing helpers
+  const getCanvasPoint = (e: any) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  };
+  const startDraw = (e: any) => {
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+  const draw = (e: any) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(e);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = '#1A1A1A';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    setHasDrawn(true);
+  };
+  const endDraw = () => setIsDrawing(false);
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!typedName.trim()) {
+      setError('Please type your full legal name.');
+      return;
+    }
+    if (!acceptedTerms) {
+      setError('You must agree to the terms to accept the proposal.');
+      return;
+    }
+    if (mode === 'draw' && !hasDrawn) {
+      setError('Please draw your signature before accepting.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const signatureDataUrl = mode === 'draw' && canvasRef.current
+        ? canvasRef.current.toDataURL('image/png')
+        : null;
+
+      const res = await fetch('/api/accept-proposal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId,
+          signedName: typedName.trim(),
+          signatureDataUrl,
+          acceptedTerms: true,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        setError(result.error || 'Unable to record your acceptance. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+      onAccepted({
+        signedName: typedName.trim(),
+        signatureDataUrl,
+        signedAt: { toDate: () => new Date() },
+        acceptedTerms: true,
+      });
+    } catch {
+      setError('Network error — please check your connection and try again.');
+      setSubmitting(false);
+    }
+  };
+
+  const fmt = (n: number) => typeof n === 'number'
+    ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    : '—';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-6 py-5 border-b border-luxury-cream">
+          <div>
+            <h2 className="text-xl font-serif text-luxury-black">Accept Your Proposal</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Total: <span className="font-bold text-luxury-gold">{fmt(totalAmount)}</span>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
+
+          {/* Printed Name */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">Print Full Legal Name *</label>
+            <input
+              type="text"
+              required
+              autoComplete="name"
+              value={typedName}
+              onChange={(e) => setTypedName(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent"
+              placeholder="Your full name"
+            />
+          </div>
+
+          {/* Mode Toggle */}
+          <div>
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setMode('type')}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-colors ${mode === 'type' ? 'bg-luxury-black text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                Type Signature
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('draw')}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-colors ${mode === 'draw' ? 'bg-luxury-black text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                Draw Signature
+              </button>
+            </div>
+
+            {mode === 'type' ? (
+              <div className="border-2 border-dashed border-slate-300 rounded-lg py-8 px-4 text-center bg-slate-50">
+                {typedName ? (
+                  <p className="text-3xl italic text-luxury-black" style={{ fontFamily: "'Outfit', 'Brush Script MT', cursive" }}>
+                    {typedName}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Type your name above — it will appear here as your signature</p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 overflow-hidden relative">
+                  <canvas
+                    ref={canvasRef}
+                    width={600}
+                    height={160}
+                    className="w-full h-40 cursor-crosshair touch-none"
+                    onMouseDown={startDraw}
+                    onMouseMove={draw}
+                    onMouseUp={endDraw}
+                    onMouseLeave={endDraw}
+                    onTouchStart={startDraw}
+                    onTouchMove={draw}
+                    onTouchEnd={endDraw}
+                  />
+                  {!hasDrawn && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-sm text-gray-400 italic">
+                      Draw your signature here
+                    </div>
+                  )}
+                </div>
+                {hasDrawn && (
+                  <button
+                    type="button"
+                    onClick={clearCanvas}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-luxury-gold"
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    Clear &amp; redraw
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Terms Checkbox */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              required
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-1 w-4 h-4 text-luxury-gold focus:ring-luxury-gold border-slate-300 rounded"
+            />
+            <span className="text-xs text-gray-700 leading-relaxed">
+              I, <span className="font-semibold">{typedName || '[your name]'}</span>, accept this proposal for {fmt(totalAmount)} including applicable HST,
+              and I agree to the payment terms, warranty, and terms &amp; conditions described above.
+              I understand this is an electronic signature with the same legal effect as a handwritten one,
+              and that my name, IP address, and timestamp will be recorded.
+            </span>
+          </label>
+
+          {/* Submit */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 px-4 py-3 bg-luxury-gold text-luxury-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-luxury-gold/90 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {submitting ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
+              ) : (
+                <><CheckCircle2 className="w-4 h-4" /> Accept &amp; Sign</>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
