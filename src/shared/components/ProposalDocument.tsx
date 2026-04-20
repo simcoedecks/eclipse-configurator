@@ -5,10 +5,20 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
   const {
     name, email, phone, address, city, date, docNumber,
     width, depth, height, frameColorName, louverColorName,
-    basePrice, accessories, subtotal, discount, discountPercentage, discountedSubtotal, hst, total, visualizerProps
+    basePrice, accessories, subtotal, discount, discountPercentage, discountedSubtotal, hst, total, visualizerProps,
+    availableUpgrades
   } = data;
 
-  const totalPagesCount = (isGeneratingPDF || previewMode) && visualizerProps ? 5 : 4;
+  const hasUpgrades = Array.isArray(availableUpgrades) && availableUpgrades.length > 0;
+  const upgradePageCount = hasUpgrades ? 1 : 0;
+  const renderingsPageCount = (isGeneratingPDF || previewMode) && visualizerProps ? 1 : 0;
+  const totalPagesCount = 4 + upgradePageCount + renderingsPageCount;
+
+  // Page numbering:
+  // 1 Cover / 2 Specs / 3 Totals / 4 Terms / [5? Upgrades] / [6? Renderings]
+  const termsPageNum = 4;
+  const upgradesPageNum = hasUpgrades ? termsPageNum + 1 : 0;
+  const renderingsPageNum = renderingsPageCount ? termsPageNum + upgradePageCount + 1 : 0;
 
   const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -389,10 +399,68 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
         </div>
       </div>
 
-      {/* ═══════════════════════ PAGE 5: 3D VIEWS ═══════════════════════ */}
+      {/* ═══════════════════════ PAGE 5: AVAILABLE OPTIONS & UPGRADES ═══════════════════════ */}
+      {hasUpgrades && (() => {
+        const wallUpgrades = availableUpgrades.filter((u: any) => u.category === 'wall');
+        const addonUpgrades = availableUpgrades.filter((u: any) => u.category === 'addon');
+        const UpgradeRow = ({ u }: { u: any }) => (
+          <div className="grid grid-cols-[1fr_110px] px-3 py-2 border-b border-[#f0f0f0] text-[10px]">
+            <div>
+              <div className="font-bold">{u.name}</div>
+              {u.description && <div className="text-[9px] text-[#777] mt-0.5 leading-snug">{u.description}</div>}
+            </div>
+            <div className="text-right font-bold text-[#C5A059] self-center">
+              +${fmt(u.price || 0)}
+            </div>
+          </div>
+        );
+        return (
+          <div className="pdf-page w-[210mm] h-[297mm] bg-[#ffffff] text-[#1A1A1A] p-[15mm] flex flex-col relative box-border">
+            <Header pageNum={upgradesPageNum} totalPages={totalPagesCount} />
+            <SectionTitle>Available Options &amp; Upgrades</SectionTitle>
+            <p className="text-[10px] text-[#666] leading-relaxed mb-4 px-1">
+              The following options were not included in your current design. Prices shown are based on your selected pergola dimensions ({width}' × {depth}' × {height}') and reflect what each would add to your total.
+            </p>
+
+            {wallUpgrades.length > 0 && (
+              <>
+                <GoldBar>Wall Coverages &amp; Enclosures</GoldBar>
+                <div className="bg-[#FAF9F6] grid grid-cols-[1fr_110px] py-2 px-3 font-bold text-[9px] mb-1 border border-[#e5e7eb] uppercase tracking-wider text-[#666]">
+                  <div>Option</div>
+                  <div className="text-right">Upgrade Price</div>
+                </div>
+                <div className="mb-4">
+                  {wallUpgrades.map((u: any) => <UpgradeRow key={u.id} u={u} />)}
+                </div>
+              </>
+            )}
+
+            {addonUpgrades.length > 0 && (
+              <>
+                <GoldBar>Add-Ons &amp; Features</GoldBar>
+                <div className="bg-[#FAF9F6] grid grid-cols-[1fr_110px] py-2 px-3 font-bold text-[9px] mb-1 border border-[#e5e7eb] uppercase tracking-wider text-[#666]">
+                  <div>Option</div>
+                  <div className="text-right">Upgrade Price</div>
+                </div>
+                <div className="mb-4">
+                  {addonUpgrades.map((u: any) => <UpgradeRow key={u.id} u={u} />)}
+                </div>
+              </>
+            )}
+
+            <div className="mt-auto pt-4 border-t border-[#e5e7eb]">
+              <p className="text-[9px] italic text-[#666] leading-relaxed">
+                Prices listed above are estimates based on current specs. Combining multiple options may affect pricing; your final quote will be confirmed after your site visit. Contact us at <span className="font-bold text-[#C5A059]">info@eclipsepergola.ca</span> or <span className="font-bold text-[#C5A059]">289-855-2977</span> to add any of these to your project.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ═══════════════════════ PAGE 6: 3D VIEWS ═══════════════════════ */}
       {(isGeneratingPDF || previewMode) && visualizerProps && (
         <div className="pdf-page w-[210mm] h-[297mm] bg-[#ffffff] text-[#1A1A1A] p-[15mm] flex flex-col relative box-border">
-          <Header pageNum={totalPagesCount} totalPages={totalPagesCount} />
+          <Header pageNum={renderingsPageNum} totalPages={totalPagesCount} />
 
           <SectionTitle>Pergola Renderings — {width}' × {depth}' × {height}'</SectionTitle>
 

@@ -658,6 +658,31 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     const hst = subtotal * 0.13;
     const finalTotal = subtotal + hst;
 
+    // Build a list of UPGRADES the customer did NOT pick, with calculated pricing.
+    // Used on the PDF's "Available Options & Upgrades" page.
+    const wallUnitPriceForAvail = (width * depth) < 120 ? 60 : 55;
+    const availableUpgrades = ACCESSORIES
+      .filter(a => !selectedAccessories.has(a.id))
+      .map(a => {
+        let price = 0;
+        if (a.type === 'flat') price = a.price;
+        else if (a.type === 'sqft') price = a.price * (width * depth);
+        else if (a.type === 'screen_width') price = calculateScreenPrice(width, height, numScreenBaysX);
+        else if (a.type === 'screen_depth') price = calculateScreenPrice(depth, height, numScreenBaysZ);
+        else if (a.type === 'wall_width') price = width * height * wallUnitPriceForAvail;
+        else if (a.type === 'wall_depth') price = depth * height * wallUnitPriceForAvail;
+        const isWallCoverage = a.type === 'screen_width' || a.type === 'screen_depth' ||
+                               a.type === 'wall_width' || a.type === 'wall_depth' ||
+                               a.id.includes('guillotine');
+        return {
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          price,
+          category: isWallCoverage ? 'wall' : 'addon',
+        };
+      });
+
     return {
       name, email, phone, address, city,
       date: new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '-'),
@@ -673,6 +698,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       discountedSubtotal: subtotal,
       hst,
       total: finalTotal,
+      availableUpgrades,
       visualizerProps: {
         width, depth, height, accessories: selectedAccessories, frameColor, louverColor,
         louverAngle: 0, screenDrop: 100, guillotineOpen: 50, wallColor: wallColor, houseWallColor: '#e2e8f0',
