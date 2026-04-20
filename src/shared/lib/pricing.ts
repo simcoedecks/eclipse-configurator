@@ -6,9 +6,9 @@ export const SCREEN_PRICES: Record<number, Record<number, number>> = {
 };
 
 export function getMarkup(area: number): number {
-  if (area <= 99) return 1.20;
-  if (area <= 119) return 1.15;
-  return 1.10;
+  if (area <= 99) return 1.15;
+  if (area <= 119) return 1.10;
+  return 1.05;
 }
 
 export function calculateLouverCount(width: number, depth: number): number {
