@@ -2248,8 +2248,11 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       <div className="flex flex-col">
                         <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">Total Investment</span>
                       </div>
-                      <span className="text-2xl font-serif text-luxury-black">{formatCurrency(totalPrice || 0)}</span>
+                      <span className="text-2xl font-serif text-luxury-black dark:text-white">{formatCurrency(totalPrice || 0)}</span>
                     </div>
+                    <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed pt-2">
+                      Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
+                    </p>
                   </div>
 
                   <div className="space-y-4">

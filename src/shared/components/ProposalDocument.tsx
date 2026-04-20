@@ -308,6 +308,9 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
               Price subject to duties and fees<br/>
               *Price quoted above is valid for 30 days
             </div>
+            <p className="text-[8px] italic text-[#666] leading-relaxed mt-2 pt-2 border-t border-[#f0f0f0]">
+              Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
+            </p>
           </div>
 
           <GoldBar>Payment Terms</GoldBar>
