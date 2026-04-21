@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
-import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, X, Eye, EyeOff, CheckCheck, Map as MapIcon } from 'lucide-react';
+import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
+import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck, Map as MapIcon, Trash2, CheckSquare, Square } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import LeadMap from '../components/LeadMap';
 
@@ -23,9 +23,13 @@ export default function Admin() {
   const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'unique'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
+  // Column-level sort: lets any table header toggle asc/desc sorting
+  const [columnSort, setColumnSort] = useState<{ key: 'date' | 'type' | 'name' | 'email' | 'city' | 'price' | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'desc' });
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [signedFilter, setSignedFilter] = useState<'all' | 'signed' | 'pending'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
+  // Bulk selection for multi-row actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -143,22 +147,38 @@ export default function Admin() {
       return true;
     });
 
-    list.sort((a, b) => {
-      const aDate = a.createdAt?.toDate?.()?.getTime() || 0;
-      const bDate = b.createdAt?.toDate?.()?.getTime() || 0;
-      const aPrice = parsePrice(a.configuration?.totalPrice);
-      const bPrice = parsePrice(b.configuration?.totalPrice);
-      switch (sortBy) {
-        case 'date-asc':  return aDate - bDate;
-        case 'price-desc': return bPrice - aPrice;
-        case 'price-asc':  return aPrice - bPrice;
-        case 'name':       return (a.name || '').localeCompare(b.name || '');
-        case 'date-desc':
-        default:           return bDate - aDate;
-      }
-    });
+    // Column-level sort takes priority over the dropdown
+    if (columnSort.key) {
+      const dir = columnSort.dir === 'asc' ? 1 : -1;
+      list.sort((a, b) => {
+        switch (columnSort.key) {
+          case 'date':  return dir * ((a.createdAt?.toDate?.()?.getTime() || 0) - (b.createdAt?.toDate?.()?.getTime() || 0));
+          case 'price': return dir * (parsePrice(a.configuration?.totalPrice) - parsePrice(b.configuration?.totalPrice));
+          case 'name':  return dir * (a.name || '').localeCompare(b.name || '');
+          case 'type':  return dir * (a.type || '').localeCompare(b.type || '');
+          case 'email': return dir * (a.email || '').localeCompare(b.email || '');
+          case 'city':  return dir * (a.city || '').localeCompare(b.city || '');
+          default:      return 0;
+        }
+      });
+    } else {
+      list.sort((a, b) => {
+        const aDate = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bDate = b.createdAt?.toDate?.()?.getTime() || 0;
+        const aPrice = parsePrice(a.configuration?.totalPrice);
+        const bPrice = parsePrice(b.configuration?.totalPrice);
+        switch (sortBy) {
+          case 'date-asc':  return aDate - bDate;
+          case 'price-desc': return bPrice - aPrice;
+          case 'price-asc':  return aPrice - bPrice;
+          case 'name':       return (a.name || '').localeCompare(b.name || '');
+          case 'date-desc':
+          default:           return bDate - aDate;
+        }
+      });
+    }
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter]);
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -188,6 +208,66 @@ export default function Admin() {
       await setDoc(doc(db, 'submissions', submissionId), { viewedAt: null }, { merge: true });
     } catch (e) {
       console.error('Failed to mark as unread', e);
+    }
+  };
+
+  // ── Column sort header helper ───────────────────────────────────────
+  const toggleColumnSort = (key: 'date' | 'type' | 'name' | 'email' | 'city' | 'price') => {
+    setColumnSort(prev => {
+      if (prev.key !== key) return { key, dir: 'asc' };
+      if (prev.dir === 'asc') return { key, dir: 'desc' };
+      return { key: null, dir: 'desc' }; // third click clears
+    });
+  };
+  const SortIcon = ({ col }: { col: 'date' | 'type' | 'name' | 'email' | 'city' | 'price' }) => {
+    if (columnSort.key !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
+    return columnSort.dir === 'asc' ? <ArrowUp className="w-3 h-3 text-luxury-gold" /> : <ArrowDown className="w-3 h-3 text-luxury-gold" />;
+  };
+
+  // ── Bulk selection helpers ──────────────────────────────────────────
+  const toggleSelected = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAllVisible = (rows: any[]) => setSelectedIds(new Set(rows.map(r => r.id)));
+  const allVisibleSelected = (rows: any[]) => rows.length > 0 && rows.every(r => selectedIds.has(r.id));
+
+  const bulkMarkRead = async () => {
+    if (selectedIds.size === 0) return;
+    const batch = writeBatch(db);
+    selectedIds.forEach(id => {
+      batch.set(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true });
+    });
+    await batch.commit();
+    clearSelection();
+    toast.success(`Marked ${selectedIds.size} as read`);
+  };
+  const bulkMarkUnread = async () => {
+    if (selectedIds.size === 0) return;
+    const batch = writeBatch(db);
+    selectedIds.forEach(id => {
+      batch.set(doc(db, 'submissions', id), { viewedAt: null }, { merge: true });
+    });
+    await batch.commit();
+    clearSelection();
+    toast.success(`Marked ${selectedIds.size} as unread`);
+  };
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!confirm(`Permanently delete ${count} submission${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    try {
+      // deleteDoc in parallel; writeBatch also works but this avoids batch-size limits
+      const ids = Array.from(selectedIds);
+      await Promise.all(ids.map(id => deleteDoc(doc(db, 'submissions', id))));
+      clearSelection();
+      toast.success(`Deleted ${count} submission${count === 1 ? '' : 's'}`);
+    } catch (e: any) {
+      console.error('Bulk delete failed', e);
+      toast.error('Some submissions could not be deleted. Check admin permissions.');
     }
   };
 
@@ -619,18 +699,75 @@ export default function Admin() {
                 )}
               </div>
             </div>
+            {/* Bulk actions toolbar — visible when rows are selected */}
+            {selectedIds.size > 0 && (
+              <div className="bg-luxury-black text-white rounded-xl p-3 mb-3 flex items-center justify-between flex-wrap gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 bg-luxury-gold/20 rounded-lg text-luxury-gold font-bold text-sm">
+                    <CheckSquare className="w-4 h-4" />
+                    {selectedIds.size} selected
+                  </span>
+                  <button onClick={clearSelection} className="text-xs text-white/60 hover:text-white">Clear</button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={bulkMarkRead} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold">
+                    <Eye className="w-3.5 h-3.5" /> Mark read
+                  </button>
+                  <button onClick={bulkMarkUnread} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold">
+                    <EyeOff className="w-3.5 h-3.5" /> Mark unread
+                  </button>
+                  <button onClick={bulkDelete} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold">
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
-                    <th className="p-4 font-medium">Date</th>
-                    <th className="p-4 font-medium">Type</th>
-                    <th className="p-4 font-medium">Customer</th>
-                    <th className="p-4 font-medium">Contact</th>
-                    <th className="p-4 font-medium">Location</th>
+                    <th className="p-4 w-10">
+                      <button
+                        onClick={() => allVisibleSelected(filteredSubmissions) ? clearSelection() : selectAllVisible(filteredSubmissions)}
+                        className="hover:text-luxury-gold transition-colors"
+                        aria-label="Select all visible"
+                      >
+                        {allVisibleSelected(filteredSubmissions) ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4" />}
+                      </button>
+                    </th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('date')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Date <SortIcon col="date" />
+                      </button>
+                    </th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('type')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Type <SortIcon col="type" />
+                      </button>
+                    </th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Customer <SortIcon col="name" />
+                      </button>
+                    </th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Contact <SortIcon col="email" />
+                      </button>
+                    </th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Location <SortIcon col="city" />
+                      </button>
+                    </th>
                     <th className="p-4 font-medium">Configuration</th>
-                    <th className="p-4 font-medium">Total Price</th>
+                    <th className="p-4 font-medium">
+                      <button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
+                        Total Price <SortIcon col="price" />
+                      </button>
+                    </th>
                     <th className="p-4 font-medium">PDF</th>
                     <th className="p-4 font-medium">Email Status</th>
                   </tr>
@@ -638,7 +775,7 @@ export default function Admin() {
                 <tbody className="text-sm divide-y divide-gray-100">
                   {filteredSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-gray-500">
+                      <td colSpan={10} className="p-8 text-center text-gray-500">
                         {submissions.length === 0 ? 'No submissions found.' : 'No submissions match your filters.'}
                       </td>
                     </tr>
@@ -646,6 +783,7 @@ export default function Admin() {
                     filteredSubmissions.map((sub) => {
                       const config = sub.configuration || {};
                       const isUnread = !sub.viewedAt;
+                      const isChecked = selectedIds.has(sub.id);
                       return (
                         <tr
                           key={sub.id}
@@ -653,8 +791,13 @@ export default function Admin() {
                             setDetailSub(sub);
                             if (isUnread) markAsViewed(sub.id);
                           }}
-                          className={`cursor-pointer transition-colors ${isUnread ? 'bg-luxury-gold/[0.04] hover:bg-luxury-gold/10 border-l-4 border-luxury-gold' : 'hover:bg-gray-50/50 border-l-4 border-transparent'}`}
+                          className={`cursor-pointer transition-colors ${isChecked ? 'bg-luxury-gold/20' : isUnread ? 'bg-luxury-gold/[0.04] hover:bg-luxury-gold/10 border-l-4 border-luxury-gold' : 'hover:bg-gray-50/50 border-l-4 border-transparent'}`}
                         >
+                          <td className="p-4 w-10" onClick={(e) => { e.stopPropagation(); toggleSelected(sub.id); }}>
+                            <button className="hover:text-luxury-gold transition-colors" aria-label={isChecked ? 'Deselect row' : 'Select row'}>
+                              {isChecked ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4 text-gray-400" />}
+                            </button>
+                          </td>
                           <td className="p-4 align-top whitespace-nowrap">
                             <div className="flex items-center gap-2 text-gray-600">
                               {isUnread && <span className="w-2 h-2 rounded-full bg-luxury-gold" title="Unread" />}
