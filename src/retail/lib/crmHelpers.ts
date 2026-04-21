@@ -108,6 +108,31 @@ export async function changeStage(submissionId: string, newStage: string, previo
   );
 }
 
+// ─── Assignment ─────────────────────────────────────────────────────────────
+export async function assignLead(submissionId: string, assigneeEmail: string | null, assigneeName?: string) {
+  await setDoc(doc(db, 'submissions', submissionId), { assignedTo: assigneeEmail }, { merge: true });
+  await logActivity(
+    submissionId,
+    'manual',
+    assigneeEmail ? `Assigned to ${assigneeName || assigneeEmail}` : 'Unassigned',
+    { assignedTo: assigneeEmail }
+  );
+}
+
+// ─── Lead source ───────────────────────────────────────────────────────────
+export async function updateSource(submissionId: string, source: string, sourceLabel?: string, ref?: string) {
+  await setDoc(doc(db, 'submissions', submissionId), {
+    source,
+    ...(ref !== undefined ? { sourceRef: ref } : {}),
+  }, { merge: true });
+  await logActivity(
+    submissionId,
+    'manual',
+    `Lead source set to ${sourceLabel || source}${ref ? ` (ref: ${ref})` : ''}`,
+    { source, ref }
+  );
+}
+
 // ─── Tags ──────────────────────────────────────────────────────────────────
 export async function addTag(submissionId: string, currentTags: string[], tag: string) {
   const normalized = tag.trim();

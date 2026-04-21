@@ -65,6 +65,36 @@ export interface Activity {
   createdAt?: any;                 // Firestore timestamp
 }
 
+// ─── Team Members ──────────────────────────────────────────────────────────
+// Hardcoded list of admin/sales reps who can be assigned to leads.
+// Add new entries here as the team grows. Initials are auto-generated.
+export interface TeamMember {
+  email: string;
+  name: string;
+  /** CSS color used for the avatar background */
+  color: string;
+  /** Optional role badge */
+  role?: string;
+}
+
+export const TEAM_MEMBERS: TeamMember[] = [
+  { email: 'michael@simcoedecks.ca', name: 'Michael Scott', color: '#C5A059', role: 'Owner' },
+  // Add more team members here as you scale:
+  // { email: 'jane@eclipsepergola.ca', name: 'Jane Doe', color: '#0284c7', role: 'Sales' },
+];
+
+export function teamMemberByEmail(email: string | null | undefined): TeamMember | undefined {
+  if (!email) return undefined;
+  return TEAM_MEMBERS.find(m => m.email.toLowerCase() === email.toLowerCase());
+}
+
+export function initialsFor(nameOrEmail: string): string {
+  const parts = nameOrEmail.split(/[\s@.]+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
 // ─── Lead Sources ──────────────────────────────────────────────────────────
 export const LEAD_SOURCES = [
   { id: 'organic',          label: 'Organic / Direct' },

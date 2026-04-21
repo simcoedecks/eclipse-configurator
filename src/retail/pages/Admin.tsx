@@ -23,7 +23,9 @@ import TagManager from '../components/admin/TagManager';
 import ComposeModal from '../components/admin/ComposeModal';
 import FilesPanel from '../components/admin/FilesPanel';
 import CommandPalette from '../components/admin/CommandPalette';
-import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES } from '../../shared/lib/crm';
+import AssignedToSelector, { Avatar } from '../components/admin/AssignedToSelector';
+import SourceSelector from '../components/admin/SourceSelector';
+import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
 type TabKey = 'dashboard' | 'submissions' | 'kanban' | 'map' | 'jobs' | 'contractors';
@@ -52,6 +54,8 @@ export default function Admin() {
   const [signedFilter, setSignedFilter] = useState<'all' | 'signed' | 'pending'>('all');
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [assignedFilter, setAssignedFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
   const [composeMode, setComposeMode] = useState<'email' | 'sms' | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -153,6 +157,11 @@ export default function Admin() {
       if (signedFilter === 'pending' && sub.acceptance?.signedAt) return false;
       if (stageFilter !== 'all' && (sub.pipelineStage || defaultStageFor(sub)) !== stageFilter) return false;
       if (tagFilter !== 'all' && !(sub.tags || []).includes(tagFilter)) return false;
+      if (assignedFilter !== 'all') {
+        if (assignedFilter === 'unassigned') { if (sub.assignedTo) return false; }
+        else if (sub.assignedTo !== assignedFilter) return false;
+      }
+      if (sourceFilter !== 'all' && (sub.source || 'organic') !== sourceFilter) return false;
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
         const created = sub.createdAt.toDate().getTime();
         const cutoff = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
@@ -190,13 +199,14 @@ export default function Admin() {
       });
     }
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, columnSort]);
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
     setSortBy('date-desc'); setReadFilter('all'); setSignedFilter('all'); setStageFilter('all'); setTagFilter('all');
+    setAssignedFilter('all'); setSourceFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all';
 
   const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
   const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
@@ -549,6 +559,15 @@ export default function Admin() {
                     <option value="all">All Tags</option>
                     {uniqueTags.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  <select value={assignedFilter} onChange={e => setAssignedFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">Anyone</option>
+                    <option value="unassigned">Unassigned</option>
+                    {TEAM_MEMBERS.map(m => <option key={m.email} value={m.email}>{m.name}</option>)}
+                  </select>
+                  <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">All Sources</option>
+                    {LEAD_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
                   <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
                     <option value="all">Read & Unread</option>
                     <option value="unread">Unread</option>
@@ -642,13 +661,14 @@ export default function Admin() {
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1 hover:text-luxury-black">Value <SortIcon col="price" /></button></th>
+                        <th className="p-3 font-semibold">Owner</th>
                         <th className="p-3 font-semibold">Tags</th>
                         <th className="p-3 font-semibold">PDF</th>
                       </tr>
                     </thead>
                     <tbody className="text-sm divide-y divide-slate-100">
                       {filteredSubmissions.length === 0 ? (
-                        <tr><td colSpan={9} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
+                        <tr><td colSpan={10} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
                       ) : filteredSubmissions.map(sub => {
                         const config = sub.configuration || {};
                         const isUnread = !sub.viewedAt;
@@ -691,6 +711,9 @@ export default function Admin() {
                               {sub.city ? <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{sub.city}</div> : <span className="text-gray-400 italic">—</span>}
                             </td>
                             <td className="p-3 align-top font-bold text-luxury-black">{config.totalPrice || '—'}</td>
+                            <td className="p-3 align-top">
+                              <AssignedToSelector submission={sub} compact />
+                            </td>
                             <td className="p-3 align-top">
                               <div className="flex flex-wrap gap-0.5 max-w-[140px]">
                                 {(sub.tags || []).slice(0, 2).map((t: string) => (
@@ -920,6 +943,16 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread }: { sub: any;
                     <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${sub.email}`} className="hover:underline">{sub.email}</a></div>
                     {sub.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${sub.phone}`} className="hover:underline">{sub.phone}</a></div>}
                     {(sub.address || sub.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span>{[sub.address, sub.city].filter(Boolean).join(', ')}</span></div>}
+                  </div>
+                </section>
+                <section className="grid grid-cols-2 gap-3">
+                  <div>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Owner</h3>
+                    <AssignedToSelector submission={sub} />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Source</h3>
+                    <SourceSelector submission={sub} />
                   </div>
                 </section>
                 <section>

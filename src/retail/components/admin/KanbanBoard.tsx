@@ -1,7 +1,8 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import { PIPELINE_STAGES, defaultStageFor, stageById } from '../../../shared/lib/crm';
+import { PIPELINE_STAGES, defaultStageFor, stageById, teamMemberByEmail } from '../../../shared/lib/crm';
 import { changeStage } from '../../lib/crmHelpers';
-import { CalendarClock, CheckCircle2, Mail, MapPin, MoreVertical } from 'lucide-react';
+import { MapPin } from 'lucide-react';
+import { Avatar } from './AssignedToSelector';
 
 interface Props {
   submissions: any[];
@@ -20,6 +21,7 @@ function formatPrice(n: any): string {
 function LeadCard({ sub, onOpen, onDragStart }: { sub: any; onOpen: () => void; onDragStart: (e: DragEvent<HTMLDivElement>) => void }) {
   const createdAt = sub.createdAt?.toDate?.() || null;
   const price = sub.pricingBreakdown?.total || sub.configuration?.totalPrice;
+  const assignee = teamMemberByEmail(sub.assignedTo);
   return (
     <div
       draggable
@@ -27,11 +29,14 @@ function LeadCard({ sub, onOpen, onDragStart }: { sub: any; onOpen: () => void; 
       onClick={onOpen}
       className="bg-white border border-gray-200 rounded-xl p-3 mb-2 shadow-sm hover:shadow-md hover:border-luxury-gold/60 transition-all cursor-pointer active:scale-[0.98]"
     >
-      <div className="flex items-start justify-between mb-1.5">
+      <div className="flex items-start justify-between mb-1.5 gap-2">
         <p className="font-semibold text-sm text-luxury-black truncate flex-1">{sub.name}</p>
-        {!sub.viewedAt && (
-          <span className="w-1.5 h-1.5 rounded-full bg-luxury-gold animate-pulse shrink-0 mt-1 ml-1" title="Unread" />
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {!sub.viewedAt && (
+            <span className="w-1.5 h-1.5 rounded-full bg-luxury-gold animate-pulse" title="Unread" />
+          )}
+          {assignee && <Avatar name={assignee.name} email={assignee.email} color={assignee.color} size="sm" />}
+        </div>
       </div>
       <div className="flex items-center gap-1 text-[11px] text-gray-500 mb-2">
         <MapPin className="w-3 h-3" />
