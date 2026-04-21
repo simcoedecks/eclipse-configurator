@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'tags', 'assignedTo']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo']) &&
              data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -131,11 +131,12 @@ service cloud.firestore {
 
     function isValidSignatureWrite(data, prevData) {
       // Customer signs a proposal client-side (when server admin SDK is unavailable).
-      // Only allowed if no prior signature exists and only acceptance + status are written.
+      // Only allowed if no prior signature exists and only specified fields are touched.
       let affectedKeys = data.diff(prevData).affectedKeys();
-      return !('acceptance' in prevData || (prevData.keys().hasAny(['acceptance']))) &&
-             affectedKeys.hasOnly(['acceptance', 'status']) &&
+      return !(prevData.keys().hasAny(['acceptance']) && prevData.acceptance is map && prevData.acceptance.signedAt != null) &&
+             affectedKeys.hasOnly(['acceptance', 'status', 'pipelineStage']) &&
              data.status == 'accepted' &&
+             (!('pipelineStage' in data) || data.pipelineStage == 'accepted') &&
              data.acceptance is map &&
              data.acceptance.acceptedTerms == true &&
              data.acceptance.signedName is string &&

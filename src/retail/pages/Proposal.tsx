@@ -480,6 +480,7 @@ function SignatureModal({
       try {
         await setDoc(doc(db, 'submissions', submissionId), {
           status: 'accepted',
+          pipelineStage: 'accepted',
           acceptance: {
             signedName: typedName.trim(),
             signatureDataUrl,

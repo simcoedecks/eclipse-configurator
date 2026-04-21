@@ -370,6 +370,16 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  // Capture lead source from URL params (e.g. ?source=contractor&ref=john)
+  const [leadSource] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'configurator';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('source') || 'configurator';
+  });
+  const [leadSourceRef] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('ref') || null;
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [scanSessionId] = useState<string>(() => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -923,7 +933,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
-          source: 'configurator',
+          source: leadSource,
+          sourceRef: leadSourceRef,
           tags: [],
           assignedTo: null,
           createdAt: serverTimestamp()

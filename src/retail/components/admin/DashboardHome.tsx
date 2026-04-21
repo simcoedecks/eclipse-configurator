@@ -4,7 +4,8 @@ import { db } from '../../../shared/firebase';
 import StatCard from './StatCard';
 import { PIPELINE_STAGES, stageById, defaultStageFor } from '../../../shared/lib/crm';
 import { motion } from 'motion/react';
-import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight, Globe } from 'lucide-react';
+import { LEAD_SOURCES } from '../../../shared/lib/crm';
 
 interface Props {
   submissions: any[];
@@ -142,6 +143,28 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
     return submissions
       .filter(s => !s.acceptance?.signedAt && (s.pipelineStage === 'proposal-sent' || s.pipelineStage === 'site-visit' || s.tags?.includes('Hot Lead')))
       .slice(0, 5);
+  }, [submissions]);
+
+  // Lead source attribution
+  const sourceBreakdown = useMemo(() => {
+    const map = new Map<string, { count: number; revenue: number; accepted: number }>();
+    submissions.forEach(s => {
+      const src = s.source || 'organic';
+      const entry = map.get(src) || { count: 0, revenue: 0, accepted: 0 };
+      entry.count += 1;
+      if (s.acceptance?.signedAt) {
+        entry.accepted += 1;
+        entry.revenue += parsePrice(s.pricingBreakdown?.total || s.configuration?.totalPrice);
+      }
+      map.set(src, entry);
+    });
+    return Array.from(map.entries())
+      .map(([id, data]) => ({
+        id,
+        label: LEAD_SOURCES.find(s => s.id === id)?.label || id,
+        ...data,
+      }))
+      .sort((a, b) => b.count - a.count);
   }, [submissions]);
 
   const maxStageValue = Math.max(...pipelineByStage.map(p => p.value), 1);
@@ -372,6 +395,48 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
           </button>
         </section>
       </div>
+
+      {/* Lead source attribution */}
+      {sourceBreakdown.length > 0 && (
+        <section>
+          <h2 className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold mb-3">Lead Sources</h2>
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {sourceBreakdown.slice(0, 6).map((src) => {
+                const conversionPct = src.count > 0 ? (src.accepted / src.count) * 100 : 0;
+                return (
+                  <div key={src.id} className="p-4 border border-slate-200 rounded-xl hover:border-luxury-gold transition-colors">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Globe className="w-3.5 h-3.5 text-luxury-gold" />
+                      <h3 className="text-sm font-semibold text-luxury-black">{src.label}</h3>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-serif font-medium text-luxury-black">{src.count}</span>
+                      <span className="text-xs text-gray-500">leads</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-xs">
+                      <div>
+                        <span className="text-gray-400">Accepted: </span>
+                        <span className="font-bold text-emerald-600">{src.accepted}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Rate: </span>
+                        <span className="font-bold text-luxury-black">{conversionPct.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                    {src.revenue > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-100">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Revenue</span>
+                        <p className="text-sm font-bold text-luxury-gold">{formatCurrency(src.revenue)}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

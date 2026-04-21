@@ -12,6 +12,8 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import LeadMap from '../components/LeadMap';
 import DashboardHome from '../components/admin/DashboardHome';
+import { useTheme } from '../../shared/hooks/useTheme';
+import { Moon, Sun } from 'lucide-react';
 import KanbanBoard from '../components/admin/KanbanBoard';
 import ActivityTimeline from '../components/admin/ActivityTimeline';
 import NotesPanel from '../components/admin/NotesPanel';
@@ -27,6 +29,7 @@ import { logActivity } from '../lib/crmHelpers';
 type TabKey = 'dashboard' | 'submissions' | 'kanban' | 'map' | 'jobs' | 'contractors';
 
 export default function Admin() {
+  const { toggleTheme, isDark } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -356,8 +359,8 @@ export default function Admin() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-luxury-paper via-white to-luxury-paper flex">
-      <Toaster position="top-right" />
+    <div className={`min-h-screen flex ${isDark ? 'dark bg-[#0a0a0a]' : 'bg-gradient-to-br from-luxury-paper via-white to-luxury-paper'}`}>
+      <Toaster position="top-right" theme={isDark ? 'dark' : 'light'} />
 
       {/* ─── SIDEBAR ─── */}
       <aside className="w-64 bg-luxury-black text-white flex flex-col shrink-0">
@@ -399,7 +402,7 @@ export default function Admin() {
           })}
         </nav>
 
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-white/10 p-3 space-y-1">
           <button
             onClick={() => setCmdOpen(true)}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg"
@@ -407,6 +410,13 @@ export default function Admin() {
             <Command className="w-3.5 h-3.5" />
             <span className="flex-1 text-left">Quick search</span>
             <kbd className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded">⌘K</kbd>
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg"
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            <span className="flex-1 text-left">{isDark ? 'Light mode' : 'Dark mode'}</span>
           </button>
         </div>
 
@@ -429,13 +439,13 @@ export default function Admin() {
       {/* ─── MAIN CONTENT ─── */}
       <main className="flex-1 overflow-x-hidden">
         {/* Page header */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <header className={`sticky top-0 z-30 backdrop-blur-md border-b ${isDark ? 'bg-[#0a0a0a]/80 border-white/10' : 'bg-white/80 border-slate-200'}`}>
           <div className="px-8 py-4 flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-serif text-luxury-black">
+              <h1 className={`text-2xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>
                 {navItems.find(n => n.key === activeTab)?.label || 'Dashboard'}
               </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>
                 {activeTab === 'dashboard' && "Here's what's happening today."}
                 {activeTab === 'submissions' && `Manage and filter all ${submissions.length} quote submissions.`}
                 {activeTab === 'kanban' && 'Drag leads between stages.'}
