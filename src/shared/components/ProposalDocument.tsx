@@ -7,14 +7,14 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
     width, depth, height, frameColorName, louverColorName,
     basePrice, accessories, subtotal: rawSubtotal, discount, discountPercentage, discountedSubtotal, hst: rawHst, total: rawTotal, visualizerProps,
     availableUpgrades,
-    // New: admin-added custom line items flow through here when the admin
-    // regenerates the PDF from the CRM
+    // New: admin-added custom line items + additional pergolas flow through
+    // here when the admin regenerates the PDF from the CRM
     customLineItems,
+    additionalPergolas,
   } = data;
 
-  // If customLineItems are provided, re-derive subtotal/HST/total so the
-  // PDF matches whatever the admin has saved. Otherwise use the original
-  // numbers baked in at submission time.
+  // If customLineItems or additionalPergolas are provided, re-derive
+  // subtotal/HST/total so the PDF matches whatever the admin has saved.
   const customAdditions = Array.isArray(customLineItems)
     ? customLineItems.reduce((s: number, i: any) => {
         const qty = i.quantity || 1;
@@ -22,9 +22,17 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
         return s + signed * qty;
       }, 0)
     : 0;
-  const subtotal = customAdditions !== 0 ? (rawSubtotal || 0) + customAdditions : rawSubtotal;
-  const hst = customAdditions !== 0 ? subtotal * 0.13 : rawHst;
-  const total = customAdditions !== 0 ? subtotal + hst : rawTotal;
+  const extraPergolasTotal = Array.isArray(additionalPergolas)
+    ? additionalPergolas.reduce((s: number, p: any) => {
+        if (typeof p.price === 'number') return s + p.price;
+        if (Array.isArray(p.lineItems)) return s + p.lineItems.reduce((ss: number, li: any) => ss + (li.cost || 0) * (li.quantity || 1), 0);
+        return s;
+      }, 0)
+    : 0;
+  const hasAdjustments = customAdditions !== 0 || extraPergolasTotal > 0;
+  const subtotal = hasAdjustments ? (rawSubtotal || 0) + customAdditions + extraPergolasTotal : rawSubtotal;
+  const hst = hasAdjustments ? subtotal * 0.13 : rawHst;
+  const total = hasAdjustments ? subtotal + hst : rawTotal;
 
   const hasUpgrades = Array.isArray(availableUpgrades) && availableUpgrades.length > 0;
   const upgradePageCount = hasUpgrades ? 1 : 0;
@@ -296,6 +304,37 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
                       *Heaters must be installed by a licensed electrician at additional cost.
                     </p>
                   )}
+                </>
+              )}
+
+              {Array.isArray(additionalPergolas) && additionalPergolas.length > 0 && (
+                <>
+                  <GoldBar>Additional Pergolas</GoldBar>
+                  <div className="space-y-2 mb-4">
+                    {additionalPergolas.map((p: any, idx: number) => {
+                      const pPrice = typeof p.price === 'number'
+                        ? p.price
+                        : Array.isArray(p.lineItems)
+                          ? p.lineItems.reduce((s: number, li: any) => s + (li.cost || 0) * (li.quantity || 1), 0)
+                          : 0;
+                      return (
+                        <div key={`ap-${idx}`} className="border border-[#e5e7eb] rounded-sm overflow-hidden">
+                          <div className="flex items-center justify-between bg-[#FAF9F6] px-3 py-2 border-b border-[#e5e7eb]">
+                            <div>
+                              <p className="font-bold text-[11px]">Pergola #{idx + 2}: {p.label}</p>
+                              <p className="text-[9px] text-[#666]">
+                                {p.width}' × {p.depth}' × {p.height}' · {p.frameColor} frame · {p.louverColor} louvers
+                              </p>
+                            </div>
+                            <div className="text-right font-bold text-[11px]">${fmt(pPrice)}</div>
+                          </div>
+                          {p.notes && (
+                            <p className="text-[8px] text-[#666] italic px-3 py-1.5">{p.notes}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               )}
 

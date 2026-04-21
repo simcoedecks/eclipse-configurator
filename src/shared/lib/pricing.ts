@@ -60,3 +60,31 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+/**
+ * Standalone base-price calculator — replicates the same logic used in the
+ * retail configurator so the admin can auto-calculate the price for an
+ * additional pergola added to an existing project. Returns null for
+ * out-of-range dimensions.
+ */
+export function calculateBasePrice(depth: number, width: number): number | null {
+  // Note: the configurator swaps width/depth internally; match that here
+  const d = width;
+  const w = depth;
+  if (d < 7 || d > 100 || w < 8 || w > 40) return null;
+
+  const area = d * w;
+  const sections = Math.ceil(d / 13) * Math.ceil(w / 20);
+
+  let price = 0;
+  if (sections > 1) {
+    price = 140 * area + 2000 * sections;
+  } else if (area <= 99) {
+    price = 165 * area + 2000;
+  } else if (area <= 120) {
+    price = 150 * area + 2000;
+  } else {
+    price = 130 * area + 2000;
+  }
+  return price * getMarkup(area);
+}

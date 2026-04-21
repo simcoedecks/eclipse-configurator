@@ -6,6 +6,7 @@ import { logActivity } from '../../lib/crmHelpers';
 import { Plus, Trash2, Edit3, Check, X, Save, Percent, Tag as TagIcon, FileText, Sparkles, Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import ProductCatalog from './ProductCatalog';
+import AdditionalPergolaEditor from './AdditionalPergolaEditor';
 
 interface Props { submission: any }
 
@@ -46,8 +47,9 @@ export default function PricingEditor({ submission }: Props) {
   }, [submission.id]);
 
   const pb = submission.pricingBreakdown || {};
-  const finalPricing = useMemo(() => computeFinalPricing(pb, items), [pb, items]);
-  const originalFinal = useMemo(() => computeFinalPricing(pb, submission.customLineItems || []), [pb, submission.customLineItems]);
+  const additionalPergolas = submission.additionalPergolas || [];
+  const finalPricing = useMemo(() => computeFinalPricing(pb, items, additionalPergolas), [pb, items, additionalPergolas]);
+  const originalFinal = useMemo(() => computeFinalPricing(pb, submission.customLineItems || [], submission.additionalPergolas || []), [pb, submission.customLineItems, submission.additionalPergolas]);
 
   const save = async () => {
     setSaving(true);
@@ -304,6 +306,9 @@ export default function PricingEditor({ submission }: Props) {
         </div>
       </section>
 
+      {/* Additional pergolas (lives inside the Pricing tab) */}
+      <AdditionalPergolaEditor submission={submission} />
+
       {/* Final totals */}
       <section>
         <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Updated Totals</h3>
@@ -313,6 +318,12 @@ export default function PricingEditor({ submission }: Props) {
               <span className="text-gray-600">Configurator subtotal</span>
               <span className="font-semibold">{formatCurrencyUSD(finalPricing.basePrice + finalPricing.accessoriesTotal)}</span>
             </div>
+            {finalPricing.additionalPergolasTotal > 0 && (
+              <div className="flex justify-between px-4 py-2 text-sm">
+                <span className="text-gray-600">Additional pergolas</span>
+                <span className="font-semibold">+{formatCurrencyUSD(finalPricing.additionalPergolasTotal)}</span>
+              </div>
+            )}
             {finalPricing.customTotal !== 0 && (
               <div className="flex justify-between px-4 py-2 text-sm">
                 <span className="text-gray-600">Custom adjustments</span>

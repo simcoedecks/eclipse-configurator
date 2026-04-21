@@ -5,7 +5,7 @@ import { db } from '../../shared/firebase';
 import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
-import { computeFinalPricing } from '../../shared/lib/pricingMath';
+import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
 
 /** Public customer-facing proposal view — accessed by token in URL.
  *  Phase 1: read-only mirror of the PDF content.
@@ -70,7 +70,8 @@ export default function Proposal() {
   const cfg = data.configuration || {};
   const pb = data.pricingBreakdown || {};
   const customLineItems = data.customLineItems || [];
-  const finalPricing = computeFinalPricing(pb, customLineItems);
+  const additionalPergolas = data.additionalPergolas || [];
+  const finalPricing = computeFinalPricing(pb, customLineItems, additionalPergolas);
   const customCharges = customLineItems.filter((i: any) => i.kind !== 'discount');
   const customDiscounts = customLineItems.filter((i: any) => i.kind === 'discount');
   const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
@@ -217,6 +218,29 @@ export default function Proposal() {
                     <div key={i.id} className="flex justify-between items-center text-sm py-1">
                       <span className="text-gray-700">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
                       <span className="font-medium text-gray-900">{fmt(i.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Additional pergolas on the same project */}
+            {additionalPergolas.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Additional Pergolas</p>
+                <div className="space-y-3">
+                  {additionalPergolas.map((p: any) => (
+                    <div key={p.id} className="border border-luxury-cream rounded-lg p-3">
+                      <div className="flex justify-between items-start mb-1">
+                        <div>
+                          <p className="font-semibold text-luxury-black">{p.label}</p>
+                          <p className="text-[11px] text-gray-500">
+                            {p.width}' × {p.depth}' × {p.height}' • {p.frameColor} frame • {p.louverColor} louvers
+                          </p>
+                          {p.notes && <p className="text-[11px] text-gray-500 italic mt-1">{p.notes}</p>}
+                        </div>
+                        <span className="font-serif text-luxury-gold text-lg whitespace-nowrap ml-2">{fmt(computeAdditionalPergolaPrice(p))}</span>
+                      </div>
                     </div>
                   ))}
                 </div>

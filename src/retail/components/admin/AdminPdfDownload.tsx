@@ -54,6 +54,7 @@ export default function AdminPdfDownload({ submission, compact, label }: Props) 
       hst: pb.hst,
       total: pb.total,
       customLineItems: submission.customLineItems || [],
+      additionalPergolas: submission.additionalPergolas || [],
       visualizerProps: {
         width: cfg.width, depth: cfg.depth, height: cfg.height,
         accessories: new Set<string>((pb.itemizedAccessories || []).map((a: any) => a.id).filter(Boolean)),

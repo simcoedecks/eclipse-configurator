@@ -867,7 +867,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   const pb = sub.pricingBreakdown || {};
-  const finalPricing = computeFinalPricing(pb, sub.customLineItems || []);
+  const finalPricing = computeFinalPricing(pb, sub.customLineItems || [], sub.additionalPergolas || []);
   const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
   const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
 
@@ -995,6 +995,22 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                         {(pb.itemizedAccessories || []).map((a: any, i: number) => (
                           <tr key={i}><td className="px-3 py-2 pl-6 text-gray-600">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td><td className="px-3 py-2 text-right">{fmt(a.cost)}</td></tr>
                         ))}
+                        {(sub.additionalPergolas || []).map((p: any) => {
+                          const price = typeof p.price === 'number'
+                            ? p.price
+                            : Array.isArray(p.lineItems)
+                              ? p.lineItems.reduce((s: number, li: any) => s + (li.cost || 0) * (li.quantity || 1), 0)
+                              : 0;
+                          return (
+                            <tr key={p.id} className="bg-luxury-gold/5">
+                              <td className="px-3 py-2 font-semibold">
+                                Pergola: {p.label}
+                                <div className="text-[10px] text-gray-500 font-normal">{p.width}' × {p.depth}' × {p.height}'</div>
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold">{fmt(price)}</td>
+                            </tr>
+                          );
+                        })}
                         {(sub.customLineItems || []).map((i: any) => {
                           const signed = i.kind === 'discount' ? -1 : 1;
                           return (
