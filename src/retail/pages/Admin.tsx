@@ -26,6 +26,8 @@ import CommandPalette from '../components/admin/CommandPalette';
 import AssignedToSelector, { Avatar } from '../components/admin/AssignedToSelector';
 import SourceSelector from '../components/admin/SourceSelector';
 import ContractorInviteForm from '../components/admin/ContractorInviteForm';
+import PricingEditor from '../components/admin/PricingEditor';
+import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
@@ -858,9 +860,10 @@ export default function Admin() {
 
 // ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
 function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; contractors: any[] }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   const pb = sub.pricingBreakdown || {};
+  const finalPricing = computeFinalPricing(pb, sub.customLineItems || []);
   const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
   const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
 
@@ -871,7 +874,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
       ? contractors.find(c => c.email === sub.assignedTo)
       : null;
   const dealerDiscountPct = dealer?.discountPercentage ?? null;
-  const customerTotal = pb.total || 0;
+  const customerTotal = finalPricing.total;
   const dealerCost = dealerDiscountPct != null ? customerTotal * (1 - dealerDiscountPct / 100) : null;
   const dealerMargin = dealerCost != null ? customerTotal - dealerCost : null;
 
@@ -924,6 +927,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
         <div className="px-6 pt-3 border-b border-slate-100 flex gap-1 bg-white">
           {[
             { k: 'overview', label: 'Overview' },
+            { k: 'pricing', label: 'Pricing' },
             { k: 'activity', label: 'Activity' },
             { k: 'notes', label: 'Notes' },
             { k: 'tasks', label: 'Tasks' },
@@ -973,7 +977,12 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   </div>
                 </section>
                 <section>
-                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Pricing Breakdown</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Pricing Breakdown</h3>
+                    <button onClick={() => setActiveTab('pricing')} className="text-[10px] font-bold uppercase tracking-widest text-luxury-gold hover:text-luxury-black">
+                      Edit →
+                    </button>
+                  </div>
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-slate-100">
@@ -981,10 +990,24 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                         {(pb.itemizedAccessories || []).map((a: any, i: number) => (
                           <tr key={i}><td className="px-3 py-2 pl-6 text-gray-600">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td><td className="px-3 py-2 text-right">{fmt(a.cost)}</td></tr>
                         ))}
-                        <tr className="bg-slate-50"><td className="px-3 py-2 font-semibold">Subtotal</td><td className="px-3 py-2 text-right font-bold">{fmt(pb.subtotal)}</td></tr>
-                        <tr><td className="px-3 py-2 text-gray-500">HST</td><td className="px-3 py-2 text-right">{fmt(pb.hst)}</td></tr>
+                        {(sub.customLineItems || []).map((i: any) => {
+                          const signed = i.kind === 'discount' ? -1 : 1;
+                          return (
+                            <tr key={i.id} className={i.kind === 'discount' ? 'bg-emerald-50/30' : 'bg-luxury-gold/5'}>
+                              <td className="px-3 py-2 pl-6 text-gray-700 font-semibold">
+                                {i.kind === 'discount' && <span className="text-[9px] uppercase tracking-widest text-emerald-700 mr-1">Disc</span>}
+                                {i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}
+                              </td>
+                              <td className={`px-3 py-2 text-right font-semibold ${i.kind === 'discount' ? 'text-emerald-700' : ''}`}>
+                                {fmt(signed * (i.amount || 0) * (i.quantity || 1))}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        <tr className="bg-slate-50"><td className="px-3 py-2 font-semibold">Subtotal</td><td className="px-3 py-2 text-right font-bold">{fmt(finalPricing.subtotal)}</td></tr>
+                        <tr><td className="px-3 py-2 text-gray-500">HST</td><td className="px-3 py-2 text-right">{fmt(finalPricing.hst)}</td></tr>
                         <tr className="bg-luxury-gold/5 border-t-2 border-luxury-gold/30">
-                          <td className="px-3 py-3 font-bold">Total</td><td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(pb.total)}</td>
+                          <td className="px-3 py-3 font-bold">Total</td><td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(finalPricing.total)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1051,6 +1074,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               </div>
             </div>
           )}
+          {activeTab === 'pricing' && <PricingEditor submission={sub} />}
           {activeTab === 'activity' && <ActivityTimeline submissionId={sub.id} />}
           {activeTab === 'notes' && <NotesPanel submissionId={sub.id} />}
           {activeTab === 'tasks' && <TasksPanel submissionId={sub.id} />}

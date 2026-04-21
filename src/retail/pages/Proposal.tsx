@@ -5,6 +5,7 @@ import { db } from '../../shared/firebase';
 import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
+import { computeFinalPricing } from '../../shared/lib/pricingMath';
 
 /** Public customer-facing proposal view — accessed by token in URL.
  *  Phase 1: read-only mirror of the PDF content.
@@ -68,6 +69,10 @@ export default function Proposal() {
 
   const cfg = data.configuration || {};
   const pb = data.pricingBreakdown || {};
+  const customLineItems = data.customLineItems || [];
+  const finalPricing = computeFinalPricing(pb, customLineItems);
+  const customCharges = customLineItems.filter((i: any) => i.kind !== 'discount');
+  const customDiscounts = customLineItems.filter((i: any) => i.kind === 'discount');
   const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
   const fmt = (n: number) => typeof n === 'number'
     ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -218,19 +223,55 @@ export default function Proposal() {
               </div>
             )}
 
+            {/* Custom additions (admin-added) */}
+            {customCharges.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Additional Items</p>
+                <div className="space-y-1">
+                  {customCharges.map((i: any) => (
+                    <div key={i.id} className="flex justify-between items-start text-sm py-1">
+                      <div>
+                        <span className="text-gray-700">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                        {i.description && <p className="text-[11px] text-gray-400 italic">{i.description}</p>}
+                      </div>
+                      <span className="font-medium text-gray-900 whitespace-nowrap ml-2">{fmt((i.amount || 0) * (i.quantity || 1))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom discounts */}
+            {customDiscounts.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 mb-2">Discounts &amp; Credits</p>
+                <div className="space-y-1">
+                  {customDiscounts.map((i: any) => (
+                    <div key={i.id} className="flex justify-between items-start text-sm py-1">
+                      <div>
+                        <span className="text-emerald-800">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                        {i.description && <p className="text-[11px] text-gray-400 italic">{i.description}</p>}
+                      </div>
+                      <span className="font-medium text-emerald-700 whitespace-nowrap ml-2">−{fmt((i.amount || 0) * (i.quantity || 1))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Totals */}
             <div className="pt-5 mt-5 border-t border-luxury-cream space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">{fmt(pb.subtotal)}</span>
+                <span className="font-medium">{fmt(finalPricing.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">HST (13%)</span>
-                <span className="font-medium">{fmt(pb.hst)}</span>
+                <span className="font-medium">{fmt(finalPricing.hst)}</span>
               </div>
               <div className="flex justify-between items-baseline pt-3 mt-3 border-t-2 border-luxury-gold">
                 <span className="text-sm font-bold uppercase tracking-widest text-luxury-black">Total Investment</span>
-                <span className="text-3xl font-serif text-luxury-gold">{fmt(pb.total)}</span>
+                <span className="text-3xl font-serif text-luxury-gold">{fmt(finalPricing.total)}</span>
               </div>
             </div>
           </div>
@@ -352,7 +393,7 @@ export default function Proposal() {
         <SignatureModal
           customerName={data.name}
           submissionId={data.id}
-          totalAmount={pb.total}
+          totalAmount={finalPricing.total}
           onClose={() => setShowSignModal(false)}
           onAccepted={(acceptance) => {
             setData({ ...data, acceptance, status: 'accepted' });
