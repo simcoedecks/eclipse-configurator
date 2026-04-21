@@ -3,8 +3,9 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase';
 import { computeFinalPricing, formatCurrencyUSD, type CustomLineItem } from '../../../shared/lib/pricingMath';
 import { logActivity } from '../../lib/crmHelpers';
-import { Plus, Trash2, Edit3, Check, X, Save, Percent, Tag as TagIcon, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Save, Percent, Tag as TagIcon, FileText, Sparkles, Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
+import ProductCatalog from './ProductCatalog';
 
 interface Props { submission: any }
 
@@ -36,6 +37,7 @@ export default function PricingEditor({ submission }: Props) {
   const [saving, setSaving] = useState(false);
   const [newItem, setNewItem] = useState<CustomLineItem>(emptyItem());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   // Reset when submission changes
   useEffect(() => {
@@ -136,23 +138,32 @@ export default function PricingEditor({ submission }: Props) {
 
       {/* Custom line items — editable */}
       <section>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <h3 className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold flex items-center gap-1.5">
             <Sparkles className="w-3 h-3" />
             Custom Line Items &amp; Adjustments
           </h3>
-          {dirty && (
-            <div className="inline-flex items-center gap-2">
-              <span className="text-[10px] text-amber-700 font-semibold">Unsaved</span>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxury-gold text-luxury-black rounded-md text-xs font-bold hover:bg-luxury-gold/90 disabled:opacity-50"
-              >
-                {saving ? <><Loader2 className="w-3 h-3 animate-spin" />Saving…</> : <><Save className="w-3 h-3" />Save</>}
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCatalogOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-bold hover:bg-luxury-black/90"
+            >
+              <Package className="w-3.5 h-3.5" />
+              Browse Catalog
+            </button>
+            {dirty && (
+              <>
+                <span className="text-[10px] text-amber-700 font-semibold">Unsaved</span>
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-lg text-xs font-bold hover:bg-luxury-gold/90 disabled:opacity-50"
+                >
+                  {saving ? <><Loader2 className="w-3 h-3 animate-spin" />Saving…</> : <><Save className="w-3 h-3" />Save</>}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -335,6 +346,14 @@ export default function PricingEditor({ submission }: Props) {
           Changes you save here show up instantly on the customer's interactive proposal page. The original PDF attachment stays as a historical snapshot.
         </p>
       </section>
+
+      {catalogOpen && (
+        <ProductCatalog
+          onClose={() => setCatalogOpen(false)}
+          existingNames={items.map(i => i.name)}
+          onAdd={(p) => addItem(p)}
+        />
+      )}
     </div>
   );
 }
