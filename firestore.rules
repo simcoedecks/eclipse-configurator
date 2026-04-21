@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'tags', 'assignedTo']) &&
              data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -123,7 +123,7 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidSubmissionUpdate(data, prevData) {
-      // Allow updating email tracking fields, PDF URL, viewedAt, submitterIp, geo.
+      // Client-side update fields (non-admin). Admin can do anything.
       let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt', 'submitterIp', 'geo'];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return affectedKeys.hasOnly(allowedFields);
@@ -154,6 +154,20 @@ service cloud.firestore {
                     || isValidSubmissionUpdate(request.resource.data, resource.data)
                     || isValidSignatureWrite(request.resource.data, resource.data);
       allow delete: if isAdmin();
+
+      // CRM subcollections — all admin-only
+      match /activities/{activityId} {
+        allow read, write: if isAdmin();
+      }
+      match /notes/{noteId} {
+        allow read, write: if isAdmin();
+      }
+      match /tasks/{taskId} {
+        allow read, write: if isAdmin();
+      }
+      match /files/{fileId} {
+        allow read, write: if isAdmin();
+      }
     }
 
     match /leads/{userId} {

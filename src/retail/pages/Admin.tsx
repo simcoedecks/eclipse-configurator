@@ -1,9 +1,30 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
-import { collection, getDocs, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
-import { LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, User as UserIcon, Plus, Building2, Send, Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck, Map as MapIcon, Trash2, CheckSquare, Square } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
+import {
+  LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, Plus, Building2, Send,
+  Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
+  Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
+  Bookmark, Save,
+} from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import { motion, AnimatePresence } from 'motion/react';
+
 import LeadMap from '../components/LeadMap';
+import DashboardHome from '../components/admin/DashboardHome';
+import KanbanBoard from '../components/admin/KanbanBoard';
+import ActivityTimeline from '../components/admin/ActivityTimeline';
+import NotesPanel from '../components/admin/NotesPanel';
+import TasksPanel from '../components/admin/TasksPanel';
+import PipelineStageSelector from '../components/admin/PipelineStageSelector';
+import TagManager from '../components/admin/TagManager';
+import ComposeModal from '../components/admin/ComposeModal';
+import FilesPanel from '../components/admin/FilesPanel';
+import CommandPalette from '../components/admin/CommandPalette';
+import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES } from '../../shared/lib/crm';
+import { logActivity } from '../lib/crmHelpers';
+
+type TabKey = 'dashboard' | 'submissions' | 'kanban' | 'map' | 'jobs' | 'contractors';
 
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
@@ -12,25 +33,44 @@ export default function Admin() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
   const [contractors, setContractors] = useState<any[]>([]);
-  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'jobs' | 'contractors'>('submissions');
+  const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
+
   // Submissions search + filter + sort
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'email' | 'consultation'>('all');
   const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'unique'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
-  // Column-level sort: lets any table header toggle asc/desc sorting
   const [columnSort, setColumnSort] = useState<{ key: 'date' | 'type' | 'name' | 'email' | 'city' | 'price' | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'desc' });
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [signedFilter, setSignedFilter] = useState<'all' | 'signed' | 'pending'>('all');
+  const [stageFilter, setStageFilter] = useState<string>('all');
+  const [tagFilter, setTagFilter] = useState<string>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
-  // Bulk selection for multi-row actions
+  const [composeMode, setComposeMode] = useState<'email' | 'sms' | null>(null);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Saved views
+  const [savedViews, setSavedViews] = useState<Array<{ id: string; name: string; state: any }>>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('eclipse-admin-saved-views');
+      if (raw) setSavedViews(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('eclipse-admin-saved-views', JSON.stringify(savedViews));
+    } catch {}
+  }, [savedViews]);
+
+  // Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -39,106 +79,77 @@ export default function Admin() {
     return () => unsubscribe();
   }, []);
 
-  const fetchData = () => {
-    setFetching(true);
-    setError(null);
+  // Data listeners
+  useEffect(() => {
+    if (!user) return;
+    const cleanups: Array<() => void> = [];
     try {
-      const qSubmissions = query(collection(db, 'submissions'), orderBy('createdAt', 'desc'));
-      const unsubSubmissions = onSnapshot(qSubmissions, (snapshot) => {
-        setSubmissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
+      const qSub = query(collection(db, 'submissions'), orderBy('createdAt', 'desc'));
+      cleanups.push(onSnapshot(qSub, (snap) => setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
 
       const qJobs = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
-      const unsubJobs = onSnapshot(qJobs, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added' && !fetching) {
-            toast.info(`New job request from ${change.doc.data().name}`);
-          }
-        });
-        setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
+      cleanups.push(onSnapshot(qJobs, (snap) => {
+        snap.docChanges().forEach(c => { if (c.type === 'added') toast.info(`New job request: ${c.doc.data().customerName || 'Unknown'}`); });
+        setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }));
 
       const qBids = query(collection(db, 'bids'), orderBy('createdAt', 'desc'));
-      const unsubBids = onSnapshot(qBids, (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added' && !fetching) {
-            toast.success(`New bid submitted by ${change.doc.data().contractorName}`);
-          }
-        });
-        setBids(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setFetching(false);
-      });
+      cleanups.push(onSnapshot(qBids, (snap) => setBids(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
 
-      const unsubContractors = onSnapshot(collection(db, 'contractors'), (snapshot) => {
-        setContractors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-
-      return () => {
-        unsubSubmissions();
-        unsubJobs();
-        unsubBids();
-        unsubContractors();
-      };
+      cleanups.push(onSnapshot(collection(db, 'contractors'), (snap) => setContractors(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
     } catch (err: any) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch data. Make sure you have admin privileges. ' + err.message);
-      setFetching(false);
+      console.error(err);
+      setError('Failed to load data. Ensure you have admin privileges. ' + err?.message);
     }
-  };
-
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-    if (user) {
-      cleanup = fetchData();
-    }
-    return () => {
-      if (cleanup) cleanup();
-    };
+    return () => cleanups.forEach(fn => fn());
   }, [user]);
 
-  const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError('Failed to log in. ' + err.message);
-    }
-  };
-
-  const handleLogout = () => {
-    auth.signOut();
-  };
-
-  // Apply search + filters + sort to submissions
-  const filteredSubmissions = useMemo(() => {
-    const parsePrice = (s: any): number => {
-      if (typeof s === 'number') return s;
-      if (!s) return 0;
-      return parseFloat(String(s).replace(/[^0-9.-]+/g, '')) || 0;
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(true); }
+      if (e.key === '?' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        toast.message('Keyboard shortcuts', {
+          description: '⌘K: command palette · ⌘E: email · D: dashboard · L: list · K: kanban · M: map',
+          duration: 5000,
+        });
+      }
+      if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) && !e.metaKey && !e.ctrlKey) {
+        if (e.key === 'd') setActiveTab('dashboard');
+        if (e.key === 'l') setActiveTab('submissions');
+        if (e.key === 'k' && !detailSub) setActiveTab('kanban');
+        if (e.key === 'm' && !detailSub) setActiveTab('map');
+      }
     };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [detailSub]);
+
+  // Helpers
+  const parsePrice = (s: any): number => typeof s === 'number' ? s : parseFloat(String(s || '').replace(/[^0-9.-]+/g, '')) || 0;
+  const formatCurrency = (n: number | undefined | null): string => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+
+  // Filtered + sorted submissions
+  const filteredSubmissions = useMemo(() => {
     const nowMs = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const q = searchQuery.trim().toLowerCase();
 
     let list = submissions.filter(sub => {
-      // Search
       if (q) {
-        const hay = [sub.name, sub.email, sub.phone, sub.city, sub.address]
-          .filter(Boolean).join(' ').toLowerCase();
+        const hay = [sub.name, sub.email, sub.phone, sub.city, sub.address, ...(sub.tags || [])].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      // Type filter
       if (typeFilter !== 'all' && sub.type !== typeFilter) return false;
-      // Duplicate filter
       if (duplicateFilter === 'duplicates' && !sub.isDuplicate) return false;
       if (duplicateFilter === 'unique' && sub.isDuplicate) return false;
-      // Read filter
       if (readFilter === 'unread' && sub.viewedAt) return false;
       if (readFilter === 'read' && !sub.viewedAt) return false;
-      // Signed filter
       if (signedFilter === 'signed' && !sub.acceptance?.signedAt) return false;
       if (signedFilter === 'pending' && sub.acceptance?.signedAt) return false;
-      // Date filter
+      if (stageFilter !== 'all' && (sub.pipelineStage || defaultStageFor(sub)) !== stageFilter) return false;
+      if (tagFilter !== 'all' && !(sub.tags || []).includes(tagFilter)) return false;
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
         const created = sub.createdAt.toDate().getTime();
         const cutoff = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
@@ -147,7 +158,6 @@ export default function Admin() {
       return true;
     });
 
-    // Column-level sort takes priority over the dropdown
     if (columnSort.key) {
       const dir = columnSort.dir === 'asc' ? 1 : -1;
       list.sort((a, b) => {
@@ -172,51 +182,53 @@ export default function Admin() {
           case 'price-desc': return bPrice - aPrice;
           case 'price-asc':  return aPrice - bPrice;
           case 'name':       return (a.name || '').localeCompare(b.name || '');
-          case 'date-desc':
           default:           return bDate - aDate;
         }
       });
     }
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, columnSort]);
+  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, columnSort]);
 
   const clearFilters = () => {
-    setSearchQuery('');
-    setTypeFilter('all');
-    setDuplicateFilter('all');
-    setDateFilter('all');
-    setSortBy('date-desc');
-    setReadFilter('all');
-    setSignedFilter('all');
+    setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
+    setSortBy('date-desc'); setReadFilter('all'); setSignedFilter('all'); setStageFilter('all'); setTagFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all';
 
   const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
   const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
   const acceptedCount = useMemo(() => submissions.filter(s => !!s.acceptance?.signedAt).length, [submissions]);
+  const uniqueTags = useMemo(() => {
+    const set = new Set<string>();
+    submissions.forEach(s => (s.tags || []).forEach((t: string) => set.add(t)));
+    return Array.from(set).sort();
+  }, [submissions]);
 
-  const markAsViewed = async (submissionId: string) => {
-    try {
-      await setDoc(doc(db, 'submissions', submissionId), { viewedAt: serverTimestamp() }, { merge: true });
-    } catch (e) {
-      console.error('Failed to mark as viewed', e);
+  // Actions
+  const markAsViewed = async (id: string) => { try { await setDoc(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true }); } catch (e) { console.error(e); } };
+  const markAsUnread = async (id: string) => { try { await setDoc(doc(db, 'submissions', id), { viewedAt: null }, { merge: true }); } catch (e) { console.error(e); } };
+  const markAllAsRead = async () => {
+    if (unreadCount === 0) return;
+    if (!confirm(`Mark all ${unreadCount} unread as read?`)) return;
+    const batch = writeBatch(db);
+    submissions.filter(s => !s.viewedAt).forEach(s => batch.set(doc(db, 'submissions', s.id), { viewedAt: serverTimestamp() }, { merge: true }));
+    await batch.commit();
+    toast.success('All marked read');
+  };
+  const openDetail = (sub: any) => {
+    setDetailSub(sub);
+    if (!sub.viewedAt) {
+      markAsViewed(sub.id);
+      logActivity(sub.id, 'viewed_by_admin', `Viewed by ${auth.currentUser?.email || 'admin'}`);
     }
   };
 
-  const markAsUnread = async (submissionId: string) => {
-    try {
-      await setDoc(doc(db, 'submissions', submissionId), { viewedAt: null }, { merge: true });
-    } catch (e) {
-      console.error('Failed to mark as unread', e);
-    }
-  };
-
-  // ── Column sort header helper ───────────────────────────────────────
+  // Column sort
   const toggleColumnSort = (key: 'date' | 'type' | 'name' | 'email' | 'city' | 'price') => {
     setColumnSort(prev => {
       if (prev.key !== key) return { key, dir: 'asc' };
       if (prev.dir === 'asc') return { key, dir: 'desc' };
-      return { key: null, dir: 'desc' }; // third click clears
+      return { key: null, dir: 'desc' };
     });
   };
   const SortIcon = ({ col }: { col: 'date' | 'type' | 'name' | 'email' | 'city' | 'price' }) => {
@@ -224,35 +236,23 @@ export default function Admin() {
     return columnSort.dir === 'asc' ? <ArrowUp className="w-3 h-3 text-luxury-gold" /> : <ArrowDown className="w-3 h-3 text-luxury-gold" />;
   };
 
-  // ── Bulk selection helpers ──────────────────────────────────────────
-  const toggleSelected = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-  };
+  // Bulk selection
+  const toggleSelected = (id: string) => { const n = new Set(selectedIds); n.has(id) ? n.delete(id) : n.add(id); setSelectedIds(n); };
   const clearSelection = () => setSelectedIds(new Set());
   const selectAllVisible = (rows: any[]) => setSelectedIds(new Set(rows.map(r => r.id)));
   const allVisibleSelected = (rows: any[]) => rows.length > 0 && rows.every(r => selectedIds.has(r.id));
-
   const bulkMarkRead = async () => {
     if (selectedIds.size === 0) return;
     const batch = writeBatch(db);
-    selectedIds.forEach(id => {
-      batch.set(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true });
-    });
-    await batch.commit();
-    clearSelection();
+    selectedIds.forEach(id => batch.set(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true }));
+    await batch.commit(); clearSelection();
     toast.success(`Marked ${selectedIds.size} as read`);
   };
   const bulkMarkUnread = async () => {
     if (selectedIds.size === 0) return;
     const batch = writeBatch(db);
-    selectedIds.forEach(id => {
-      batch.set(doc(db, 'submissions', id), { viewedAt: null }, { merge: true });
-    });
-    await batch.commit();
-    clearSelection();
+    selectedIds.forEach(id => batch.set(doc(db, 'submissions', id), { viewedAt: null }, { merge: true }));
+    await batch.commit(); clearSelection();
     toast.success(`Marked ${selectedIds.size} as unread`);
   };
   const bulkDelete = async () => {
@@ -260,96 +260,83 @@ export default function Admin() {
     const count = selectedIds.size;
     if (!confirm(`Permanently delete ${count} submission${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
     try {
-      // deleteDoc in parallel; writeBatch also works but this avoids batch-size limits
-      const ids = Array.from(selectedIds);
-      await Promise.all(ids.map(id => deleteDoc(doc(db, 'submissions', id))));
+      await Promise.all(Array.from(selectedIds).map(id => deleteDoc(doc(db, 'submissions', id))));
       clearSelection();
-      toast.success(`Deleted ${count} submission${count === 1 ? '' : 's'}`);
-    } catch (e: any) {
-      console.error('Bulk delete failed', e);
-      toast.error('Some submissions could not be deleted. Check admin permissions.');
-    }
+      toast.success(`Deleted ${count}`);
+    } catch (e) { console.error(e); toast.error('Some could not be deleted.'); }
   };
-
-  const markAllAsRead = async () => {
-    if (unreadCount === 0) return;
-    if (!confirm(`Mark all ${unreadCount} unread submissions as read?`)) return;
-    try {
-      const batch = writeBatch(db);
-      submissions.filter(s => !s.viewedAt).forEach(s => {
-        batch.set(doc(db, 'submissions', s.id), { viewedAt: serverTimestamp() }, { merge: true });
-      });
-      await batch.commit();
-      toast.success('All submissions marked as read');
-    } catch (e) {
-      console.error('Failed to mark all as read', e);
-      toast.error('Failed to mark all as read');
-    }
+  const bulkMoveToStage = async (stageId: string) => {
+    if (selectedIds.size === 0) return;
+    const batch = writeBatch(db);
+    selectedIds.forEach(id => batch.set(doc(db, 'submissions', id), { pipelineStage: stageId }, { merge: true }));
+    await batch.commit(); clearSelection();
+    toast.success(`Moved ${selectedIds.size} to ${stageById(stageId)?.label}`);
   };
 
   const downloadCSV = () => {
     const dataset = filteredSubmissions.length > 0 ? filteredSubmissions : submissions;
     if (dataset.length === 0) return;
-
-    const headers = [
-      'Date', 'Type', 'Duplicate', 'Name', 'Email', 'Phone', 'Address', 'City',
-      'Width', 'Depth', 'Height', 'Frame Color', 'Louver Color', 'Total Price', 'Accessories', 'PDF URL'
-    ];
-
-    const rows = dataset.map(sub => {
-      const date = sub.createdAt ? new Date(sub.createdAt.toDate()).toLocaleDateString() : 'N/A';
-      const config = sub.configuration || {};
-      const accessories = config.accessories ? config.accessories.join('; ') : '';
-      
+    const headers = ['Date', 'Stage', 'Type', 'Signed', 'Duplicate', 'Name', 'Email', 'Phone', 'Address', 'City', 'Width', 'Depth', 'Height', 'Frame', 'Louver', 'Total', 'Tags', 'Source', 'PDF URL'];
+    const rows = dataset.map(s => {
+      const d = s.createdAt?.toDate?.()?.toLocaleDateString() || 'N/A';
+      const c = s.configuration || {};
       return [
-        date,
-        sub.type || 'N/A',
-        sub.isDuplicate ? 'Yes' : 'No',
-        sub.name || 'N/A',
-        sub.email || 'N/A',
-        sub.phone || 'N/A',
-        sub.address || 'N/A',
-        sub.city || 'N/A',
-        config.width || 'N/A',
-        config.depth || 'N/A',
-        config.height || 'N/A',
-        config.frameColor || 'N/A',
-        config.louverColor || 'N/A',
-        config.totalPrice || 'N/A',
-        accessories,
-        sub.pdfUrl || ''
-      ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+        d, stageById(s.pipelineStage || defaultStageFor(s))?.label || '', s.type || '',
+        s.acceptance?.signedAt ? 'Yes' : 'No', s.isDuplicate ? 'Yes' : 'No',
+        s.name || '', s.email || '', s.phone || '', s.address || '', s.city || '',
+        c.width || '', c.depth || '', c.height || '', c.frameColor || '', c.louverColor || '',
+        c.totalPrice || '', (s.tags || []).join('; '), s.source || '', s.pdfUrl || ''
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
     });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `submissions_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `submissions_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
+
+  // Saved views
+  const saveCurrentView = () => {
+    const name = prompt('Save this filter view as:');
+    if (!name?.trim()) return;
+    const id = Date.now().toString(36);
+    setSavedViews([...savedViews, {
+      id, name: name.trim(),
+      state: { searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter }
+    }]);
+    toast.success(`Saved view "${name}"`);
+  };
+  const applyView = (view: { state: any }) => {
+    const s = view.state;
+    setSearchQuery(s.searchQuery || ''); setTypeFilter(s.typeFilter || 'all');
+    setDuplicateFilter(s.duplicateFilter || 'all'); setDateFilter(s.dateFilter || 'all');
+    setSortBy(s.sortBy || 'date-desc'); setReadFilter(s.readFilter || 'all');
+    setSignedFilter(s.signedFilter || 'all'); setStageFilter(s.stageFilter || 'all');
+    setTagFilter(s.tagFilter || 'all');
+  };
+  const deleteView = (id: string) => setSavedViews(savedViews.filter(v => v.id !== id));
+
+  // ── Render ─────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+      <div className="min-h-screen flex items-center justify-center bg-luxury-paper">
+        <Loader2 className="w-8 h-8 animate-spin text-luxury-gold" />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white p-8 rounded-xl shadow-sm max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold mb-6">Admin Login</h1>
-          <p className="text-gray-600 mb-8">Please sign in with your admin account to view submissions.</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-luxury-paper via-luxury-cream to-luxury-paper p-6">
+        <div className="bg-white p-10 rounded-2xl shadow-xl max-w-md w-full text-center border border-luxury-cream">
+          <img src="/logo.png" alt="Eclipse Pergola" className="h-12 mx-auto mb-6" />
+          <h1 className="text-2xl font-serif text-luxury-black mb-2">Admin Portal</h1>
+          <p className="text-sm text-gray-500 mb-8">Sign in with your admin Google account to access the CRM.</p>
           <button
-            onClick={handleLogin}
-            className="w-full bg-black text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-800 transition-colors"
+            onClick={async () => { try { await signInWithPopup(auth, googleProvider); } catch (e: any) { setError('Failed: ' + e.message); } }}
+            className="w-full bg-luxury-black text-white py-3 px-4 rounded-lg font-medium hover:bg-luxury-black/90 transition-colors"
           >
             Sign in with Google
           </button>
@@ -359,857 +346,643 @@ export default function Admin() {
     );
   }
 
+  const navItems: Array<{ key: TabKey; label: string; icon: any; badge?: number | string; sub?: string }> = [
+    { key: 'dashboard',   label: 'Dashboard',   icon: Home,     sub: 'Overview' },
+    { key: 'submissions', label: 'Leads',       icon: List,     badge: unreadCount > 0 ? unreadCount : undefined, sub: `${submissions.length} total` },
+    { key: 'kanban',      label: 'Pipeline',    icon: Kanban,   sub: `${pendingCount} active` },
+    { key: 'map',         label: 'Map',         icon: MapIcon,  sub: 'Geography' },
+    { key: 'jobs',        label: 'Jobs',        icon: Building2, badge: jobs.length || undefined, sub: 'Contractor board' },
+    { key: 'contractors', label: 'Team',        icon: Users,    sub: `${contractors.length} contractors` },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-12">
-      <Toaster position="top-center" />
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">Logged in as {user.email}</p>
+    <div className="min-h-screen bg-gradient-to-br from-luxury-paper via-white to-luxury-paper flex">
+      <Toaster position="top-right" />
+
+      {/* ─── SIDEBAR ─── */}
+      <aside className="w-64 bg-luxury-black text-white flex flex-col shrink-0">
+        <div className="p-6 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="Eclipse" className="h-9 object-contain brightness-0 invert" />
           </div>
-          <div className="flex gap-4">
-            {activeTab === 'submissions' && (
+          <p className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold mt-3">CRM · Admin</p>
+        </div>
+
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            const active = activeTab === item.key;
+            return (
               <button
-                onClick={downloadCSV}
-                disabled={submissions.length === 0}
-                className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  active
+                    ? 'bg-luxury-gold text-luxury-black shadow-lg'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
               >
-                <Download className="w-4 h-4" />
-                Export CSV
+                <Icon className="w-4 h-4 shrink-0" />
+                <div className="flex-1 text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{item.label}</span>
+                    {item.badge != null && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0 rounded-full min-w-[18px] h-[16px] inline-flex items-center justify-center ${active ? 'bg-luxury-black text-luxury-gold' : 'bg-luxury-gold text-luxury-black'}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
+                  {item.sub && <p className={`text-[10px] ${active ? 'text-luxury-black/60' : 'text-white/40'}`}>{item.sub}</p>}
+                </div>
               </button>
-            )}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 bg-gray-100 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-          </div>
-        </div>
+            );
+          })}
+        </nav>
 
-        <div className="flex gap-4 mb-6 border-b border-gray-200">
+        <div className="border-t border-white/10 p-3">
           <button
-            onClick={() => setActiveTab('submissions')}
-            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 ${
-              activeTab === 'submissions' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
+            onClick={() => setCmdOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg"
           >
-            Submissions ({submissions.length})
-            {unreadCount > 0 && activeTab !== 'submissions' && (
-              <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-luxury-gold text-white text-[10px] font-bold">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('map')}
-            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 inline-flex items-center gap-1.5 ${
-              activeTab === 'map' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <MapIcon className="w-4 h-4" />
-            Map
-          </button>
-          <button
-            onClick={() => setActiveTab('jobs')}
-            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 ${
-              activeTab === 'jobs' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Contractor Jobs ({jobs.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('contractors')}
-            className={`pb-3 px-2 font-medium text-sm transition-colors border-b-2 ${
-              activeTab === 'contractors' ? 'border-luxury-black text-luxury-black' : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Contractors ({contractors.length})
+            <Command className="w-3.5 h-3.5" />
+            <span className="flex-1 text-left">Quick search</span>
+            <kbd className="text-[9px] font-mono bg-white/10 px-1.5 py-0.5 rounded">⌘K</kbd>
           </button>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-8 border border-red-100">
-            {error}
+        <div className="border-t border-white/10 p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-luxury-gold flex items-center justify-center shrink-0">
+            <span className="text-luxury-black font-bold text-xs">
+              {(user.email || 'A').charAt(0).toUpperCase()}
+            </span>
           </div>
-        )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold truncate">{user.displayName || 'Admin'}</p>
+            <p className="text-[10px] text-white/50 truncate">{user.email}</p>
+          </div>
+          <button onClick={() => auth.signOut()} className="text-white/40 hover:text-white" title="Sign out">
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </aside>
 
-        {fetching ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-          </div>
-        ) : activeTab === 'map' ? (
-          <LeadMap submissions={submissions} />
-        ) : activeTab === 'contractors' ? (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold">Contractor Management</h2>
-              <button
-                onClick={() => setShowInviteForm(!showInviteForm)}
-                className="flex items-center gap-2 bg-black text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Invite Contractor
+      {/* ─── MAIN CONTENT ─── */}
+      <main className="flex-1 overflow-x-hidden">
+        {/* Page header */}
+        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200">
+          <div className="px-8 py-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-serif text-luxury-black">
+                {navItems.find(n => n.key === activeTab)?.label || 'Dashboard'}
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {activeTab === 'dashboard' && "Here's what's happening today."}
+                {activeTab === 'submissions' && `Manage and filter all ${submissions.length} quote submissions.`}
+                {activeTab === 'kanban' && 'Drag leads between stages.'}
+                {activeTab === 'map' && 'Geographic distribution of all leads.'}
+                {activeTab === 'jobs' && 'Contractor job board and bids.'}
+                {activeTab === 'contractors' && 'Invite and manage contractors.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {activeTab === 'submissions' && (
+                <button onClick={downloadCSV} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50">
+                  <Download className="w-3.5 h-3.5" />
+                  Export CSV
+                </button>
+              )}
+              <button onClick={() => setCmdOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-semibold hover:bg-luxury-black/90">
+                <Command className="w-3.5 h-3.5" />
+                ⌘K
               </button>
             </div>
+          </div>
+        </header>
 
-            {showInviteForm && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900 mb-4">New Contractor Invite</h3>
-                <form
-                  onSubmit={async (e: FormEvent) => {
-                    e.preventDefault();
-                    setInviteLoading(true);
-                    const form = e.target as HTMLFormElement;
-                    const formData = new FormData(form);
-                    const adminSecret = localStorage.getItem('adminSecret') || prompt('Enter admin secret (EXPORT_SECRET):');
-                    if (!adminSecret) {
-                      toast.error('Admin secret is required');
-                      setInviteLoading(false);
-                      return;
-                    }
-                    localStorage.setItem('adminSecret', adminSecret);
+        {/* Page body */}
+        <div className="px-8 py-6">
+          {error && (
+            <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 mb-6 text-sm">{error}</div>
+          )}
 
-                    try {
-                      const res = await fetch('/api/pro/invite-contractor', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          companyName: formData.get('companyName'),
-                          contactName: formData.get('contactName'),
-                          email: formData.get('email'),
-                          phone: formData.get('phone'),
-                          discountPercentage: formData.get('discountPercentage'),
-                          adminSecret,
-                        }),
-                      });
-                      const result = await res.json();
-                      if (result.success) {
-                        toast.success(`Invite sent to ${formData.get('email')}`);
-                        form.reset();
-                        setShowInviteForm(false);
-                      } else {
-                        toast.error(result.error || 'Failed to send invite');
-                        if (res.status === 401) localStorage.removeItem('adminSecret');
-                      }
-                    } catch {
-                      toast.error('Failed to connect to server');
-                    } finally {
-                      setInviteLoading(false);
-                    }
-                  }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
-                    <input name="companyName" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name *</label>
-                    <input name="contactName" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                    <input name="email" type="email" required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <input name="phone" type="tel" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Discount %</label>
-                    <input name="discountPercentage" type="number" min="0" max="100" defaultValue="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-black transition-colors" />
-                  </div>
-                  <div className="flex items-end">
+          {/* Dashboard */}
+          {activeTab === 'dashboard' && (
+            <DashboardHome
+              submissions={submissions}
+              onOpenSubmission={openDetail}
+              onGoToSubmissions={() => setActiveTab('submissions')}
+              onGoToKanban={() => setActiveTab('kanban')}
+            />
+          )}
+
+          {/* Kanban */}
+          {activeTab === 'kanban' && (
+            <KanbanBoard submissions={submissions} onOpen={openDetail} />
+          )}
+
+          {/* Map */}
+          {activeTab === 'map' && <LeadMap submissions={submissions} />}
+
+          {/* Submissions */}
+          {activeTab === 'submissions' && (
+            <>
+              {/* Status tabs */}
+              <div className="flex gap-1 mb-4 border-b border-slate-200">
+                {[
+                  { key: 'all',     label: 'All Leads',        count: submissions.length, icon: '📋' },
+                  { key: 'pending', label: 'Pending Signature', count: pendingCount,       icon: '⏳' },
+                  { key: 'signed',  label: 'Accepted',          count: acceptedCount,      icon: '✅' },
+                ].map(tab => {
+                  const active = signedFilter === tab.key;
+                  return (
                     <button
-                      type="submit"
-                      disabled={inviteLoading}
-                      className="flex items-center gap-2 bg-black text-white py-2 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors text-sm disabled:opacity-50"
+                      key={tab.key}
+                      onClick={() => setSignedFilter(tab.key as any)}
+                      className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                        active
+                          ? (tab.key === 'signed' ? 'border-emerald-500 text-emerald-700 bg-emerald-50/60'
+                            : tab.key === 'pending' ? 'border-luxury-gold text-luxury-black bg-luxury-gold/10'
+                            : 'border-luxury-black text-luxury-black bg-slate-50')
+                          : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                      } rounded-t-lg`}
                     >
-                      <Send className="w-4 h-4" />
-                      {inviteLoading ? 'Sending...' : 'Send Invite'}
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                      <span className={`min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                        active ? (tab.key === 'signed' ? 'bg-emerald-500 text-white' : tab.key === 'pending' ? 'bg-luxury-gold text-white' : 'bg-luxury-black text-white') : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {tab.count}
+                      </span>
                     </button>
-                  </div>
-                </form>
+                  );
+                })}
               </div>
-            )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
-                      <th className="p-4 font-medium">Company</th>
-                      <th className="p-4 font-medium">Contact</th>
-                      <th className="p-4 font-medium">Email</th>
-                      <th className="p-4 font-medium">Status</th>
-                      <th className="p-4 font-medium">Discount</th>
-                      <th className="p-4 font-medium">Last Login</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm divide-y divide-gray-100">
-                    {contractors.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-gray-500">
-                          No contractors found. Invite your first contractor above.
-                        </td>
+              {/* Filters + saved views */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by name, email, phone, city, tag…"
+                      className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent"
+                    />
+                  </div>
+                  <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">All Stages</option>
+                    {PIPELINE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                  <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">All Tags</option>
+                    {uniqueTags.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">Read & Unread</option>
+                    <option value="unread">Unread</option>
+                    <option value="read">Read</option>
+                  </select>
+                  <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
+                    <option value="all">Any Time</option>
+                    <option value="7d">7 Days</option>
+                    <option value="30d">30 Days</option>
+                    <option value="90d">90 Days</option>
+                  </select>
+                  {hasActiveFilters && (
+                    <button onClick={clearFilters} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg border border-slate-200">
+                      <X className="w-3.5 h-3.5" />Clear
+                    </button>
+                  )}
+                </div>
+
+                {/* Saved views */}
+                <div className="flex items-center flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-luxury-gold">
+                    <Bookmark className="w-3 h-3" />
+                    Saved Views
+                  </div>
+                  {savedViews.length === 0 ? (
+                    <span className="text-[11px] text-gray-400 italic">None yet</span>
+                  ) : (
+                    savedViews.map(v => (
+                      <span key={v.id} className="inline-flex items-center gap-1 bg-luxury-black/5 hover:bg-luxury-black/10 rounded-full pl-3 pr-1 py-0.5 text-xs font-semibold text-luxury-black group">
+                        <button onClick={() => applyView(v)}>{v.name}</button>
+                        <button onClick={() => deleteView(v.id)} className="opacity-40 group-hover:opacity-100 hover:text-rose-600 p-0.5">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                  {hasActiveFilters && (
+                    <button onClick={saveCurrentView} className="inline-flex items-center gap-1 text-xs font-semibold text-luxury-gold hover:text-luxury-black">
+                      <Save className="w-3 h-3" />
+                      Save current
+                    </button>
+                  )}
+                  <div className="flex-1" />
+                  <div className="text-xs text-gray-500">
+                    <span className="font-semibold text-gray-800">{filteredSubmissions.length}</span> of {submissions.length}
+                    {unreadCount > 0 && <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-luxury-gold/10 text-luxury-gold text-[10px] font-bold uppercase">{unreadCount} new</span>}
+                  </div>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllAsRead} className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-luxury-gold font-medium">
+                      <CheckCheck className="w-3.5 h-3.5" />Mark all read
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bulk toolbar */}
+              {selectedIds.size > 0 && (
+                <div className="bg-luxury-black text-white rounded-xl p-3 mb-3 flex items-center justify-between flex-wrap gap-3 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-2 px-3 py-1 bg-luxury-gold/20 rounded-lg text-luxury-gold font-bold text-sm">
+                      <CheckSquare className="w-4 h-4" />{selectedIds.size} selected
+                    </span>
+                    <button onClick={clearSelection} className="text-xs text-white/60 hover:text-white">Clear</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <select onChange={(e) => { if (e.target.value) bulkMoveToStage(e.target.value); e.target.value = ''; }} className="bg-white/10 text-white text-xs font-semibold rounded-lg px-3 py-1.5 border border-white/20">
+                      <option value="">Move to stage…</option>
+                      {PIPELINE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                    <button onClick={bulkMarkRead} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-semibold"><Eye className="w-3.5 h-3.5" />Read</button>
+                    <button onClick={bulkMarkUnread} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-semibold"><EyeOff className="w-3.5 h-3.5" />Unread</button>
+                    <button onClick={bulkDelete} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-xs font-semibold"><Trash2 className="w-3.5 h-3.5" />Delete</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-xs text-gray-500 uppercase tracking-wider">
+                        <th className="p-3 w-10">
+                          <button onClick={() => allVisibleSelected(filteredSubmissions) ? clearSelection() : selectAllVisible(filteredSubmissions)}>
+                            {allVisibleSelected(filteredSubmissions) ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4" />}
+                          </button>
+                        </th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('date')} className="inline-flex items-center gap-1 hover:text-luxury-black">Date <SortIcon col="date" /></button></th>
+                        <th className="p-3 font-semibold">Stage</th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1 hover:text-luxury-black">Customer <SortIcon col="name" /></button></th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1 hover:text-luxury-black">Value <SortIcon col="price" /></button></th>
+                        <th className="p-3 font-semibold">Tags</th>
+                        <th className="p-3 font-semibold">PDF</th>
                       </tr>
-                    ) : (
-                      contractors.map((c) => (
-                        <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="p-4 align-top">
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-gray-400" />
-                              <span className="font-medium text-gray-900">{c.companyName}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 align-top text-gray-600">{c.contactName}</td>
-                          <td className="p-4 align-top text-gray-600">
-                            <a href={`mailto:${c.email}`} className="hover:text-black">{c.email}</a>
-                          </td>
-                          <td className="p-4 align-top">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                              c.status === 'active' ? 'bg-green-100 text-green-800' :
-                              c.status === 'invited' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {c.status}
-                            </span>
-                          </td>
-                          <td className="p-4 align-top text-gray-600">{c.discountPercentage || 0}%</td>
-                          <td className="p-4 align-top text-gray-500 text-xs">
-                            {c.lastLogin ? new Date(c.lastLogin.toDate()).toLocaleDateString() : 'Never'}
-                          </td>
+                    </thead>
+                    <tbody className="text-sm divide-y divide-slate-100">
+                      {filteredSubmissions.length === 0 ? (
+                        <tr><td colSpan={9} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
+                      ) : filteredSubmissions.map(sub => {
+                        const config = sub.configuration || {};
+                        const isUnread = !sub.viewedAt;
+                        const isChecked = selectedIds.has(sub.id);
+                        return (
+                          <tr
+                            key={sub.id}
+                            onClick={() => openDetail(sub)}
+                            className={`cursor-pointer transition-colors ${isChecked ? 'bg-luxury-gold/20' : isUnread ? 'bg-luxury-gold/[0.04] hover:bg-luxury-gold/10' : 'hover:bg-slate-50'}`}
+                          >
+                            <td className="p-3 w-10" onClick={(e) => { e.stopPropagation(); toggleSelected(sub.id); }}>
+                              {isChecked ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4 text-gray-400 hover:text-luxury-gold" />}
+                            </td>
+                            <td className="p-3 align-top whitespace-nowrap">
+                              <div className="flex items-center gap-2 text-gray-600">
+                                {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-luxury-gold animate-pulse" />}
+                                <span className={isUnread ? 'font-semibold text-luxury-black' : ''}>
+                                  {sub.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) || '—'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3 align-top">
+                              <PipelineStageSelector submission={sub} />
+                              <div className="flex gap-1 mt-1">
+                                {sub.acceptance?.signedAt && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800">Signed</span>}
+                                {sub.isDuplicate && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Dup</span>}
+                              </div>
+                            </td>
+                            <td className="p-3 align-top">
+                              <p className="font-semibold text-luxury-black">{sub.name}</p>
+                              <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
+                            </td>
+                            <td className="p-3 align-top">
+                              <div className="flex flex-col gap-0.5 text-xs text-gray-600">
+                                <a href={`mailto:${sub.email}`} onClick={(e) => e.stopPropagation()} className="hover:text-luxury-gold inline-flex items-center gap-1.5"><Mail className="w-3 h-3" />{sub.email}</a>
+                                {sub.phone && <a href={`tel:${sub.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-luxury-gold inline-flex items-center gap-1.5"><Phone className="w-3 h-3" />{sub.phone}</a>}
+                              </div>
+                            </td>
+                            <td className="p-3 align-top text-xs text-gray-600">
+                              {sub.city ? <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{sub.city}</div> : <span className="text-gray-400 italic">—</span>}
+                            </td>
+                            <td className="p-3 align-top font-bold text-luxury-black">{config.totalPrice || '—'}</td>
+                            <td className="p-3 align-top">
+                              <div className="flex flex-wrap gap-0.5 max-w-[140px]">
+                                {(sub.tags || []).slice(0, 2).map((t: string) => (
+                                  <span key={t} className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{t}</span>
+                                ))}
+                                {(sub.tags || []).length > 2 && <span className="text-[9px] text-gray-400">+{sub.tags.length - 2}</span>}
+                              </div>
+                            </td>
+                            <td className="p-3 align-top">
+                              {sub.pdfUrl ? (
+                                <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white text-[11px] font-semibold border border-luxury-gold/20">
+                                  <FileText className="w-3 h-3" />View
+                                </a>
+                              ) : <span className="text-[11px] text-gray-400 italic">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Contractors */}
+          {activeTab === 'contractors' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold">Contractor Management</h2>
+                <button onClick={() => setShowInviteForm(!showInviteForm)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-luxury-black text-white rounded-lg font-semibold text-sm hover:bg-luxury-black/90">
+                  <Plus className="w-4 h-4" />Invite Contractor
+                </button>
+              </div>
+              {showInviteForm && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-luxury-black mb-4">New Contractor Invite</h3>
+                  <form
+                    onSubmit={async (e: FormEvent<HTMLFormElement>) => {
+                      e.preventDefault();
+                      setInviteLoading(true);
+                      const fd = new FormData(e.currentTarget);
+                      try {
+                        const res = await fetch('/api/pro/invite-contractor', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            companyName: fd.get('companyName'), contactName: fd.get('contactName'),
+                            email: fd.get('email'), phone: fd.get('phone'),
+                            discountPercentage: fd.get('discountPercentage'),
+                            adminSecret: prompt('Enter admin secret:') || '',
+                          }),
+                        });
+                        const r = await res.json();
+                        if (r.success) { toast.success('Invite sent'); setShowInviteForm(false); }
+                        else toast.error(r.error || 'Failed to send invite');
+                      } catch { toast.error('Network error'); }
+                      finally { setInviteLoading(false); }
+                    }}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                  >
+                    <input name="companyName" placeholder="Company name" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                    <input name="contactName" placeholder="Contact name" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                    <input name="email" type="email" placeholder="Email" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                    <input name="phone" type="tel" placeholder="Phone" className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                    <input name="discountPercentage" type="number" min="0" max="100" defaultValue="15" placeholder="Discount %" className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+                    <div className="flex gap-2 md:col-span-2">
+                      <button type="submit" disabled={inviteLoading} className="px-5 py-2 bg-luxury-black text-white rounded-lg font-semibold text-sm disabled:opacity-50">
+                        {inviteLoading ? 'Sending…' : 'Send Invite'}
+                      </button>
+                      <button type="button" onClick={() => setShowInviteForm(false)} className="px-5 py-2 border border-slate-200 rounded-lg text-sm">Cancel</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left">
+                  <thead><tr className="bg-slate-50 text-xs text-gray-500 uppercase"><th className="p-3">Company</th><th className="p-3">Contact</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Discount</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {contractors.length === 0
+                      ? <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">No contractors yet.</td></tr>
+                      : contractors.map(c => (
+                        <tr key={c.id}>
+                          <td className="p-3 font-semibold text-luxury-black">{c.companyName}</td>
+                          <td className="p-3 text-gray-600">{c.contactName}</td>
+                          <td className="p-3 text-gray-600"><a href={`mailto:${c.email}`} className="hover:text-luxury-gold">{c.email}</a></td>
+                          <td className="p-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${c.status === 'active' ? 'bg-emerald-100 text-emerald-800' : c.status === 'invited' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{c.status}</span></td>
+                          <td className="p-3 text-gray-600">{c.discountPercentage || 0}%</td>
                         </tr>
-                      ))
-                    )}
+                      ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          </div>
-        ) : activeTab === 'submissions' ? (
-          <>
-            {/* Status Tabs — All / Pending / Accepted */}
-            <div className="flex gap-1 mb-3 border-b border-gray-200">
-              {[
-                { key: 'all', label: 'All Quotes', count: submissions.length, icon: '📋' },
-                { key: 'pending', label: 'Pending Signature', count: pendingCount, icon: '⏳' },
-                { key: 'signed', label: 'Accepted', count: acceptedCount, icon: '✅' },
-              ].map(tab => {
-                const active = signedFilter === tab.key;
+          )}
+
+          {/* Jobs */}
+          {activeTab === 'jobs' && (
+            <div className="space-y-4">
+              {jobs.length === 0 ? (
+                <div className="bg-white p-12 rounded-xl border border-slate-200 text-center text-gray-500 italic">No contractor jobs yet.</div>
+              ) : jobs.map(job => {
+                const jobBids = bids.filter(b => b.jobId === job.id);
                 return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setSignedFilter(tab.key as any)}
-                    className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
-                      active
-                        ? (tab.key === 'signed'
-                            ? 'border-emerald-500 text-emerald-700 bg-emerald-50/60'
-                            : tab.key === 'pending'
-                              ? 'border-luxury-gold text-luxury-black bg-luxury-gold/10'
-                              : 'border-luxury-black text-luxury-black bg-gray-50')
-                        : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
-                    } rounded-t-lg`}
-                  >
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    <span className={`min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
-                      active
-                        ? (tab.key === 'signed' ? 'bg-emerald-500 text-white' : tab.key === 'pending' ? 'bg-luxury-gold text-white' : 'bg-luxury-black text-white')
-                        : 'bg-gray-200 text-gray-700'
-                    }`}>
-                      {tab.count}
-                    </span>
-                  </button>
+                  <div key={job.id} className="bg-white rounded-xl border border-slate-200 p-5">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-luxury-black">{job.customerName || 'Customer'}</p>
+                        <p className="text-xs text-gray-500">{job.city}</p>
+                      </div>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${job.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : job.status === 'in-progress' ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-700'}`}>{job.status}</span>
+                    </div>
+                    {jobBids.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Bids ({jobBids.length})</h4>
+                        <ul className="space-y-1">
+                          {jobBids.map(bid => <li key={bid.id} className="text-sm flex justify-between"><span>{bid.contractorName}</span><span className="font-bold">{formatCurrency(bid.amount)}</span></li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
+          )}
+        </div>
+      </main>
 
-            {/* Search + Filters + Sort */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-              <div className="flex flex-col md:flex-row md:items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, email, phone, city, or address…"
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent"
-                  />
-                </div>
-                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="all">All Types</option>
-                  <option value="email">Email Quote</option>
-                  <option value="consultation">Consultation</option>
-                </select>
-                <select value={duplicateFilter} onChange={e => setDuplicateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="all">All Submissions</option>
-                  <option value="unique">Unique Only</option>
-                  <option value="duplicates">Duplicates Only</option>
-                </select>
-                <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="all">All (Read & Unread)</option>
-                  <option value="unread">Unread Only</option>
-                  <option value="read">Read Only</option>
-                </select>
-                <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="all">Any Time</option>
-                  <option value="7d">Last 7 Days</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                </select>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-luxury-gold">
-                  <option value="date-desc">Newest First</option>
-                  <option value="date-asc">Oldest First</option>
-                  <option value="price-desc">Price: High → Low</option>
-                  <option value="price-asc">Price: Low → High</option>
-                  <option value="name">Name A–Z</option>
-                </select>
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg border border-gray-200"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <div className="text-xs text-gray-500">
-                  Showing <span className="font-semibold text-gray-800">{filteredSubmissions.length}</span> of {submissions.length} submissions
-                  {unreadCount > 0 && (
-                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-luxury-gold/10 text-luxury-gold text-[10px] font-bold uppercase tracking-wider">
-                      {unreadCount} new
-                    </span>
-                  )}
-                </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-luxury-gold font-medium"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5" />
-                    Mark all read
-                  </button>
-                )}
-              </div>
-            </div>
-            {/* Bulk actions toolbar — visible when rows are selected */}
-            {selectedIds.size > 0 && (
-              <div className="bg-luxury-black text-white rounded-xl p-3 mb-3 flex items-center justify-between flex-wrap gap-3 shadow-lg">
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-2 px-3 py-1 bg-luxury-gold/20 rounded-lg text-luxury-gold font-bold text-sm">
-                    <CheckSquare className="w-4 h-4" />
-                    {selectedIds.size} selected
-                  </span>
-                  <button onClick={clearSelection} className="text-xs text-white/60 hover:text-white">Clear</button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={bulkMarkRead} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold">
-                    <Eye className="w-3.5 h-3.5" /> Mark read
-                  </button>
-                  <button onClick={bulkMarkUnread} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold">
-                    <EyeOff className="w-3.5 h-3.5" /> Mark unread
-                  </button>
-                  <button onClick={bulkDelete} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold">
-                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Command palette */}
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        submissions={submissions}
+        onOpenSubmission={openDetail}
+        onNav={(tab) => setActiveTab(tab)}
+      />
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
-                    <th className="p-4 w-10">
-                      <button
-                        onClick={() => allVisibleSelected(filteredSubmissions) ? clearSelection() : selectAllVisible(filteredSubmissions)}
-                        className="hover:text-luxury-gold transition-colors"
-                        aria-label="Select all visible"
-                      >
-                        {allVisibleSelected(filteredSubmissions) ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4" />}
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('date')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Date <SortIcon col="date" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('type')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Type <SortIcon col="type" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Customer <SortIcon col="name" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Contact <SortIcon col="email" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Location <SortIcon col="city" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">Configuration</th>
-                    <th className="p-4 font-medium">
-                      <button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1.5 hover:text-luxury-black">
-                        Total Price <SortIcon col="price" />
-                      </button>
-                    </th>
-                    <th className="p-4 font-medium">PDF</th>
-                    <th className="p-4 font-medium">Email Status</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm divide-y divide-gray-100">
-                  {filteredSubmissions.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="p-8 text-center text-gray-500">
-                        {submissions.length === 0 ? 'No submissions found.' : 'No submissions match your filters.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSubmissions.map((sub) => {
-                      const config = sub.configuration || {};
-                      const isUnread = !sub.viewedAt;
-                      const isChecked = selectedIds.has(sub.id);
-                      return (
-                        <tr
-                          key={sub.id}
-                          onClick={() => {
-                            setDetailSub(sub);
-                            if (isUnread) markAsViewed(sub.id);
-                          }}
-                          className={`cursor-pointer transition-colors ${isChecked ? 'bg-luxury-gold/20' : isUnread ? 'bg-luxury-gold/[0.04] hover:bg-luxury-gold/10 border-l-4 border-luxury-gold' : 'hover:bg-gray-50/50 border-l-4 border-transparent'}`}
-                        >
-                          <td className="p-4 w-10" onClick={(e) => { e.stopPropagation(); toggleSelected(sub.id); }}>
-                            <button className="hover:text-luxury-gold transition-colors" aria-label={isChecked ? 'Deselect row' : 'Select row'}>
-                              {isChecked ? <CheckSquare className="w-4 h-4 text-luxury-gold" /> : <Square className="w-4 h-4 text-gray-400" />}
-                            </button>
-                          </td>
-                          <td className="p-4 align-top whitespace-nowrap">
-                            <div className="flex items-center gap-2 text-gray-600">
-                              {isUnread && <span className="w-2 h-2 rounded-full bg-luxury-gold" title="Unread" />}
-                              <Calendar className="w-4 h-4" />
-                              <span className={isUnread ? 'font-semibold text-gray-900' : ''}>
-                                {sub.createdAt ? new Date(sub.createdAt.toDate()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-4 align-top">
-                            <div className="flex flex-col gap-1">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize w-fit
-                                ${sub.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                                {sub.type}
-                              </span>
-                              {sub.acceptance?.signedAt && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 w-fit">
-                                  ✓ Signed
-                                </span>
-                              )}
-                              {sub.isDuplicate && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 w-fit">
-                                  ⚠ Duplicate
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 align-top">
-                            <div className="font-medium text-gray-900">{sub.name}</div>
-                          </td>
-                          <td className="p-4 align-top">
-                            <div className="flex flex-col gap-1 text-gray-600">
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-3.5 h-3.5" />
-                                <a href={`mailto:${sub.email}`} className="hover:text-black">{sub.email}</a>
-                              </div>
-                              {sub.phone && (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="w-3.5 h-3.5" />
-                                  <a href={`tel:${sub.phone}`} className="hover:text-black">{sub.phone}</a>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 align-top text-gray-600">
-                            {sub.city && sub.address ? (
-                              <div className="flex items-start gap-2">
-                                <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                <div>
-                                  <div>{sub.address}</div>
-                                  <div>{sub.city}</div>
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">Not provided</span>
-                            )}
-                          </td>
-                          <td className="p-4 align-top">
-                            <div className="text-xs space-y-1 text-gray-600">
-                              <div><span className="font-medium text-gray-900">Size:</span> {config.width}' × {config.depth}' × {config.height}'</div>
-                              <div><span className="font-medium text-gray-900">Frame:</span> {config.frameColor}</div>
-                              <div><span className="font-medium text-gray-900">Louvers:</span> {config.louverColor}</div>
-                              {config.accessories && config.accessories.length > 0 && (
-                                <div className="mt-2">
-                                  <span className="font-medium text-gray-900">Accessories:</span>
-                                  <ul className="list-disc list-inside mt-1">
-                                    {config.accessories.map((acc: string, i: number) => (
-                                      <li key={i}>{acc}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 align-top font-medium text-gray-900">
-                            {config.totalPrice || 'N/A'}
-                          </td>
-                          <td className="p-4 align-top">
-                            {sub.pdfUrl ? (
-                              <a
-                                href={sub.pdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download={sub.pdfFilename || undefined}
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white font-medium text-xs transition-colors border border-luxury-gold/20"
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                                View PDF
-                              </a>
-                            ) : (
-                              <span className="text-xs text-gray-400 italic">Not available</span>
-                            )}
-                          </td>
-                          <td className="p-4 align-top">
-                            <div className="flex flex-col gap-2">
-                              {sub.emailStatus === 'sent' ? (
-                                <div className="flex items-center gap-1.5 text-green-600 font-medium">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                  Sent
-                                </div>
-                              ) : (
-                                <div className="text-gray-400 italic">Not sent</div>
-                              )}
-                              
-                              {(sub.adminEmailId || sub.customerEmailId) && (
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    const btn = e.currentTarget;
-                                    const originalText = btn.innerText;
-                                    btn.disabled = true;
-                                    btn.innerText = 'Checking...';
-                                    
-                                    try {
-                                      const emailId = sub.customerEmailId || sub.adminEmailId;
-                                      const res = await fetch(`/api/email-status/${emailId}`);
-                                      const result = await res.json();
-                                      
-                                      if (result.success && result.data) {
-                                        const status = result.data.last_event;
-                                        // Resend API returns 'delivered', 'opened', etc.
-                                        alert(`Email Status: ${status}\nOpened: ${result.data.opened ? 'Yes' : 'No'}`);
-                                      } else {
-                                        alert(`Error: ${result.error || 'Failed to fetch status'}`);
-                                      }
-                                    } catch (err) {
-                                      alert('Failed to connect to server');
-                                    } finally {
-                                      btn.disabled = false;
-                                      btn.innerText = originalText;
-                                    }
-                                  }}
-                                  className="text-[10px] text-luxury-gold hover:underline text-left"
-                                >
-                                  Check Delivery Status
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            </div>
-          </>
-        ) : (
-          <div className="space-y-6">
-            {jobs.length === 0 ? (
-              <div className="bg-white p-8 rounded-xl border border-gray-200 text-center text-gray-500">
-                No contractor jobs found.
-              </div>
-            ) : (
-              jobs.map(job => {
-                const jobBids = bids.filter(b => b.jobId === job.id);
-                const config = job.configuration || {};
-                const submission = submissions.find(s => s.id === job.submissionId);
-                const customerName = submission ? submission.name : 'Unknown Customer';
-                
-                return (
-                  <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">
-                            Job: {config.width}' x {config.depth}' Pergola
-                          </h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            Posted: {job.createdAt ? new Date(job.createdAt.toDate()).toLocaleDateString() : 'N/A'}
-                            <span className="mx-2">•</span>
-                            Status: <span className={`font-medium capitalize ${job.status === 'open' ? 'text-green-600' : 'text-gray-600'}`}>{job.status}</span>
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-gray-900">{customerName}</div>
-                          <div className="text-sm text-gray-500">{job.city || 'Unknown City'}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="p-6">
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Contractor Bids ({jobBids.length})</h4>
-                      
-                      {jobBids.length === 0 ? (
-                        <p className="text-sm text-gray-500 italic">No bids submitted yet.</p>
-                      ) : (
-                        <div className="space-y-4">
-                          {jobBids.map(bid => (
-                            <div key={bid.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border border-gray-200 bg-white">
-                              <div>
-                                <div className="font-medium text-gray-900">{bid.contractorName}</div>
-                                <div className="text-sm text-gray-500 mt-1">{bid.message}</div>
-                              </div>
-                              <div className="mt-4 sm:mt-0 sm:text-right">
-                                <div className="text-lg font-bold text-luxury-black">${bid.amount.toLocaleString()}</div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {bid.createdAt ? new Date(bid.createdAt.toDate()).toLocaleDateString() : ''}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </div>
+      {/* Detail modal */}
+      <AnimatePresence>
+        {detailSub && <SubmissionDetail key={detailSub.id} sub={detailSub} onClose={() => setDetailSub(null)} onCompose={setComposeMode} onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }} />}
+      </AnimatePresence>
 
-      {/* Submission Detail Modal */}
-      {detailSub && (() => {
-        const d = detailSub;
-        const cfg = d.configuration || {};
-        const pb = d.pricingBreakdown || {};
-        const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setDetailSub(null)}>
-            <div
-              className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-hidden flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h2 className="text-xl font-bold text-gray-900">{d.name}</h2>
-                    {d.acceptance?.signedAt && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">✓ Signed</span>
-                    )}
-                    {d.isDuplicate && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">⚠ Duplicate</span>
-                    )}
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${d.type === 'consultation' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{d.type}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Submitted {d.createdAt ? new Date(d.createdAt.toDate()).toLocaleString() : 'N/A'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`/proposal/${d.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-luxury-black bg-luxury-gold/10 hover:bg-luxury-gold hover:text-white rounded-lg border border-luxury-gold/20"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    Open Customer View
-                  </a>
-                  <button
-                    onClick={() => { markAsUnread(d.id); setDetailSub(null); }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
-                  >
-                    <EyeOff className="w-3.5 h-3.5" />
-                    Mark unread
-                  </button>
-                  <button
-                    onClick={() => setDetailSub(null)}
-                    className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
-                    aria-label="Close"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left column: details + pricing */}
-                <div className="space-y-5">
-                  {/* Contact */}
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Contact</h3>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${d.email}`} className="text-gray-900 hover:underline">{d.email}</a></div>
-                      {d.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${d.phone}`} className="text-gray-900 hover:underline">{d.phone}</a></div>}
-                      {(d.address || d.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span className="text-gray-900">{[d.address, d.city].filter(Boolean).join(', ')}</span></div>}
-                    </div>
-                  </section>
-
-                  {/* Configuration */}
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Configuration</h3>
-                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
-                      <div><span className="text-gray-500">Size:</span> <span className="font-medium">{cfg.width}' × {cfg.depth}' × {cfg.height}'</span></div>
-                      <div><span className="text-gray-500">Frame:</span> <span className="font-medium">{cfg.frameColor}</span></div>
-                      <div><span className="text-gray-500">Louvers:</span> <span className="font-medium">{cfg.louverColor}</span></div>
-                    </div>
-                  </section>
-
-                  {/* Pricing Breakdown */}
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Pricing Breakdown</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <tbody className="divide-y divide-gray-100">
-                          <tr>
-                            <td className="px-3 py-2 text-gray-700">Bespoke Pergola</td>
-                            <td className="px-3 py-2 text-right font-medium">{fmt(pb.basePrice)}</td>
-                          </tr>
-                          {(pb.itemizedAccessories || []).map((a: any, i: number) => (
-                            <tr key={i}>
-                              <td className="px-3 py-2 text-gray-700 pl-6">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td>
-                              <td className="px-3 py-2 text-right font-medium">{fmt(a.cost)}</td>
-                            </tr>
-                          ))}
-                          <tr className="bg-gray-50">
-                            <td className="px-3 py-2 font-medium">Subtotal</td>
-                            <td className="px-3 py-2 text-right font-semibold">{fmt(pb.subtotal)}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-3 py-2 text-gray-500">HST (13%)</td>
-                            <td className="px-3 py-2 text-right text-gray-700">{fmt(pb.hst)}</td>
-                          </tr>
-                          <tr className="bg-luxury-gold/5 border-t-2 border-luxury-gold/30">
-                            <td className="px-3 py-3 font-bold text-luxury-black">Total</td>
-                            <td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(pb.total)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    {!pb.basePrice && (
-                      <p className="text-xs text-gray-400 italic mt-2">Detailed breakdown unavailable for submissions created before this feature was added.</p>
-                    )}
-                  </section>
-
-                  {/* Acceptance / Signature */}
-                  {d.acceptance?.signedAt && (
-                    <section>
-                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Acceptance &amp; Signature</h3>
-                      <div className="border-2 border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
-                            <CheckCheck className="w-4 h-4 text-white" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-bold text-emerald-800">Accepted by {d.acceptance.signedName}</p>
-                            <p className="text-[11px] text-gray-600">
-                              {d.acceptance.signedAt?.toDate ? d.acceptance.signedAt.toDate().toLocaleString() : 'Unknown date'}
-                            </p>
-                          </div>
-                        </div>
-                        {d.acceptance.signatureDataUrl ? (
-                          <div className="bg-white border border-emerald-200 rounded p-3 mb-2">
-                            <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mb-1">Drawn Signature</p>
-                            <img src={d.acceptance.signatureDataUrl} alt="Signature" className="h-16" />
-                          </div>
-                        ) : (
-                          <div className="bg-white border border-emerald-200 rounded p-3 mb-2">
-                            <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mb-1">Typed Signature</p>
-                            <p className="text-xl italic text-luxury-black" style={{ fontFamily: "'Outfit', 'Brush Script MT', cursive" }}>
-                              {d.acceptance.signedName}
-                            </p>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-600 mt-2">
-                          <div>
-                            <span className="font-semibold text-gray-400 block">IP Address</span>
-                            {d.acceptance.signerIp || 'unknown'}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-400 block">Device</span>
-                            <span className="break-all">{d.acceptance.signerUserAgent?.slice(0, 60) || 'unknown'}{(d.acceptance.signerUserAgent?.length || 0) > 60 ? '…' : ''}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-                  )}
-
-                  {d.summary && (
-                    <section>
-                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Full Summary</h3>
-                      <pre className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap font-sans text-gray-700">{d.summary}</pre>
-                    </section>
-                  )}
-                </div>
-
-                {/* Right column: PDF */}
-                <div>
-                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Proposal Document</h3>
-                  {d.pdfUrl ? (
-                    <div className="space-y-2">
-                      <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-100" style={{ height: '65vh' }}>
-                        <iframe src={d.pdfUrl} className="w-full h-full" title={`Proposal ${d.name}`} />
-                      </div>
-                      <a
-                        href={d.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={d.pdfFilename || undefined}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-luxury-gold text-white hover:bg-luxury-gold/90 font-medium text-sm"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download PDF
-                      </a>
-                    </div>
-                  ) : (
-                    <div className="h-64 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 text-sm italic">
-                      PDF not available for this submission
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Compose modal */}
+      {composeMode && detailSub && (
+        <ComposeModal submission={detailSub} initialMode={composeMode} onClose={() => setComposeMode(null)} />
+      )}
     </div>
+  );
+}
+
+// ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
+function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void }) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
+  const cfg = sub.configuration || {};
+  const pb = sub.pricingBreakdown || {};
+  const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+  const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[94vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <h2 className="text-2xl font-serif text-luxury-black">{sub.name}</h2>
+                <PipelineStageSelector submission={sub} />
+                {sub.acceptance?.signedAt && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">✓ Signed</span>}
+                {sub.isDuplicate && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Duplicate</span>}
+              </div>
+              <p className="text-xs text-gray-500">
+                Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => onCompose('email')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-bold hover:bg-luxury-black/90">
+                <Mail className="w-3.5 h-3.5" />Email
+              </button>
+              <button onClick={() => onCompose('sms')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black/80 text-white rounded-lg text-xs font-bold hover:bg-luxury-black">
+                <MessageSquare className="w-3.5 h-3.5" />SMS
+              </button>
+              <a href={`/proposal/${sub.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold/10 text-luxury-black border border-luxury-gold/30 rounded-lg text-xs font-bold hover:bg-luxury-gold hover:text-white">
+                <Eye className="w-3.5 h-3.5" />Customer View
+              </a>
+              <button onClick={onMarkUnread} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-slate-100 rounded-lg" title="Mark unread & close">
+                <EyeOff className="w-4 h-4" />
+              </button>
+              <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-slate-100 rounded-lg" title="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Inner tabs */}
+        <div className="px-6 pt-3 border-b border-slate-100 flex gap-1 bg-white">
+          {[
+            { k: 'overview', label: 'Overview' },
+            { k: 'activity', label: 'Activity' },
+            { k: 'notes', label: 'Notes' },
+            { k: 'tasks', label: 'Tasks' },
+            { k: 'files', label: 'Files' },
+            { k: 'pdf', label: 'Proposal PDF' },
+          ].map(t => (
+            <button key={t.k} onClick={() => setActiveTab(t.k as any)} className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${activeTab === t.k ? 'border-luxury-gold text-luxury-black' : 'border-transparent text-gray-500 hover:text-luxury-black'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-5">
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Contact</h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${sub.email}`} className="hover:underline">{sub.email}</a></div>
+                    {sub.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${sub.phone}`} className="hover:underline">{sub.phone}</a></div>}
+                    {(sub.address || sub.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span>{[sub.address, sub.city].filter(Boolean).join(', ')}</span></div>}
+                  </div>
+                </section>
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Tags</h3>
+                  <TagManager submission={sub} />
+                </section>
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Configuration</h3>
+                  <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-sm">
+                    <div><span className="text-gray-500">Size:</span> <span className="font-semibold">{cfg.width}' × {cfg.depth}' × {cfg.height}'</span></div>
+                    <div><span className="text-gray-500">Frame:</span> <span className="font-semibold">{cfg.frameColor}</span></div>
+                    <div><span className="text-gray-500">Louvers:</span> <span className="font-semibold">{cfg.louverColor}</span></div>
+                    <div><span className="text-gray-500">Source:</span> <span className="font-semibold">{sourceLabel}</span></div>
+                  </div>
+                </section>
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Pricing Breakdown</h3>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr><td className="px-3 py-2">Bespoke Pergola</td><td className="px-3 py-2 text-right font-semibold">{fmt(pb.basePrice)}</td></tr>
+                        {(pb.itemizedAccessories || []).map((a: any, i: number) => (
+                          <tr key={i}><td className="px-3 py-2 pl-6 text-gray-600">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td><td className="px-3 py-2 text-right">{fmt(a.cost)}</td></tr>
+                        ))}
+                        <tr className="bg-slate-50"><td className="px-3 py-2 font-semibold">Subtotal</td><td className="px-3 py-2 text-right font-bold">{fmt(pb.subtotal)}</td></tr>
+                        <tr><td className="px-3 py-2 text-gray-500">HST</td><td className="px-3 py-2 text-right">{fmt(pb.hst)}</td></tr>
+                        <tr className="bg-luxury-gold/5 border-t-2 border-luxury-gold/30">
+                          <td className="px-3 py-3 font-bold">Total</td><td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(pb.total)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                {sub.acceptance?.signedAt && (
+                  <section className="border-2 border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shrink-0"><CheckCheck className="w-4 h-4 text-white" /></div>
+                      <div>
+                        <p className="font-bold text-emerald-800">Accepted by {sub.acceptance.signedName}</p>
+                        <p className="text-[11px] text-gray-600">{sub.acceptance.signedAt?.toDate?.()?.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    {sub.acceptance.signatureDataUrl ? <img src={sub.acceptance.signatureDataUrl} alt="Signature" className="h-12 bg-white rounded p-1 border" /> : <p className="italic text-lg" style={{ fontFamily: "'Outfit', cursive" }}>{sub.acceptance.signedName}</p>}
+                    <p className="text-[10px] text-gray-500 mt-2">IP: {sub.acceptance.signerIp}</p>
+                  </section>
+                )}
+              </div>
+              <div className="space-y-5">
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Open Tasks</h3>
+                  <TasksPanel submissionId={sub.id} />
+                </section>
+                <section>
+                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Internal Notes</h3>
+                  <NotesPanel submissionId={sub.id} />
+                </section>
+              </div>
+            </div>
+          )}
+          {activeTab === 'activity' && <ActivityTimeline submissionId={sub.id} />}
+          {activeTab === 'notes' && <NotesPanel submissionId={sub.id} />}
+          {activeTab === 'tasks' && <TasksPanel submissionId={sub.id} />}
+          {activeTab === 'files' && <FilesPanel submissionId={sub.id} />}
+          {activeTab === 'pdf' && (
+            sub.pdfUrl ? (
+              <div className="space-y-2">
+                <iframe src={sub.pdfUrl} className="w-full rounded-lg border border-slate-200" style={{ height: '75vh' }} title={`Proposal ${sub.name}`} />
+                <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" download={sub.pdfFilename} className="inline-flex items-center gap-1.5 px-3 py-2 bg-luxury-gold text-white rounded-lg text-xs font-bold"><Download className="w-4 h-4" />Download</a>
+              </div>
+            ) : <p className="text-sm text-gray-400 italic text-center py-10">No PDF attached to this submission.</p>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

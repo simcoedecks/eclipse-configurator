@@ -922,6 +922,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           pricingBreakdown,
           summary: summaryText,
           viewedAt: null,
+          pipelineStage: 'new',
+          source: 'configurator',
+          tags: [],
+          assignedTo: null,
           createdAt: serverTimestamp()
         });
         submissionId = submissionRef.id;

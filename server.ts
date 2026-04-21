@@ -802,6 +802,52 @@ export async function createExpressApp() {
     }
   });
 
+  // ── Admin: send an email from the CRM ──────────────────────────────────────
+  app.post("/api/admin/send-email", async (req: Request, res: Response) => {
+    try {
+      const { to, subject, body, submissionId } = req.body;
+      if (!to || !subject || !body) {
+        return res.status(400).json({ success: false, error: "Missing to/subject/body" });
+      }
+      if (!resend) {
+        return res.status(500).json({ success: false, error: "Email service not configured" });
+      }
+      const htmlBody = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;line-height:1.55;"><div style="white-space:pre-wrap;">${String(body).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div><hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/><p style="color:#999;font-size:11px;">This message was sent from Eclipse Pergola CRM.</p></div>`;
+      const r = await resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject,
+        html: htmlBody,
+        text: String(body),
+      });
+      if (r.error) {
+        return res.status(500).json({ success: false, error: r.error.message });
+      }
+      return res.json({ success: true, emailId: r.data?.id, submissionId });
+    } catch (e: any) {
+      console.error("admin send-email error:", e);
+      return res.status(500).json({ success: false, error: e?.message || "Internal error" });
+    }
+  });
+
+  // ── Admin: send an SMS from the CRM ────────────────────────────────────────
+  app.post("/api/admin/send-sms", async (req: Request, res: Response) => {
+    try {
+      const { to, body, submissionId } = req.body;
+      if (!to || !body) {
+        return res.status(400).json({ success: false, error: "Missing to/body" });
+      }
+      const result = await sendSms(to, String(body));
+      if (!result.ok) {
+        return res.status(500).json({ success: false, error: result.error });
+      }
+      return res.json({ success: true, sid: result.sid, submissionId });
+    } catch (e: any) {
+      console.error("admin send-sms error:", e);
+      return res.status(500).json({ success: false, error: e?.message || "Internal error" });
+    }
+  });
+
   // ── Accept Proposal (customer signature) ────────────────────────────────────
   // Called from the public /proposal/:id page when a customer signs.
   // Captures the client IP (server-side, trustworthy), triggers admin email +
