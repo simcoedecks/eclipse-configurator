@@ -27,6 +27,7 @@ import AssignedToSelector, { Avatar } from '../components/admin/AssignedToSelect
 import SourceSelector from '../components/admin/SourceSelector';
 import ContractorInviteForm from '../components/admin/ContractorInviteForm';
 import PricingEditor from '../components/admin/PricingEditor';
+import AdminPdfDownload from '../components/admin/AdminPdfDownload';
 import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
@@ -725,12 +726,15 @@ export default function Admin() {
                                 {(sub.tags || []).length > 2 && <span className="text-[9px] text-gray-400">+{sub.tags.length - 2}</span>}
                               </div>
                             </td>
-                            <td className="p-3 align-top">
-                              {sub.pdfUrl ? (
-                                <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white text-[11px] font-semibold border border-luxury-gold/20">
-                                  <FileText className="w-3 h-3" />View
-                                </a>
-                              ) : <span className="text-[11px] text-gray-400 italic">—</span>}
+                            <td className="p-3 align-top" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex gap-1">
+                                {sub.pdfUrl && (
+                                  <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white text-[11px] font-semibold border border-luxury-gold/20" title="View original PDF">
+                                    <FileText className="w-3 h-3" />
+                                  </a>
+                                )}
+                                <AdminPdfDownload submission={sub} compact label="PDF" />
+                              </div>
                             </td>
                           </tr>
                         );
@@ -903,7 +907,8 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <AdminPdfDownload submission={sub} label="PDF" />
               <button onClick={() => onCompose('email')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-bold hover:bg-luxury-black/90">
                 <Mail className="w-3.5 h-3.5" />Email
               </button>

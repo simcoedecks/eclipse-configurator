@@ -5,9 +5,26 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
   const {
     name, email, phone, address, city, date, docNumber,
     width, depth, height, frameColorName, louverColorName,
-    basePrice, accessories, subtotal, discount, discountPercentage, discountedSubtotal, hst, total, visualizerProps,
-    availableUpgrades
+    basePrice, accessories, subtotal: rawSubtotal, discount, discountPercentage, discountedSubtotal, hst: rawHst, total: rawTotal, visualizerProps,
+    availableUpgrades,
+    // New: admin-added custom line items flow through here when the admin
+    // regenerates the PDF from the CRM
+    customLineItems,
   } = data;
+
+  // If customLineItems are provided, re-derive subtotal/HST/total so the
+  // PDF matches whatever the admin has saved. Otherwise use the original
+  // numbers baked in at submission time.
+  const customAdditions = Array.isArray(customLineItems)
+    ? customLineItems.reduce((s: number, i: any) => {
+        const qty = i.quantity || 1;
+        const signed = i.kind === 'discount' ? -Math.abs(i.amount) : i.amount;
+        return s + signed * qty;
+      }, 0)
+    : 0;
+  const subtotal = customAdditions !== 0 ? (rawSubtotal || 0) + customAdditions : rawSubtotal;
+  const hst = customAdditions !== 0 ? subtotal * 0.13 : rawHst;
+  const total = customAdditions !== 0 ? subtotal + hst : rawTotal;
 
   const hasUpgrades = Array.isArray(availableUpgrades) && availableUpgrades.length > 0;
   const upgradePageCount = hasUpgrades ? 1 : 0;
@@ -279,6 +296,37 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
                       *Heaters must be installed by a licensed electrician at additional cost.
                     </p>
                   )}
+                </>
+              )}
+
+              {Array.isArray(customLineItems) && customLineItems.length > 0 && (
+                <>
+                  <GoldBar>Custom Items &amp; Adjustments</GoldBar>
+                  <div className="bg-[#FAF9F6] grid grid-cols-[1fr_100px_50px_100px] py-2 px-3 font-bold text-[9px] mb-1 border border-[#e5e7eb] uppercase tracking-wider text-[#666]">
+                    <div>Item Description</div>
+                    <div className="text-center">Price</div>
+                    <div className="text-center">Qty</div>
+                    <div className="text-right">Subtotal</div>
+                  </div>
+                  {customLineItems.map((item: any, idx: number) => {
+                    const qty = item.quantity || 1;
+                    const signed = item.kind === 'discount' ? -1 : 1;
+                    const rowTotal = signed * (item.amount || 0) * qty;
+                    return (
+                      <div key={`ci-${idx}`} className={`grid grid-cols-[1fr_100px_50px_100px] px-3 text-[10px] py-2 border-b border-[#f0f0f0] ${item.kind === 'discount' ? 'bg-emerald-50' : ''}`}>
+                        <div>
+                          <span className="font-bold">
+                            {item.kind === 'discount' && <span className="text-[8px] text-emerald-700 mr-1 uppercase">Disc</span>}
+                            {item.name}
+                          </span>
+                          {item.description && <p className="text-[8px] text-[#777] italic mt-0.5 leading-tight">{item.description}</p>}
+                        </div>
+                        <div className="text-center">${fmt(item.amount || 0)}</div>
+                        <div className="text-center">{qty}</div>
+                        <div className={`text-right font-bold ${item.kind === 'discount' ? 'text-emerald-700' : ''}`}>${fmt(rowTotal)}</div>
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </>
