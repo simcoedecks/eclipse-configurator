@@ -119,7 +119,15 @@ function calculateBasePrice(depth: number, width: number): number | null {
   return calculatedPrice * getMarkup(area);
 }
 
-export default function Home({ skipIntro = false }: { skipIntro?: boolean }) {
+interface HomeProps {
+  skipIntro?: boolean;
+  /** When loaded via /dealer/:slug, these tag the submission for attribution */
+  dealerSlug?: string;
+  dealerEmail?: string;
+  dealerName?: string;
+}
+
+export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName }: HomeProps) {
   const { theme, toggleTheme, isDark } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
@@ -370,13 +378,16 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
-  // Capture lead source from URL params (e.g. ?source=contractor&ref=john)
+  // Capture lead source from URL params (e.g. ?source=contractor&ref=john).
+  // When loaded inside /dealer/:slug, the dealer props override.
   const [leadSource] = useState<string>(() => {
+    if (dealerSlug) return 'contractor';
     if (typeof window === 'undefined') return 'configurator';
     const params = new URLSearchParams(window.location.search);
     return params.get('source') || 'configurator';
   });
   const [leadSourceRef] = useState<string | null>(() => {
+    if (dealerSlug) return dealerSlug;
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('ref') || null;
   });
@@ -935,8 +946,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           pipelineStage: 'new',
           source: leadSource,
           sourceRef: leadSourceRef,
-          tags: [],
-          assignedTo: null,
+          tags: dealerSlug ? ['Dealer Lead'] : [],
+          assignedTo: dealerEmail || null,
+          dealerSlug: dealerSlug || null,
+          dealerName: dealerName || null,
           createdAt: serverTimestamp()
         });
         submissionId = submissionRef.id;
@@ -1152,7 +1165,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               pdfAttachment: pdfBase64,
               previewImage,
               proposalUrl,
-              isDuplicate: isDuplicateLead
+              isDuplicate: isDuplicateLead,
+              dealerEmail,
+              dealerName,
+              dealerSlug,
             }),
           });
 

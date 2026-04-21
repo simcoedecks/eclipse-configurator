@@ -575,6 +575,8 @@ export async function createExpressApp() {
       const {
         name, email, phone, address, city,
         configuration, pdfAttachment, previewImage, proposalUrl, isDuplicate,
+        // Dealer attribution (optional, set when submission came from /dealer/:slug)
+        dealerEmail, dealerName, dealerSlug, dealerPhone,
       } = req.body;
 
       if (!name || !email || !configuration) {
@@ -761,11 +763,60 @@ export async function createExpressApp() {
         if (process.env.ADMIN_SMS_NUMBER) {
           const adminBody =
             `📨 New ${isDuplicate ? '[DUPLICATE] ' : ''}Pergola Quote from ${name} ` +
-            `(${configuration.width}'x${configuration.depth}'x${configuration.height}', ${configuration.totalPrice}). ` +
+            `(${configuration.width}'x${configuration.depth}'x${configuration.height}', ${configuration.totalPrice})` +
+            (dealerName ? ` via ${dealerName}` : '') + `. ` +
             `Proposal: ${proposalUrl}`;
           const a = await sendSms(process.env.ADMIN_SMS_NUMBER, adminBody);
           if (a.ok) adminSmsSid = a.sid;
         }
+
+        // Also text the dealer if this lead came through their co-branded link
+        if (dealerPhone) {
+          const dealerSmsBody =
+            `📨 New lead via your Eclipse Pergola configurator: ${name} ` +
+            `(${configuration.totalPrice}, ${configuration.width}x${configuration.depth}'). ` +
+            `Customer: ${email}${phone ? ` / ${phone}` : ''}.`;
+          await sendSms(dealerPhone, dealerSmsBody);
+        }
+      }
+
+      // ── Dealer notification email — separate from admin email ────────────
+      if (dealerEmail && resend) {
+        (async () => {
+          try {
+            await resend.emails.send({
+              from: FROM_EMAIL,
+              to: dealerEmail,
+              subject: `New lead from your Eclipse co-branded configurator — ${name}`,
+              html: `
+                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;">
+                  <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Customer Lead</h1>
+                  <p>A customer just submitted a quote through your co-branded link${dealerName ? ` (${dealerName})` : ''}:</p>
+                  <h2 style="color:#C5A059;font-size:16px;margin-top:24px;">Customer</h2>
+                  <p><strong>Name:</strong> ${name}<br/>
+                     <strong>Email:</strong> ${email}<br/>
+                     ${phone ? `<strong>Phone:</strong> ${phone}<br/>` : ''}
+                     ${address ? `<strong>Address:</strong> ${address}, ${city || ''}` : ''}
+                  </p>
+                  <h2 style="color:#C5A059;font-size:16px;margin-top:24px;">Project</h2>
+                  <p><strong>Size:</strong> ${configuration.width}' × ${configuration.depth}' × ${configuration.height}'<br/>
+                     <strong>Frame:</strong> ${configuration.frameColor}<br/>
+                     <strong>Louvers:</strong> ${configuration.louverColor}<br/>
+                     <strong>Customer Total:</strong> ${configuration.totalPrice}
+                  </p>
+                  <div style="margin:28px 0;text-align:center;">
+                    <a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;">View Customer Proposal</a>
+                  </div>
+                  <p style="color:#666;font-size:12px;line-height:1.5;border-top:1px solid #eee;padding-top:12px;margin-top:24px;">
+                    This lead has been auto-assigned to you in the Eclipse CRM. We'll be in touch shortly to coordinate next steps.
+                  </p>
+                </div>
+              `,
+            });
+          } catch (e) {
+            console.error('Dealer notification email failed:', e);
+          }
+        })();
       }
 
       return res.json({
@@ -940,10 +991,61 @@ export async function createExpressApp() {
     }
   });
 
+  // ── Generate / Update Dealer Profile (called when contractor is created) ────
+  // Writes a public-readable dealerProfiles/{slug} doc with display info
+  // for the /dealer/:slug landing page. Admin SDK bypasses Firestore rules.
+  app.post("/api/admin/upsert-dealer-profile", async (req: Request, res: Response) => {
+    try {
+      const { slug, contractorId, contractorEmail, companyName, contactName, phone, logoUrl, adminSecret } = req.body;
+      if (adminSecret !== process.env.EXPORT_SECRET) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+      if (!slug || !companyName || !contractorEmail) {
+        return res.status(400).json({ success: false, error: "Missing slug, companyName, or contractorEmail" });
+      }
+      if (!adminDb) {
+        return res.status(500).json({ success: false, error: "Firebase Admin not initialized" });
+      }
+
+      const cleanSlug = String(slug).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!cleanSlug) return res.status(400).json({ success: false, error: "Invalid slug" });
+
+      // Check uniqueness — fail if slug taken by a different contractor
+      const existing = await adminDb.collection("dealerProfiles").doc(cleanSlug).get();
+      if (existing.exists && existing.data()?.contractorId !== contractorId) {
+        return res.status(409).json({ success: false, error: `Slug "${cleanSlug}" is already in use by another dealer.` });
+      }
+
+      await adminDb.collection("dealerProfiles").doc(cleanSlug).set({
+        slug: cleanSlug,
+        contractorId: contractorId || null,
+        contractorEmail,
+        companyName,
+        contactName: contactName || "",
+        phone: phone || "",
+        logoUrl: logoUrl || "",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Also store the slug + logoUrl back on the contractor doc for convenience
+      if (contractorId) {
+        await adminDb.collection("contractors").doc(contractorId).set({
+          slug: cleanSlug,
+          logoUrl: logoUrl || "",
+        }, { merge: true });
+      }
+
+      return res.json({ success: true, slug: cleanSlug });
+    } catch (err: any) {
+      console.error("upsert-dealer-profile error:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Internal error" });
+    }
+  });
+
   // ── Invite Contractor ───────────────────────────────────────────────────────
   app.post("/api/pro/invite-contractor", async (req: Request, res: Response) => {
     try {
-      const { companyName, contactName, email, phone, discountPercentage, adminSecret } = req.body;
+      const { companyName, contactName, email, phone, discountPercentage, slug, logoUrl, adminSecret } = req.body;
 
       if (adminSecret !== process.env.EXPORT_SECRET) {
         return res.status(401).json({ success: false, error: "Unauthorized" });
@@ -955,6 +1057,19 @@ export async function createExpressApp() {
         return res.status(500).json({ success: false, error: "Firebase Admin not initialized" });
       }
 
+      // Generate / clean the slug
+      const cleanSlug = slug
+        ? String(slug).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+        : String(companyName).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+
+      // Verify slug is unique (if provided)
+      if (cleanSlug) {
+        const existingSlug = await adminDb.collection("dealerProfiles").doc(cleanSlug).get();
+        if (existingSlug.exists) {
+          return res.status(409).json({ success: false, error: `Dealer slug "${cleanSlug}" is already in use. Pick a different one.` });
+        }
+      }
+
       const inviteToken = crypto.randomUUID();
       const contractorRef = await adminDb.collection("contractors").add({
         companyName,
@@ -962,6 +1077,8 @@ export async function createExpressApp() {
         email,
         phone: phone || "",
         discountPercentage: Number(discountPercentage) || 0,
+        slug: cleanSlug,
+        logoUrl: logoUrl || "",
         status: "invited",
         inviteToken,
         invitedAt: FieldValue.serverTimestamp(),
@@ -969,6 +1086,21 @@ export async function createExpressApp() {
         lastLogin: null,
         createdBy: "admin",
       });
+
+      // Create the public dealer profile that the /dealer/:slug page reads
+      if (cleanSlug) {
+        await adminDb.collection("dealerProfiles").doc(cleanSlug).set({
+          slug: cleanSlug,
+          contractorId: contractorRef.id,
+          contractorEmail: email,
+          companyName,
+          contactName,
+          phone: phone || "",
+          logoUrl: logoUrl || "",
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       const proUrl = process.env.PRO_URL || "https://pro.eclipsepergola.ca";
       const signupLink = `${proUrl}/signup?token=${inviteToken}`;
@@ -1001,6 +1133,13 @@ export async function createExpressApp() {
           Create Your Account
         </a>
       </div>
+      ${cleanSlug ? `
+      <div style="margin-top:32px;padding:20px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;">
+        <h3 style="color:#C5A059;font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.1em;">Your Co-Branded Configurator</h3>
+        <p style="color:#ccc;font-size:13px;margin:0 0 12px;line-height:1.5;">Share this link with your customers. They'll design their pergola on a page co-branded with your company logo, and the lead will be automatically routed to you:</p>
+        <a href="https://eclipsepergola.netlify.app/dealer/${cleanSlug}" style="color:#C5A059;word-break:break-all;font-size:13px;font-family:monospace;">https://eclipsepergola.netlify.app/dealer/${cleanSlug}</a>
+      </div>
+      ` : ''}
       <p style="color:#666;font-size:12px;line-height:1.5;margin:24px 0 0;border-top:1px solid #333;padding-top:16px;">
         If the button doesn't work, copy and paste this link into your browser:<br/>
         <a href="${signupLink}" style="color:#C5A059;word-break:break-all;">${signupLink}</a>
@@ -1015,7 +1154,7 @@ export async function createExpressApp() {
         });
       }
 
-      return res.json({ success: true, contractorId: contractorRef.id, inviteToken });
+      return res.json({ success: true, contractorId: contractorRef.id, inviteToken, slug: cleanSlug });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("invite-contractor error:", msg);

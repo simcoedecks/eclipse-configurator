@@ -5,7 +5,7 @@ import {
   LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, Plus, Building2, Send,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
-  Bookmark, Save,
+  Bookmark, Save, Copy,
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,6 +25,7 @@ import FilesPanel from '../components/admin/FilesPanel';
 import CommandPalette from '../components/admin/CommandPalette';
 import AssignedToSelector, { Avatar } from '../components/admin/AssignedToSelector';
 import SourceSelector from '../components/admin/SourceSelector';
+import ContractorInviteForm from '../components/admin/ContractorInviteForm';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
@@ -748,61 +749,53 @@ export default function Admin() {
                   <Plus className="w-4 h-4" />Invite Contractor
                 </button>
               </div>
-              {showInviteForm && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-luxury-black mb-4">New Contractor Invite</h3>
-                  <form
-                    onSubmit={async (e: FormEvent<HTMLFormElement>) => {
-                      e.preventDefault();
-                      setInviteLoading(true);
-                      const fd = new FormData(e.currentTarget);
-                      try {
-                        const res = await fetch('/api/pro/invite-contractor', {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            companyName: fd.get('companyName'), contactName: fd.get('contactName'),
-                            email: fd.get('email'), phone: fd.get('phone'),
-                            discountPercentage: fd.get('discountPercentage'),
-                            adminSecret: prompt('Enter admin secret:') || '',
-                          }),
-                        });
-                        const r = await res.json();
-                        if (r.success) { toast.success('Invite sent'); setShowInviteForm(false); }
-                        else toast.error(r.error || 'Failed to send invite');
-                      } catch { toast.error('Network error'); }
-                      finally { setInviteLoading(false); }
-                    }}
-                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                  >
-                    <input name="companyName" placeholder="Company name" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    <input name="contactName" placeholder="Contact name" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    <input name="email" type="email" placeholder="Email" required className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    <input name="phone" type="tel" placeholder="Phone" className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    <input name="discountPercentage" type="number" min="0" max="100" defaultValue="15" placeholder="Discount %" className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    <div className="flex gap-2 md:col-span-2">
-                      <button type="submit" disabled={inviteLoading} className="px-5 py-2 bg-luxury-black text-white rounded-lg font-semibold text-sm disabled:opacity-50">
-                        {inviteLoading ? 'Sending…' : 'Send Invite'}
-                      </button>
-                      <button type="button" onClick={() => setShowInviteForm(false)} className="px-5 py-2 border border-slate-200 rounded-lg text-sm">Cancel</button>
-                    </div>
-                  </form>
-                </div>
-              )}
+              {showInviteForm && <ContractorInviteForm onClose={() => setShowInviteForm(false)} />}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <table className="w-full text-left">
-                  <thead><tr className="bg-slate-50 text-xs text-gray-500 uppercase"><th className="p-3">Company</th><th className="p-3">Contact</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Discount</th></tr></thead>
+                  <thead><tr className="bg-slate-50 text-xs text-gray-500 uppercase"><th className="p-3">Dealer</th><th className="p-3">Contact</th><th className="p-3">Status</th><th className="p-3">Discount</th><th className="p-3">Customer Link</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {contractors.length === 0
                       ? <tr><td colSpan={5} className="p-8 text-center text-gray-500 italic">No contractors yet.</td></tr>
-                      : contractors.map(c => (
-                        <tr key={c.id}>
-                          <td className="p-3 font-semibold text-luxury-black">{c.companyName}</td>
-                          <td className="p-3 text-gray-600">{c.contactName}</td>
-                          <td className="p-3 text-gray-600"><a href={`mailto:${c.email}`} className="hover:text-luxury-gold">{c.email}</a></td>
-                          <td className="p-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${c.status === 'active' ? 'bg-emerald-100 text-emerald-800' : c.status === 'invited' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{c.status}</span></td>
-                          <td className="p-3 text-gray-600">{c.discountPercentage || 0}%</td>
-                        </tr>
-                      ))}
+                      : contractors.map(c => {
+                        const dealerLink = c.slug ? `${window.location.origin}/dealer/${c.slug}` : null;
+                        return (
+                          <tr key={c.id}>
+                            <td className="p-3">
+                              <div className="flex items-center gap-3">
+                                {c.logoUrl ? (
+                                  <img src={c.logoUrl} alt={c.companyName} className="w-10 h-10 object-contain rounded bg-slate-50 border border-slate-200 p-1" />
+                                ) : (
+                                  <div className="w-10 h-10 bg-luxury-gold/10 rounded flex items-center justify-center text-luxury-gold font-bold text-sm border border-luxury-gold/20">
+                                    {(c.companyName || '?').slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-semibold text-luxury-black">{c.companyName}</p>
+                                  {c.slug && <p className="text-[10px] text-gray-400 font-mono">/dealer/{c.slug}</p>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3 text-sm">
+                              <p className="text-luxury-black">{c.contactName}</p>
+                              <a href={`mailto:${c.email}`} className="text-xs text-gray-500 hover:text-luxury-gold">{c.email}</a>
+                            </td>
+                            <td className="p-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${c.status === 'active' ? 'bg-emerald-100 text-emerald-800' : c.status === 'invited' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{c.status}</span></td>
+                            <td className="p-3 text-luxury-black font-semibold">{c.discountPercentage || 0}%</td>
+                            <td className="p-3">
+                              {dealerLink ? (
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(dealerLink); toast.success('Link copied'); }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-luxury-gold/10 text-luxury-black border border-luxury-gold/30 rounded-md text-xs font-semibold hover:bg-luxury-gold hover:text-white transition-colors"
+                                  title="Copy dealer link to clipboard"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  Copy Link
+                                </button>
+                              ) : <span className="text-xs text-gray-400 italic">No slug</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -852,7 +845,7 @@ export default function Admin() {
 
       {/* Detail modal */}
       <AnimatePresence>
-        {detailSub && <SubmissionDetail key={detailSub.id} sub={detailSub} onClose={() => setDetailSub(null)} onCompose={setComposeMode} onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }} />}
+        {detailSub && <SubmissionDetail key={detailSub.id} sub={detailSub} contractors={contractors} onClose={() => setDetailSub(null)} onCompose={setComposeMode} onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }} />}
       </AnimatePresence>
 
       {/* Compose modal */}
@@ -864,12 +857,23 @@ export default function Admin() {
 }
 
 // ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
-function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void }) {
+function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; contractors: any[] }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   const pb = sub.pricingBreakdown || {};
   const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
   const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
+
+  // If this lead came through a dealer, compute dealer cost + margin (admin-only view)
+  const dealer = sub.dealerSlug
+    ? contractors.find(c => c.slug === sub.dealerSlug)
+    : sub.assignedTo
+      ? contractors.find(c => c.email === sub.assignedTo)
+      : null;
+  const dealerDiscountPct = dealer?.discountPercentage ?? null;
+  const customerTotal = pb.total || 0;
+  const dealerCost = dealerDiscountPct != null ? customerTotal * (1 - dealerDiscountPct / 100) : null;
+  const dealerMargin = dealerCost != null ? customerTotal - dealerCost : null;
 
   return (
     <motion.div
@@ -986,6 +990,41 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread }: { sub: any;
                     </table>
                   </div>
                 </section>
+                {dealer && dealerCost != null && (
+                  <section className="border-2 border-luxury-gold/30 bg-luxury-gold/5 rounded-lg p-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      {dealer.logoUrl ? (
+                        <img src={dealer.logoUrl} alt={dealer.companyName} className="w-10 h-10 rounded bg-white p-1 object-contain border border-luxury-gold/20" />
+                      ) : (
+                        <div className="w-10 h-10 bg-luxury-gold/20 text-luxury-gold rounded font-bold flex items-center justify-center text-sm">
+                          {(dealer.companyName || '?').slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <p className="font-bold text-luxury-black">Dealer-Sourced Lead</p>
+                        <p className="text-xs text-gray-600">{dealer.companyName} · {dealer.contactName}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Internal numbers — never shown to customer</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-white rounded-md p-2 border border-slate-200">
+                        <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Customer Price</p>
+                        <p className="text-sm font-bold text-luxury-black">{fmt(customerTotal)}</p>
+                      </div>
+                      <div className="bg-white rounded-md p-2 border border-slate-200">
+                        <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Dealer Cost</p>
+                        <p className="text-sm font-bold text-rose-600">{fmt(dealerCost)}</p>
+                        <p className="text-[10px] text-gray-400">at {dealerDiscountPct}% disc.</p>
+                      </div>
+                      <div className="bg-white rounded-md p-2 border border-slate-200">
+                        <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Margin</p>
+                        <p className="text-sm font-bold text-emerald-600">{fmt(dealerMargin || 0)}</p>
+                        <p className="text-[10px] text-gray-400">{customerTotal > 0 ? `${(((dealerMargin || 0) / customerTotal) * 100).toFixed(1)}%` : ''}</p>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 {sub.acceptance?.signedAt && (
                   <section className="border-2 border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
                     <div className="flex items-start gap-3 mb-2">

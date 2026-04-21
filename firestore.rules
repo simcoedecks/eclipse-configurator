@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName']) &&
              data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -192,6 +192,15 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ── Dealer Profiles ────────────────────────────────────────────────
+    // Public-safe display info for the /dealer/:slug landing page.
+    // Anyone can read (so the landing page can fetch dealer name + logo).
+    // Only admins create/update/delete. Doc ID is the dealer's URL slug.
+    match /dealerProfiles/{slug} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     match /users/{userId} {
