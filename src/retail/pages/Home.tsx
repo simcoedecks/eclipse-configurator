@@ -123,6 +123,49 @@ function calculateBasePrice(depth: number, width: number): number | null {
   return calculatedPrice * getMarkup(area);
 }
 
+/**
+ * Number input that tolerates partial/invalid entry while the user is
+ * typing (so typing "3" on a min-7 field doesn't immediately clamp to
+ * 7 before they can add the "0"). Clamps and commits on blur or Enter.
+ */
+function DimensionNumberInput({
+  value, setter, min, max, ariaKey,
+}: {
+  value: number;
+  setter: (n: number) => void;
+  min: number;
+  max: number;
+  ariaKey: string;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+  const commit = () => {
+    const n = parseInt(text, 10);
+    if (Number.isNaN(n)) { setText(String(value)); return; }
+    const clamped = Math.max(min, Math.min(max, n));
+    if (clamped !== value) setter(clamped);
+    setText(String(clamped));
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      step="1"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.currentTarget.blur(); }
+      }}
+      onFocus={(e) => e.currentTarget.select()}
+      aria-label={`Pergola ${ariaKey} in feet`}
+      className="w-14 text-right text-lg font-serif font-medium text-luxury-gold bg-transparent border-b border-luxury-black/10 dark:border-white/10 focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    />
+  );
+}
+
 interface HomeProps {
   skipIntro?: boolean;
   /** When loaded via /dealer/:slug, these tag the submission for attribution */
@@ -2659,27 +2702,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     <div className="flex justify-between items-end">
                       <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">{label}</label>
                       <div className="flex items-baseline gap-0.5">
-                        <input
-                          type="number"
-                          min={min}
-                          max={max}
-                          step="1"
-                          value={value}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            // Allow empty while typing; commit on blur
-                            if (v === '') return;
-                            const n = parseInt(v, 10);
-                            if (!Number.isNaN(n)) setter(Math.max(min, Math.min(max, n)));
-                          }}
-                          onBlur={(e) => {
-                            const n = parseInt(e.target.value, 10);
-                            if (Number.isNaN(n)) setter(min);
-                            else setter(Math.max(min, Math.min(max, n)));
-                          }}
-                          aria-label={`Pergola ${ariaKey} in feet`}
-                          className="w-14 text-right text-lg font-serif font-medium text-luxury-gold bg-transparent border-b border-luxury-black/10 dark:border-white/10 focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
+                        <DimensionNumberInput value={value} setter={setter} min={min} max={max} ariaKey={ariaKey} />
                         <span className="text-lg font-serif font-medium text-luxury-gold">'</span>
                       </div>
                     </div>
