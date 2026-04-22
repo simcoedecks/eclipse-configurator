@@ -119,6 +119,15 @@ interface PergolaVisualizerProps {
    *  the pergola edge instead of extending past it. Default (true) keeps
    *  the original "house continues past pergola" visual. */
   houseWallExtensions?: Partial<Record<'back'|'front'|'left'|'right', { start?: boolean; end?: boolean }>>;
+  /** Admin-only: shift middle posts left/right (along width) or
+   *  forward/back (along depth) from their default even-distribution
+   *  positions. Keys are middle-post indices (1..numBays-1); values are
+   *  deltas in feet. */
+  postXOffsets?: Record<number, number>;
+  postZOffsets?: Record<number, number>;
+  /** Admin-only: middle posts removed entirely. Keys are `${axis}-${index}`
+   *  e.g. "x-1", "z-2". Adjacent bays merge visually (beam + louvers). */
+  removedMiddlePosts?: Set<string>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -573,7 +582,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, removedMiddlePosts, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -596,24 +605,70 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   const needsMiddlePostX = width > 20;
   const needsMiddlePostZ = depth > 20;
 
-  const postCentersX = Array.from({ length: numBaysX + 1 }).map((_, i) => -xOffset + i * ((width - postSize) / numBaysX));
-  const postCentersZ = Array.from({ length: numBaysZ + 1 }).map((_, i) => -zOffset + i * ((depth - postSize) / numBaysZ));
+  // Default post positions — corners at ends, middle posts evenly distributed.
+  const defaultPostCentersX = Array.from({ length: numBaysX + 1 }).map((_, i) => -xOffset + i * ((width - postSize) / numBaysX));
+  const defaultPostCentersZ = Array.from({ length: numBaysZ + 1 }).map((_, i) => -zOffset + i * ((depth - postSize) / numBaysZ));
+
+  // Admin: apply per-post offsets to middle posts (corners are fixed).
+  // 1ft in pergola coordinates = 1 scene unit (scene maps 1:1 to feet).
+  const postCentersX = defaultPostCentersX.map((p, i) => {
+    if (i === 0 || i === numBaysX) return p;
+    return p + (postXOffsets?.[i] || 0);
+  });
+  const postCentersZ = defaultPostCentersZ.map((p, i) => {
+    if (i === 0 || i === numBaysZ) return p;
+    return p + (postZOffsets?.[i] || 0);
+  });
+
+  // Admin: determine which middle posts are removed. The removed posts
+  // are filtered out of rendered arrays (posts + midspan beams) and
+  // adjacent bays merge into one.
+  const isMiddleXRemoved = (i: number) => i > 0 && i < numBaysX && !!removedMiddlePosts?.has(`x-${i}`);
+  const isMiddleZRemoved = (i: number) => i > 0 && i < numBaysZ && !!removedMiddlePosts?.has(`z-${i}`);
+
+  // "Effective" post arrays — exclude removed middles. These drive posts,
+  // beams, bay calculation, and screen rendering so everything merges
+  // cleanly when a middle post is pulled.
+  const effectivePostCentersX = postCentersX.filter((_, i) => !isMiddleXRemoved(i));
+  const effectivePostCentersZ = postCentersZ.filter((_, i) => !isMiddleZRemoved(i));
 
   const louverDepth = 8 / 12; // 8 inches wide
-  const louverWidth = ((width - postSize) / numBaysX) - beamWidth - 0.05; // Added clearance
 
-  const bayCentersX = Array.from({ length: numBaysX }).map((_, i) => -xOffset + (i + 0.5) * ((width - postSize) / numBaysX));
-  const bayBeamCentersX = Array.from({ length: numBaysX - 1 }).map((_, i) => -xOffset + (i + 1) * ((width - postSize) / numBaysX));
+  // Per-bay widths derived from (possibly shifted/merged) post positions,
+  // so louver spans match the actual bay width.
+  const bayPostGapsX = Array.from({ length: effectivePostCentersX.length - 1 }).map((_, i) =>
+    effectivePostCentersX[i + 1] - effectivePostCentersX[i]);
+  const bayCentersX = Array.from({ length: effectivePostCentersX.length - 1 }).map((_, i) =>
+    (effectivePostCentersX[i] + effectivePostCentersX[i + 1]) / 2);
+  const bayLouverWidthsX = bayPostGapsX.map(g => g - beamWidth - 0.05);
+  // Midspan beams sit at each remaining middle post's X position.
+  const bayBeamCentersX = effectivePostCentersX.slice(1, -1);
 
-  // Screen and Privacy Wall logic (depends on posts)
-  const numScreenBaysX = needsMiddlePostX ? numBaysX : 1;
-  const numScreenBaysZ = needsMiddlePostZ ? numBaysZ : 1;
+  // Legacy `louverWidth` kept for code that reads it as a scalar — use
+  // the per-bay array via index in new call sites.
+  const louverWidth = bayLouverWidthsX[0] ?? (((width - postSize) / numBaysX) - beamWidth - 0.05);
 
-  const screenCentersX = Array.from({ length: numScreenBaysX }).map((_, i) => -xOffset + (i + 0.5) * ((width - postSize) / numScreenBaysX));
-  const screenWidthX = ((width - postSize) / numScreenBaysX) - postSize;
+  // Screen / Privacy Wall logic — one bay per segment between effective posts
+  const showScreenBaysX = needsMiddlePostX && effectivePostCentersX.length > 2;
+  const showScreenBaysZ = needsMiddlePostZ && effectivePostCentersZ.length > 2;
+  const screenCentersX = showScreenBaysX
+    ? bayCentersX
+    : [-xOffset + (width - postSize) / 2];
+  const screenWidthsX = showScreenBaysX
+    ? bayPostGapsX.map(g => g - postSize)
+    : [width - 2 * postSize];
+  const screenWidthX = screenWidthsX[0]; // first bay — used where callers expect scalar
 
-  const screenCentersZ = Array.from({ length: numScreenBaysZ }).map((_, i) => -zOffset + (i + 0.5) * ((depth - postSize) / numScreenBaysZ));
-  const screenWidthZ = ((depth - postSize) / numScreenBaysZ) - postSize;
+  const bayPostGapsZ = Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
+    effectivePostCentersZ[i + 1] - effectivePostCentersZ[i]);
+  const screenCentersZ = showScreenBaysZ
+    ? Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
+        (effectivePostCentersZ[i] + effectivePostCentersZ[i + 1]) / 2)
+    : [-zOffset + (depth - postSize) / 2];
+  const screenWidthsZ = showScreenBaysZ
+    ? bayPostGapsZ.map(g => g - postSize)
+    : [depth - 2 * postSize];
+  const screenWidthZ = screenWidthsZ[0];
 
   /** If a side has a partial structure wall, return the center + width
    *  (in pergola-axis coordinates) of the OPEN portion so screens/walls
@@ -638,23 +693,31 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
       coveredStart = -partialLen / 2;
       coveredEnd = partialLen / 2;
     }
-    // Open segment is the complement — for start/end anchors it's contiguous;
-    // for center anchor we take the larger open segment.
+    // Open segment is the complement — for start/end anchors it's contiguous
+    // (length = openLen); for center anchor it's split into two equal halves
+    // (each length = openLen / 2), and we pick the right/front half.
     let openCenter: number;
+    let openSegmentWidth: number;
     if (anchor === 'start') {
       openCenter = (coveredEnd + baseDim / 2) / 2;
+      openSegmentWidth = openLen;
     } else if (anchor === 'end') {
       openCenter = (-baseDim / 2 + coveredStart) / 2;
+      openSegmentWidth = openLen;
     } else {
-      // Center anchor leaves two open segments; pick the front/right one.
+      // Center anchor — open is split. Render on the right/front half.
       openCenter = (coveredEnd + baseDim / 2) / 2;
+      openSegmentWidth = openLen / 2;
     }
-    return { center: openCenter, width: openLen - postSize };
+    return { center: openCenter, width: Math.max(0.5, openSegmentWidth - postSize) };
   };
 
-  // Louver bay logic (always depends on structural bays)
-  const louverBayCentersZ = Array.from({ length: numBaysZ }).map((_, i) => -zOffset + (i + 0.5) * ((depth - postSize) / numBaysZ));
-  const louverBayWidthZ = ((depth - postSize) / numBaysZ) - postSize;
+  // Louver bay logic — now derived from effective post positions so
+  // merged bays (when a middle Z post is removed) render correctly.
+  const louverBayCentersZ = Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
+    (effectivePostCentersZ[i] + effectivePostCentersZ[i + 1]) / 2);
+  const louverBayWidthsZ = bayPostGapsZ.map(g => g - postSize);
+  const louverBayWidthZ = louverBayWidthsZ[0] ?? (((depth - postSize) / numBaysZ) - postSize);
 
   // Animate louvers
   const { louverRotation } = useSpring({
@@ -678,12 +741,15 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
             const isSidePostZ = (j > 0 && j < numBaysZ && (i === 0 || i === numBaysX));
             const isInternalPost = (i > 0 && i < numBaysX) && (j > 0 && j < numBaysZ);
             
-            const isRequired = isCorner || 
-                               (needsMiddlePostX && isSidePostX) || 
+            const isRequired = isCorner ||
+                               (needsMiddlePostX && isSidePostX) ||
                                (needsMiddlePostZ && isSidePostZ) ||
                                (needsMiddlePostX && needsMiddlePostZ && isInternalPost);
-            
+
             if (!isRequired) return null;
+            // Admin-removed middle posts don't render (and the adjacent
+            // bays merge in the beam/louver math above).
+            if (isMiddleXRemoved(i) || isMiddleZRemoved(j)) return null;
 
             return (
               <React.Fragment key={`post-${i}-${j}`}>
@@ -801,41 +867,45 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         </group>
       )}
 
-      {/* Louvers */}
-      {bayCentersX.map((bayX, bayIndexX) => (
-        <React.Fragment key={`bay-x-${bayIndexX}`}>
-          {louverBayCentersZ.map((bayZ, bayIndexZ) => {
-            const targetSpacing = 7.75 / 12; // 7.75 inches spacing for interlocking
-            const louverMargin = 0.1; // Pivot is now at the edge, so we only need the clearance
-            const louverArea = louverBayWidthZ - (louverMargin * 2 + (8.5 / 12));
-            const louverCount = Math.max(2, Math.round(louverArea / targetSpacing) + 1);
-            const louverSpacing = louverCount > 1 ? louverArea / (louverCount - 1) : 0;
+      {/* Louvers — per-bay widths so merged/shifted bays render correctly */}
+      {bayCentersX.map((bayX, bayIndexX) => {
+        const thisLouverWidth = bayLouverWidthsX[bayIndexX] ?? louverWidth;
+        return (
+          <React.Fragment key={`bay-x-${bayIndexX}`}>
+            {louverBayCentersZ.map((bayZ, bayIndexZ) => {
+              const thisLouverBayWidthZ = louverBayWidthsZ[bayIndexZ] ?? louverBayWidthZ;
+              const targetSpacing = 7.75 / 12; // 7.75 inches spacing for interlocking
+              const louverMargin = 0.1; // Pivot is now at the edge, so we only need the clearance
+              const louverArea = thisLouverBayWidthZ - (louverMargin * 2 + (8.5 / 12));
+              const louverCount = Math.max(2, Math.round(louverArea / targetSpacing) + 1);
+              const louverSpacing = louverCount > 1 ? louverArea / (louverCount - 1) : 0;
 
-            return (
-              <group key={`bay-z-${bayIndexZ}`}>
-                {Array.from({ length: louverCount }).map((_, i) => {
-                  const z = bayZ - louverBayWidthZ / 2 + louverMargin + i * louverSpacing;
-                  return (
-                    <a.group key={i} position={[bayX, height - 1/12, z]} rotation-x={louverRotation}>
-                      {customModels?.louver ? (
-                        <CustomPart url={customModels.louver} position={[0, 0, 0]} scale={[louverWidth, 0.1, louverDepth]} rotation={[0, 0, 0]} color={louverColor} materialProps={louverMaterialProps} />
-                      ) : (
-                        <Louver 
-                          length={louverWidth} 
-                          color={louverColor} 
-                          materialProps={louverMaterialProps} 
-                          position={[-louverWidth / 2, 0, 0]} 
-                          rotation={[0, Math.PI / 2, 0]} 
-                        />
-                      )}
-                    </a.group>
-                  );
-                })}
-              </group>
-            );
-          })}
-        </React.Fragment>
-      ))}
+              return (
+                <group key={`bay-z-${bayIndexZ}`}>
+                  {Array.from({ length: louverCount }).map((_, i) => {
+                    const z = bayZ - thisLouverBayWidthZ / 2 + louverMargin + i * louverSpacing;
+                    return (
+                      <a.group key={i} position={[bayX, height - 1/12, z]} rotation-x={louverRotation}>
+                        {customModels?.louver ? (
+                          <CustomPart url={customModels.louver} position={[0, 0, 0]} scale={[thisLouverWidth, 0.1, louverDepth]} rotation={[0, 0, 0]} color={louverColor} materialProps={louverMaterialProps} />
+                        ) : (
+                          <Louver
+                            length={thisLouverWidth}
+                            color={louverColor}
+                            materialProps={louverMaterialProps}
+                            position={[-thisLouverWidth / 2, 0, 0]}
+                            rotation={[0, Math.PI / 2, 0]}
+                          />
+                        )}
+                      </a.group>
+                    );
+                  })}
+                </group>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
 
       {/* Motorized Screens — render over the whole side unless there's
           a partial structure wall on the same side, in which case render
@@ -844,28 +914,28 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         const seg = getOpenSegmentOnSide('front');
         if (seg) return <MotorizedScreen key="sf-partial" width={seg.width} height={height} position={[seg.center, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersX.map((x, i) => (
-          <MotorizedScreen key={`sf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+          <MotorizedScreen key={`sf-${i}`} width={screenWidthsX[i] ?? screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
       {accessories.has('screen_back') && (() => {
         const seg = getOpenSegmentOnSide('back');
         if (seg) return <MotorizedScreen key="sb-partial" width={seg.width} height={height} position={[seg.center, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersX.map((x, i) => (
-          <MotorizedScreen key={`sb-${i}`} width={screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+          <MotorizedScreen key={`sb-${i}`} width={screenWidthsX[i] ?? screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
       {accessories.has('screen_right') && (() => {
         const seg = getOpenSegmentOnSide('right');
         if (seg) return <MotorizedScreen key="sr-partial" width={seg.width} height={height} position={[xOffset - 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersZ.map((z, i) => (
-          <MotorizedScreen key={`sr-${i}`} width={screenWidthZ} height={height} position={[xOffset - 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+          <MotorizedScreen key={`sr-${i}`} width={screenWidthsZ[i] ?? screenWidthZ} height={height} position={[xOffset - 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
       {accessories.has('screen_left') && (() => {
         const seg = getOpenSegmentOnSide('left');
         if (seg) return <MotorizedScreen key="sl-partial" width={seg.width} height={height} position={[-xOffset + 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersZ.map((z, i) => (
-          <MotorizedScreen key={`sl-${i}`} width={screenWidthZ} height={height} position={[-xOffset + 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+          <MotorizedScreen key={`sl-${i}`} width={screenWidthsZ[i] ?? screenWidthZ} height={height} position={[-xOffset + 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
 

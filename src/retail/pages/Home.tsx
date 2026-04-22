@@ -374,6 +374,16 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   // Firestore submission so sales can see "change requests" alongside
   // the configured spec.
   const [customerNotes, setCustomerNotes] = useState('');
+  // Admin fine-tune: middle post offsets along X (width) and Z (depth)
+  // axes. Index is the post's position in the postCenters array
+  // (1 .. numBays-1 are middle posts; corners 0 and numBays are fixed).
+  // Value is a delta in feet from the default even-distribution position.
+  const [postXOffsets, setPostXOffsets] = useState<Record<number, number>>({});
+  const [postZOffsets, setPostZOffsets] = useState<Record<number, number>>({});
+  const [selectedMiddlePost, setSelectedMiddlePost] = useState<{ axis: 'x' | 'z'; index: number } | null>(null);
+  // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
+  // When a post is removed, the adjacent bays merge into one for rendering.
+  const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
   const [accessoryQuantities, setAccessoryQuantities] = useState<Record<string, number>>({});
   const [wallColor, setWallColor] = useState<string>('#0A0A0A');
@@ -398,6 +408,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setHouseWallAnchors({});
     setHouseWallExtensions({});
     setCustomerNotes('');
+    setPostXOffsets({});
+    setPostZOffsets({});
+    setSelectedMiddlePost(null);
+    setRemovedMiddlePosts(new Set());
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -604,6 +618,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const numBaysZ = Math.ceil(depth / 20);
   const numScreenBaysX = (hasMiddlePosts && numBaysX > 1) || width > 20 ? numBaysX : 1;
   const numScreenBaysZ = (hasMiddlePosts && numBaysZ > 1) || depth > 20 ? numBaysZ : 1;
+  // Which axes have middle posts (matches the visualizer rule — only
+  // shows when a beam actually exceeds 20').
+  const hasMiddleXPost = width > 20;
+  const hasMiddleZPost = depth > 20;
+  /** Default X position of middle post at index i (1..numBaysX-1),
+   *  relative to the left edge (x=0 at left, x=width at right). */
+  const defaultMiddleXPostPosition = (i: number) => (width * i) / numBaysX;
+  const defaultMiddleZPostPosition = (i: number) => (depth * i) / numBaysZ;
 
   const accessoriesPrice = useMemo(() => {
     let total = 0;
@@ -1076,6 +1098,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setHouseWallAnchors({});
     setHouseWallExtensions({});
     setCustomerNotes('');
+    setPostXOffsets({});
+    setPostZOffsets({});
+    setSelectedMiddlePost(null);
+    setRemovedMiddlePosts(new Set());
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1882,6 +1908,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           houseWallLengths={houseWallLengths}
           houseWallAnchors={houseWallAnchors}
           houseWallExtensions={houseWallExtensions}
+          postXOffsets={postXOffsets}
+          postZOffsets={postZOffsets}
+          removedMiddlePosts={removedMiddlePosts}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2127,6 +2156,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setHouseWallAnchors({});
     setHouseWallExtensions({});
     setCustomerNotes('');
+    setPostXOffsets({});
+    setPostZOffsets({});
+    setSelectedMiddlePost(null);
+    setRemovedMiddlePosts(new Set());
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2320,6 +2353,135 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     );
                   })}
                 </div>
+
+                {/* Middle Post Adjustments — admin-only. Lets the admin
+                    override the default even-distribution position of
+                    any middle post along the width or depth axis. Corners
+                    are always fixed by the pergola dimensions. */}
+                {adminMode && (hasMiddleXPost || hasMiddleZPost) && (() => {
+                  // Build the list of middle posts that exist
+                  const middlePosts: Array<{ axis: 'x' | 'z'; index: number; axisLabel: string; defaultPos: number; total: number }> = [];
+                  if (hasMiddleXPost) {
+                    for (let i = 1; i < numBaysX; i++) {
+                      middlePosts.push({ axis: 'x', index: i, axisLabel: 'Width', defaultPos: defaultMiddleXPostPosition(i), total: width });
+                    }
+                  }
+                  if (hasMiddleZPost) {
+                    for (let i = 1; i < numBaysZ; i++) {
+                      middlePosts.push({ axis: 'z', index: i, axisLabel: 'Depth', defaultPos: defaultMiddleZPostPosition(i), total: depth });
+                    }
+                  }
+                  if (middlePosts.length === 0) return null;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Middle Post Positions</label>
+                        <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {middlePosts.map(({ axis, index, axisLabel, defaultPos, total }) => {
+                          const offsets = axis === 'x' ? postXOffsets : postZOffsets;
+                          const setOffsets = axis === 'x' ? setPostXOffsets : setPostZOffsets;
+                          const offset = offsets[index] || 0;
+                          const currentPos = defaultPos + offset;
+                          const removeKey = `${axis}-${index}`;
+                          const isRemoved = removedMiddlePosts.has(removeKey);
+                          const toggleRemoved = () => {
+                            const next = new Set(removedMiddlePosts);
+                            if (next.has(removeKey)) next.delete(removeKey);
+                            else next.add(removeKey);
+                            setRemovedMiddlePosts(next);
+                          };
+                          // Clamp so post stays at least 4' from neighbors
+                          const prevNeighborPos = axis === 'x'
+                            ? (index === 1 ? 0 : defaultMiddleXPostPosition(index - 1) + (postXOffsets[index - 1] || 0))
+                            : (index === 1 ? 0 : defaultMiddleZPostPosition(index - 1) + (postZOffsets[index - 1] || 0));
+                          const nextNeighborPos = axis === 'x'
+                            ? (index === numBaysX - 1 ? width : defaultMiddleXPostPosition(index + 1) + (postXOffsets[index + 1] || 0))
+                            : (index === numBaysZ - 1 ? depth : defaultMiddleZPostPosition(index + 1) + (postZOffsets[index + 1] || 0));
+                          const minPos = prevNeighborPos + 4;
+                          const maxPos = nextNeighborPos - 4;
+                          const isSelected = selectedMiddlePost?.axis === axis && selectedMiddlePost?.index === index;
+                          const leftLabel = axis === 'x' ? 'Left' : 'Front';
+                          const rightLabel = axis === 'x' ? 'Right' : 'Back';
+                          const nudge = (delta: number) => {
+                            const newPos = Math.max(minPos, Math.min(maxPos, currentPos + delta));
+                            setOffsets({ ...offsets, [index]: newPos - defaultPos });
+                          };
+                          const reset = () => {
+                            const next = { ...offsets };
+                            delete next[index];
+                            setOffsets(next);
+                          };
+                          return (
+                            <div
+                              key={`${axis}-${index}`}
+                              onClick={() => setSelectedMiddlePost(isSelected ? null : { axis, index })}
+                              className={`rounded-lg border transition-all px-3 py-2 cursor-pointer ${
+                                isRemoved
+                                  ? 'border-rose-400/40 bg-rose-500/5'
+                                  : isSelected
+                                    ? 'border-luxury-gold bg-luxury-gold/10'
+                                    : (isDark ? 'border-white/10 bg-white/[0.02] hover:border-luxury-gold/40' : 'border-slate-200 bg-luxury-paper/40 hover:border-luxury-gold/40')
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[10px] uppercase tracking-widest font-bold ${isRemoved ? 'text-rose-500 line-through' : (isDark ? 'text-white/60' : 'text-luxury-black/60')}`}>
+                                  {axisLabel} Post {numBaysX > 2 || numBaysZ > 2 ? `#${index}` : ''}
+                                  {isRemoved && <span className="ml-1.5 not-italic no-underline">(removed)</span>}
+                                </span>
+                                <span className={`text-[11px] font-serif ${isRemoved ? 'text-rose-500/60 line-through' : 'text-luxury-gold'}`}>
+                                  {currentPos.toFixed(1)}' from {leftLabel.toLowerCase()}
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <div className="pt-1.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {!isRemoved && (
+                                    <div className="flex items-center gap-1">
+                                      <button type="button" onClick={() => nudge(-1)} disabled={currentPos - 1 < minPos}
+                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                        ◀ {leftLabel} 1'
+                                      </button>
+                                      <button type="button" onClick={() => nudge(-0.5)} disabled={currentPos - 0.5 < minPos}
+                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                        ◁ 6″
+                                      </button>
+                                      <button type="button" onClick={reset}
+                                        className="px-2 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold"
+                                        title="Reset to default position">
+                                        ⟲
+                                      </button>
+                                      <button type="button" onClick={() => nudge(0.5)} disabled={currentPos + 0.5 > maxPos}
+                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                        6″ ▷
+                                      </button>
+                                      <button type="button" onClick={() => nudge(1)} disabled={currentPos + 1 > maxPos}
+                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                        1' {rightLabel} ▶
+                                      </button>
+                                    </div>
+                                  )}
+                                  <button type="button" onClick={toggleRemoved}
+                                    className={`w-full py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                      isRemoved
+                                        ? 'bg-luxury-gold/15 text-luxury-gold border border-luxury-gold/40 hover:bg-luxury-gold/25'
+                                        : 'bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20'
+                                    }`}
+                                  >
+                                    {isRemoved ? '↺ Restore Post' : '✕ Remove Post'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                        Click a post to select it, then nudge ±6″ or ±1′. Adjacent posts enforce a 4′ minimum gap.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-end">
