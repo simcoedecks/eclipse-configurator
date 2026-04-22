@@ -1323,18 +1323,23 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           ? `Other: ${heardAboutOther.trim()}`
           : heardAbout || null;
         // Allocate a human-readable sequential job number.
-        // If the counter transaction fails, fall back gracefully — the
-        // submission still gets saved without a job number.
+        // If the counter transaction fails (rules not deployed, network
+        // error, etc.), fall back gracefully — the submission still gets
+        // saved without a job number.
         let jobNumber: number | null = null;
         try { jobNumber = await nextJobNumber(); } catch (e) { console.warn('Job number allocation failed', e); }
-        const submissionRef = await addDoc(collection(db, 'submissions'), {
+
+        // Build the payload conditionally — only include jobNumber when
+        // we actually got one. Omitting the field (rather than setting
+        // it to null) keeps the doc compatible with older firestore
+        // rules that don't list jobNumber yet.
+        const submissionPayload: any = {
           ...baseData,
           contractorId,
           isDuplicate: isDuplicateLead,
           pricingBreakdown,
           additionalPergolas: extraPergolas,
           heardAbout: heardAboutValue,
-          jobNumber,
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
@@ -1345,7 +1350,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           dealerSlug: dealerSlug || null,
           dealerName: dealerName || null,
           createdAt: serverTimestamp()
-        });
+        };
+        if (typeof jobNumber === 'number') submissionPayload.jobNumber = jobNumber;
+        const submissionRef = await addDoc(collection(db, 'submissions'), submissionPayload);
         submissionId = submissionRef.id;
 
         // Create or update Pipedrive lead
@@ -1623,7 +1630,20 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
     } catch (error) {
       console.error("Error saving submission:", error);
-      toast.error("There was an error saving your request. Please try again.");
+      // Surface the actual message (trimmed) so the user can share it
+      // when something specific is wrong with permissions or payload.
+      let msg = 'There was an error saving your request. Please try again.';
+      if (error instanceof Error) {
+        const raw = error.message || '';
+        // handleFirestoreError throws a JSON blob — strip that down
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.error) msg = `Save failed: ${String(parsed.error).slice(0, 140)}`;
+        } catch {
+          msg = `Save failed: ${raw.slice(0, 140)}`;
+        }
+      }
+      toast.error(msg, { duration: 8000 });
       setIsSubmitting(false);
     }
   };
@@ -3500,12 +3520,46 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                                acc.id.includes('guillotine');
                       };
 
-                      const wallCoverageIds = Array.from(selectedAccessories).filter(isWallCoverage);
-                      const addOnIds = Array.from(selectedAccessories).filter(id => !isWallCoverage(id));
+                      // Filter out side-based screen/wall accessories whose side is in per-section mode —
+                      // the per-section rows render below instead of the uniform side row.
+                      const sideOfId = (id: string) =>
+                        id.endsWith('_front') ? 'front' as const
+                        : id.endsWith('_back') ? 'back' as const
+                        : id.endsWith('_left') ? 'left' as const
+                        : id.endsWith('_right') ? 'right' as const
+                        : null;
+                      const accessoriesFiltered = Array.from(selectedAccessories).filter(id => {
+                        const side = sideOfId(id);
+                        if (!side) return true;
+                        return !sideUsesSections(side);
+                      });
+                      const wallCoverageIds = accessoriesFiltered.filter(isWallCoverage);
+                      const addOnIds = accessoriesFiltered.filter(id => !isWallCoverage(id));
+
+                      // Build per-section rows for sides that are in per-section mode
+                      const sectionRows: Array<{ key: string; name: string; cost: number }> = [];
+                      (['front','back','left','right'] as const).forEach(side => {
+                        if (!sideUsesSections(side)) return;
+                        const choices = getSectionChoicesForSide(side);
+                        const bayLen = getBayLengthOnSide(side);
+                        const sideLabel = { front: 'Front', back: 'Rear', left: 'Left', right: 'Right' }[side];
+                        const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+                        choices.forEach((choice, i) => {
+                          if (choice === 'open') return;
+                          const key = `${side}-sec-${i}`;
+                          if (choice === 'screen') {
+                            const cost = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+                            sectionRows.push({ key, name: `Motorized Screen — ${sideLabel} §${i + 1} (${bayLen.toFixed(1)}')`, cost });
+                          } else if (choice === 'wall') {
+                            const cost = bayLen * height * wallUnitPrice;
+                            sectionRows.push({ key, name: `Privacy Wall — ${sideLabel} §${i + 1} (${bayLen.toFixed(1)}')`, cost });
+                          }
+                        });
+                      });
 
                       return (
                         <>
-                          {wallCoverageIds.length > 0 && (
+                          {(wallCoverageIds.length > 0 || sectionRows.length > 0) && (
                             <div className="space-y-2">
                               <div className="flex items-center gap-2 pb-1">
                                 <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Wall Coverages</span>
@@ -3513,6 +3567,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                               </div>
                               <div className="space-y-2">
                                 {wallCoverageIds.map(renderAccessoryRow)}
+                                {sectionRows.map(row => (
+                                  <div key={row.key} className="flex justify-between items-center text-[11px]">
+                                    <span className="font-serif text-luxury-black/60 dark:text-white/60">{row.name}</span>
+                                    <span className="font-serif text-luxury-black/80">{formatCurrency(row.cost)}</span>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}

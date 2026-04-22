@@ -104,8 +104,9 @@ export default function CustomRequestModal({
         : heardAbout || null;
       let jobNumber: number | null = null;
       try { jobNumber = await nextJobNumber(); } catch (e) { console.warn('Job number allocation failed', e); }
-      // Create the doc first so we have an ID to scope uploads under.
-      const docRef = await addDoc(collection(db, 'submissions'), {
+      // Build the payload conditionally so older firestore rules (which
+      // don't list jobNumber in the allowlist yet) still accept the doc.
+      const basePayload: any = {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -115,7 +116,6 @@ export default function CustomRequestModal({
         customRequest: true,
         customRequestNotes: description.trim(),
         heardAbout: heardAboutValue,
-        jobNumber,
         attachments: [],
         pipelineStage: 'new',
         viewedAt: null,
@@ -126,7 +126,9 @@ export default function CustomRequestModal({
         dealerName: dealerName || null,
         pipedriveLeadId: leadId || null,
         createdAt: serverTimestamp(),
-      });
+      };
+      if (typeof jobNumber === 'number') basePayload.jobNumber = jobNumber;
+      const docRef = await addDoc(collection(db, 'submissions'), basePayload);
 
       // Upload attachments (if any) and patch the doc with URLs.
       let attachments: Array<{ name: string; url: string; size: number; type: string }> = [];
