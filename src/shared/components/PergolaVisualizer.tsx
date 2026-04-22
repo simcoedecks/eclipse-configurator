@@ -119,15 +119,22 @@ interface PergolaVisualizerProps {
    *  the pergola edge instead of extending past it. Default (true) keeps
    *  the original "house continues past pergola" visual. */
   houseWallExtensions?: Partial<Record<'back'|'front'|'left'|'right', { start?: boolean; end?: boolean }>>;
-  /** Admin-only: shift middle posts left/right (along width) or
+  /** Admin-only: shift middle posts + their beams left/right (along width) or
    *  forward/back (along depth) from their default even-distribution
    *  positions. Keys are middle-post indices (1..numBays-1); values are
    *  deltas in feet. */
   postXOffsets?: Record<number, number>;
   postZOffsets?: Record<number, number>;
-  /** Admin-only: middle posts removed entirely. Keys are `${axis}-${index}`
-   *  e.g. "x-1", "z-2". Adjacent bays merge visually (beam + louvers). */
+  /** Admin-only: additional post-only offsets that move the physical
+   *  support post without moving the beam it normally carries. */
+  postXOnlyOffsets?: Record<number, number>;
+  postZOnlyOffsets?: Record<number, number>;
+  /** Admin-only: middle posts hidden. Beam/louver divider stay — only
+   *  the vertical support mesh disappears. */
   removedMiddlePosts?: Set<string>;
+  /** Admin-only: cantilever insets per edge (ft). Corner posts move
+   *  inward by this amount; beams still extend to the pergola edge. */
+  cantileverInsets?: Partial<Record<'left'|'right'|'front'|'back', number>>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -582,7 +589,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, removedMiddlePosts, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -611,6 +618,9 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
 
   // Admin: apply per-post offsets to middle posts (corners are fixed).
   // 1ft in pergola coordinates = 1 scene unit (scene maps 1:1 to feet).
+  //
+  // postCentersX / postCentersZ — position of each BEAM (midspan beams
+  // sit at the middle-post indices). Used for bay/louver/screen math.
   const postCentersX = defaultPostCentersX.map((p, i) => {
     if (i === 0 || i === numBaysX) return p;
     return p + (postXOffsets?.[i] || 0);
@@ -618,6 +628,25 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   const postCentersZ = defaultPostCentersZ.map((p, i) => {
     if (i === 0 || i === numBaysZ) return p;
     return p + (postZOffsets?.[i] || 0);
+  });
+  // postRenderCentersX / postRenderCentersZ — where the physical post
+  // MESH is drawn. Middle posts layer the post-only offset on top of
+  // the beam offset. Corner posts (i=0 / i=numBays) honor the
+  // cantilever inset for that edge, moving INWARD while the beams
+  // still extend to the pergola edge.
+  const leftInset  = Math.max(0, cantileverInsets?.left  || 0);
+  const rightInset = Math.max(0, cantileverInsets?.right || 0);
+  const backInset  = Math.max(0, cantileverInsets?.back  || 0);
+  const frontInset = Math.max(0, cantileverInsets?.front || 0);
+  const postRenderCentersX = postCentersX.map((p, i) => {
+    if (i === 0)          return p + leftInset;   // left corners shift right
+    if (i === numBaysX)   return p - rightInset;  // right corners shift left
+    return p + (postXOnlyOffsets?.[i] || 0);
+  });
+  const postRenderCentersZ = postCentersZ.map((p, i) => {
+    if (i === 0)          return p + backInset;   // back corners shift toward center
+    if (i === numBaysZ)   return p - frontInset;  // front corners shift toward center
+    return p + (postZOnlyOffsets?.[i] || 0);
   });
 
   // Admin: posts that are removed. Only the POST mesh is hidden — the
@@ -728,10 +757,12 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
 
   return (
     <group position={[0, -height / 2, 0]}>
-      {/* Posts */}
-      {postCentersX.map((x, i) => (
+      {/* Posts — use postRenderCentersX/Z so the physical post can be
+          offset independently from the beam (cantilever / decorative
+          post placement). */}
+      {postRenderCentersX.map((x, i) => (
         <React.Fragment key={`post-row-${i}`}>
-          {postCentersZ.map((z, j) => {
+          {postRenderCentersZ.map((z, j) => {
             // A post is required if it's a corner, a side post if the span exceeds 20' and area > 260 sq ft, or an internal post for very large pergolas.
             const isCorner = (i === 0 || i === numBaysX) && (j === 0 || j === numBaysZ);
             const isSidePostX = (i > 0 && i < numBaysX && (j === 0 || j === numBaysZ));

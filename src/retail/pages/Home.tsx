@@ -380,7 +380,22 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   // Value is a delta in feet from the default even-distribution position.
   const [postXOffsets, setPostXOffsets] = useState<Record<number, number>>({});
   const [postZOffsets, setPostZOffsets] = useState<Record<number, number>>({});
+  // Independent post-only offsets — when an admin wants to nudge a post
+  // without moving the beam+louver divider it carries. These layer on
+  // top of postXOffsets/postZOffsets (which move post+beam together).
+  //   final post X = default + postXOffsets[i] + postXOnlyOffsets[i]
+  //   final beam X = default + postXOffsets[i]                    (no post-only offset)
+  const [postXOnlyOffsets, setPostXOnlyOffsets] = useState<Record<number, number>>({});
+  const [postZOnlyOffsets, setPostZOnlyOffsets] = useState<Record<number, number>>({});
   const [selectedMiddlePost, setSelectedMiddlePost] = useState<{ axis: 'x' | 'z'; index: number } | null>(null);
+  // Admin: which movement mode is active for the selected post
+  //   'together' — nudge moves post AND beam (current default)
+  //   'post-only' — nudge moves just the post, beam stays
+  const [postMoveMode, setPostMoveMode] = useState<'together' | 'post-only'>('together');
+  // Admin cantilever: how far each edge's corner posts sit INSIDE the
+  // pergola footprint, in feet. Beams still span the full pergola,
+  // creating a cantilever overhang past the corner post.
+  const [cantileverInsets, setCantileverInsets] = useState<Partial<Record<'left'|'right'|'front'|'back', number>>>({});
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
@@ -410,8 +425,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCustomerNotes('');
     setPostXOffsets({});
     setPostZOffsets({});
+    setPostXOnlyOffsets({});
+    setPostZOnlyOffsets({});
     setSelectedMiddlePost(null);
     setRemovedMiddlePosts(new Set());
+    setPostMoveMode('together');
+    setCantileverInsets({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -1100,8 +1119,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCustomerNotes('');
     setPostXOffsets({});
     setPostZOffsets({});
+    setPostXOnlyOffsets({});
+    setPostZOnlyOffsets({});
     setSelectedMiddlePost(null);
     setRemovedMiddlePosts(new Set());
+    setPostMoveMode('together');
+    setCantileverInsets({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1910,7 +1933,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           houseWallExtensions={houseWallExtensions}
           postXOffsets={postXOffsets}
           postZOffsets={postZOffsets}
+          postXOnlyOffsets={postXOnlyOffsets}
+          postZOnlyOffsets={postZOnlyOffsets}
           removedMiddlePosts={removedMiddlePosts}
+          cantileverInsets={cantileverInsets}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2158,8 +2184,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCustomerNotes('');
     setPostXOffsets({});
     setPostZOffsets({});
+    setPostXOnlyOffsets({});
+    setPostZOnlyOffsets({});
     setSelectedMiddlePost(null);
     setRemovedMiddlePosts(new Set());
+    setPostMoveMode('together');
+    setCantileverInsets({});
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2407,8 +2437,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         {middlePosts.map(({ axis, index, axisLabel, defaultPos, total }) => {
                           const offsets = axis === 'x' ? postXOffsets : postZOffsets;
                           const setOffsets = axis === 'x' ? setPostXOffsets : setPostZOffsets;
+                          const onlyOffsets = axis === 'x' ? postXOnlyOffsets : postZOnlyOffsets;
+                          const setOnlyOffsets = axis === 'x' ? setPostXOnlyOffsets : setPostZOnlyOffsets;
                           const offset = offsets[index] || 0;
-                          const currentPos = defaultPos + offset;
+                          const onlyOffset = onlyOffsets[index] || 0;
+                          // Beam sits at default + offset (together-mode adjustments).
+                          // Physical post sits at beam + post-only offset on top.
+                          const beamPos = defaultPos + offset;
+                          const currentPos = beamPos + onlyOffset;
                           const removeKey = `${axis}-${index}`;
                           const isRemoved = removedMiddlePosts.has(removeKey);
                           const toggleRemoved = () => {
@@ -2417,27 +2453,45 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             else next.add(removeKey);
                             setRemovedMiddlePosts(next);
                           };
-                          // Clamp so post stays at least 4' from neighbors
-                          const prevNeighborPos = axis === 'x'
+                          // Clamp so the BEAM stays at least 4' from neighbor beams
+                          // (structural constraint). Post-only offsets just need
+                          // to keep the post within the pergola footprint.
+                          const prevBeamPos = axis === 'x'
                             ? (index === 1 ? 0 : defaultMiddleXPostPosition(index - 1) + (postXOffsets[index - 1] || 0))
                             : (index === 1 ? 0 : defaultMiddleZPostPosition(index - 1) + (postZOffsets[index - 1] || 0));
-                          const nextNeighborPos = axis === 'x'
+                          const nextBeamPos = axis === 'x'
                             ? (index === numBaysX - 1 ? width : defaultMiddleXPostPosition(index + 1) + (postXOffsets[index + 1] || 0))
                             : (index === numBaysZ - 1 ? depth : defaultMiddleZPostPosition(index + 1) + (postZOffsets[index + 1] || 0));
-                          const minPos = prevNeighborPos + 4;
-                          const maxPos = nextNeighborPos - 4;
+                          const minBeamPos = prevBeamPos + 4;
+                          const maxBeamPos = nextBeamPos - 4;
+                          // Post-only offset — post stays inside the pergola (between the neighbors' posts).
+                          // We don't enforce the 4' rule here, letting admin position it freely.
+                          const minPostOnlyPos = axis === 'x' ? 1 : 1; // keep 1' inside from edge
+                          const maxPostOnlyPos = axis === 'x' ? width - 1 : depth - 1;
                           const isSelected = selectedMiddlePost?.axis === axis && selectedMiddlePost?.index === index;
                           const leftLabel = axis === 'x' ? 'Left' : 'Front';
                           const rightLabel = axis === 'x' ? 'Right' : 'Back';
                           const nudge = (delta: number) => {
-                            const newPos = Math.max(minPos, Math.min(maxPos, currentPos + delta));
-                            setOffsets({ ...offsets, [index]: newPos - defaultPos });
+                            if (postMoveMode === 'together') {
+                              const newBeam = Math.max(minBeamPos, Math.min(maxBeamPos, beamPos + delta));
+                              setOffsets({ ...offsets, [index]: newBeam - defaultPos });
+                            } else {
+                              // post-only — shift the physical post, beam stays put
+                              const newPost = Math.max(minPostOnlyPos, Math.min(maxPostOnlyPos, currentPos + delta));
+                              setOnlyOffsets({ ...onlyOffsets, [index]: newPost - beamPos });
+                            }
                           };
                           const reset = () => {
                             const next = { ...offsets };
                             delete next[index];
                             setOffsets(next);
+                            const nextOnly = { ...onlyOffsets };
+                            delete nextOnly[index];
+                            setOnlyOffsets(nextOnly);
                           };
+                          // Compute button-disable thresholds for the active mode
+                          const minPos = postMoveMode === 'together' ? minBeamPos : minPostOnlyPos;
+                          const maxPos = postMoveMode === 'together' ? maxBeamPos : maxPostOnlyPos;
                           return (
                             <div
                               key={`${axis}-${index}`}
@@ -2456,35 +2510,64 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                                   {isRemoved && <span className="ml-1.5 not-italic no-underline">(removed)</span>}
                                 </span>
                                 <span className={`text-[11px] font-serif ${isRemoved ? 'text-rose-500/60 line-through' : 'text-luxury-gold'}`}>
-                                  {currentPos.toFixed(1)}' from {leftLabel.toLowerCase()}
+                                  {onlyOffset !== 0
+                                    ? `Post ${currentPos.toFixed(1)}' • Beam ${beamPos.toFixed(1)}'`
+                                    : `${currentPos.toFixed(1)}' from ${leftLabel.toLowerCase()}`}
                                 </span>
                               </div>
                               {isSelected && (
                                 <div className="pt-1.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
                                   {!isRemoved && (
-                                    <div className="flex items-center gap-1">
-                                      <button type="button" onClick={() => nudge(-1)} disabled={currentPos - 1 < minPos}
-                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                        ◀ {leftLabel} 1'
-                                      </button>
-                                      <button type="button" onClick={() => nudge(-0.5)} disabled={currentPos - 0.5 < minPos}
-                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                        ◁ 6″
-                                      </button>
-                                      <button type="button" onClick={reset}
-                                        className="px-2 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold"
-                                        title="Reset to default position">
-                                        ⟲
-                                      </button>
-                                      <button type="button" onClick={() => nudge(0.5)} disabled={currentPos + 0.5 > maxPos}
-                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                        6″ ▷
-                                      </button>
-                                      <button type="button" onClick={() => nudge(1)} disabled={currentPos + 1 > maxPos}
-                                        className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                        1' {rightLabel} ▶
-                                      </button>
-                                    </div>
+                                    <>
+                                      {/* Move mode toggle — together moves post+beam, post-only moves just the post */}
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setPostMoveMode('together')}
+                                          className={`flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                                            postMoveMode === 'together'
+                                              ? 'bg-luxury-gold text-luxury-black'
+                                              : (isDark ? 'bg-white/[0.03] text-white/50 border border-white/10 hover:text-white' : 'bg-white text-luxury-black/50 border border-slate-200 hover:text-luxury-black')
+                                          }`}
+                                        >
+                                          Post + Beam
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPostMoveMode('post-only')}
+                                          className={`flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                                            postMoveMode === 'post-only'
+                                              ? 'bg-luxury-gold text-luxury-black'
+                                              : (isDark ? 'bg-white/[0.03] text-white/50 border border-white/10 hover:text-white' : 'bg-white text-luxury-black/50 border border-slate-200 hover:text-luxury-black')
+                                          }`}
+                                        >
+                                          Post Only
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <button type="button" onClick={() => nudge(-1)} disabled={currentPos - 1 < minPos}
+                                          className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                          ◀ {leftLabel} 1'
+                                        </button>
+                                        <button type="button" onClick={() => nudge(-0.5)} disabled={currentPos - 0.5 < minPos}
+                                          className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                          ◁ 6″
+                                        </button>
+                                        <button type="button" onClick={reset}
+                                          className="px-2 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold"
+                                          title="Reset both post and beam to default position">
+                                          ⟲
+                                        </button>
+                                        <button type="button" onClick={() => nudge(0.5)} disabled={currentPos + 0.5 > maxPos}
+                                          className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                          6″ ▷
+                                        </button>
+                                        <button type="button" onClick={() => nudge(1)} disabled={currentPos + 1 > maxPos}
+                                          className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                          1' {rightLabel} ▶
+                                        </button>
+                                      </div>
+                                    </>
                                   )}
                                   <button type="button" onClick={toggleRemoved}
                                     className={`w-full py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ${
@@ -2502,11 +2585,68 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         })}
                       </div>
                       <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                        Click a post to select it, then nudge ±6″ or ±1′ to redistribute the louver section widths. Removing a post keeps the beam and louver divider in place — only the vertical support disappears.
+                        Click a post to select it, then choose Post + Beam (moves both) or Post Only (moves the support column while the beam stays). Removing a post keeps the beam and louver divider — only the vertical support disappears.
                       </p>
                     </div>
                   );
                 })()}
+
+                {/* Edge Cantilevers — admin-only. Move corner posts
+                    inward to create a beam overhang past the post. */}
+                {adminMode && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Edge Cantilevers</label>
+                      <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { side: 'left',  label: 'Left Edge',  max: Math.floor(width / 3) },
+                        { side: 'right', label: 'Right Edge', max: Math.floor(width / 3) },
+                        { side: 'back',  label: 'Back Edge',  max: Math.floor(depth / 3) },
+                        { side: 'front', label: 'Front Edge', max: Math.floor(depth / 3) },
+                      ] as const).map(({ side, label, max }) => {
+                        const val = cantileverInsets[side] || 0;
+                        const setVal = (v: number) => {
+                          const next = { ...cantileverInsets };
+                          if (v <= 0) delete next[side];
+                          else next[side] = v;
+                          setCantileverInsets(next);
+                        };
+                        return (
+                          <div key={side} className={`rounded-lg border px-2.5 py-2 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>{label}</span>
+                              <span className="text-[11px] font-serif text-luxury-gold">{val}' inset</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => setVal(Math.max(0, val - 1))}
+                                className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center">
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="range"
+                                min={0}
+                                max={max}
+                                step={1}
+                                value={val}
+                                onChange={(e) => setVal(Number(e.target.value))}
+                                className="flex-1 h-[2px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
+                              />
+                              <button type="button" onClick={() => setVal(Math.min(max, val + 1))}
+                                className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center">
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                      Inset the corner posts inward — the beam stays at the pergola edge, creating a cantilever overhang. Max inset is ⅓ of the edge length.
+                    </p>
+                  </div>
+                )}
 
                 {/* Dimension inputs — typable + slider + ± buttons.
                     Common renderer so we keep consistent behavior across W/D/H. */}
