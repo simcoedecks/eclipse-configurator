@@ -699,6 +699,22 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const defaultMiddleXPostPosition = (i: number) => (width * i) / numBaysX;
   const defaultMiddleZPostPosition = (i: number) => (depth * i) / numBaysZ;
 
+  // Compute the length (ft) of the OPEN portion of a side — the part NOT
+  // covered by a structure (house) wall. Used to price screens/privacy walls
+  // on a side that's partially attached to a building. Declared BEFORE
+  // accessoriesPrice / pdfData because those useMemo factories run
+  // synchronously during render and would otherwise hit a TDZ error.
+  const getSideTotalLength = (side: 'front'|'back'|'left'|'right'): number => {
+    return (side === 'front' || side === 'back') ? width : depth;
+  };
+  const getOpenLengthOnSide = (side: 'front'|'back'|'left'|'right'): number => {
+    const total = getSideTotalLength(side);
+    if (!houseWalls.has(side)) return total;
+    const structLen = houseWallLengths[side];
+    if (structLen === undefined || structLen >= total) return 0;
+    return Math.max(0, total - structLen);
+  };
+
   const accessoriesPrice = useMemo(() => {
     let total = 0;
     const sqft = depth * width;
@@ -1024,21 +1040,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     if (id.endsWith('_left')) return 'left';
     if (id.endsWith('_right')) return 'right';
     return null;
-  };
-
-  // Compute the length (ft) of the OPEN portion of a side — the part NOT
-  // covered by a structure (house) wall. Used to price screens/privacy walls
-  // on a side that's partially attached to a building.
-  const getSideTotalLength = (side: 'front'|'back'|'left'|'right'): number => {
-    return (side === 'front' || side === 'back') ? width : depth;
-  };
-  const getOpenLengthOnSide = (side: 'front'|'back'|'left'|'right'): number => {
-    const total = getSideTotalLength(side);
-    if (!houseWalls.has(side)) return total;
-    const structLen = houseWallLengths[side];
-    // undefined = full side is structure wall → zero open length
-    if (structLen === undefined || structLen >= total) return 0;
-    return Math.max(0, total - structLen);
   };
 
   const getConflictReason = (id: string): 'structure' | 'screen' | null => {
