@@ -2718,8 +2718,14 @@ Total Price: $${grandTotal.toFixed(2)}`;
               ) : (
                 <>
                   {currentUser ? (
-                    <button 
-                      onClick={() => handleSubmission('email')}
+                    <button
+                      onClick={() => {
+                        if (!name || !email || !phone || !city) {
+                          setShowContactModal(true);
+                        } else {
+                          handleSubmission('email');
+                        }
+                      }}
                       disabled={isSubmitting || isGeneratingPDF}
                       className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
