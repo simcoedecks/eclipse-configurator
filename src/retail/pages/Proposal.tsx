@@ -10,6 +10,116 @@ import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
 
+/**
+ * Top-down plan with dimension lines that run edge-to-edge of the
+ * actual rendered pergola. Computes pergola edges using the same
+ * orthographic zoom as PergolaVisualizer (zoom = 300 / max(W, D))
+ * and the measured canvas container dimensions.
+ *
+ * Pergola's ortho viewport:
+ *   viewportWidth_world  = canvasW / zoom
+ *   viewportHeight_world = canvasH / zoom
+ *   pergola is centered at origin, so its screen edges are:
+ *     left   = canvasW/2 - (width / 2) * zoom
+ *     right  = canvasW/2 + (width / 2) * zoom
+ *     top    = canvasH/2 - (depth / 2) * zoom
+ *     bottom = canvasH/2 + (depth / 2) * zoom
+ */
+function TopViewWithDimensions({ visProps }: { visProps: any }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const el = wrapperRef.current;
+    const update = () => setRect({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const maxDim = Math.max(visProps.width, visProps.depth);
+  const zoom = 300 / maxDim;            // matches PergolaVisualizer's ortho
+  const pergolaW = visProps.width * zoom;
+  const pergolaD = visProps.depth * zoom;
+  const leftPx = Math.max(0, rect.w / 2 - pergolaW / 2);
+  const rightPx = Math.min(rect.w, rect.w / 2 + pergolaW / 2);
+  const topPx = Math.max(0, rect.h / 2 - pergolaD / 2);
+  const bottomPx = Math.min(rect.h, rect.h / 2 + pergolaD / 2);
+  // Offsets from the pergola so lines don't overlap the drawing itself
+  const outerOffset = 18; // px
+
+  const ready = rect.w > 0 && rect.h > 0;
+
+  return (
+    <div>
+      <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+        Top-Down Plan · Dimensions
+      </div>
+      <div ref={wrapperRef} className="relative h-[360px] bg-[#f1f5f9]">
+        <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+          <PergolaVisualizer {...visProps} view="top" />
+        </Suspense>
+        {ready && (
+          <div className="absolute inset-0 pointer-events-none">
+            {/* Width dimension — sits above the pergola's top edge */}
+            <div
+              className="absolute"
+              style={{
+                left: leftPx,
+                width: rightPx - leftPx,
+                top: Math.max(4, topPx - outerOffset),
+                height: 1,
+              }}
+            >
+              <div className="relative w-full h-px bg-luxury-black/70">
+                {/* Slash ticks at each end */}
+                <div className="absolute left-0 top-1/2 h-3 w-px bg-luxury-black/70" style={{ transform: 'translate(-50%, -50%) rotate(20deg)' }} />
+                <div className="absolute right-0 top-1/2 h-3 w-px bg-luxury-black/70" style={{ transform: 'translate(50%, -50%) rotate(20deg)' }} />
+                {/* Label centered over the line */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
+                    {visProps.width}'
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Depth dimension — sits to the left of the pergola */}
+            <div
+              className="absolute"
+              style={{
+                top: topPx,
+                height: bottomPx - topPx,
+                left: Math.max(4, leftPx - outerOffset),
+                width: 1,
+              }}
+            >
+              <div className="relative h-full w-px bg-luxury-black/70">
+                <div className="absolute top-0 left-1/2 w-3 h-px bg-luxury-black/70" style={{ transform: 'translate(-50%, -50%) rotate(20deg)' }} />
+                <div className="absolute bottom-0 left-1/2 w-3 h-px bg-luxury-black/70" style={{ transform: 'translate(-50%, 50%) rotate(20deg)' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
+                    {visProps.depth}'
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Height callout — top-down view can't show height, so it's a separate badge */}
+            <div className="absolute bottom-3 right-3">
+              <span className="px-3 py-1 bg-white/90 border border-luxury-gold/40 rounded text-[11px] font-bold text-luxury-black shadow-sm">
+                Height {visProps.height}'
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Public customer-facing proposal view — accessed by token in URL.
  *  Phase 1: read-only mirror of the PDF content.
  *  Later phases will add: interactive upgrade toggles, e-signature, admin analytics.
@@ -442,63 +552,7 @@ export default function Proposal() {
                 </div>
               </div>
               {/* Top-down plan with overlaid dimensions */}
-              <div>
-                <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                  Top-Down Plan · Dimensions
-                </div>
-                <div className="relative h-[360px] bg-[#f1f5f9]">
-                  <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                    <PergolaVisualizer {...visProps} view="top" />
-                  </Suspense>
-                  {/* Architectural-style dimension lines layered over the
-                      top view — full-span lines with slash tick marks at
-                      each end (like a blueprint). The labels sit over
-                      the dimension line center. */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* Width dimension — horizontal line spanning top of pergola,
-                        tight to the actual footprint (left 10% → right 90%) */}
-                    <div className="absolute left-[10%] right-[10%] top-5">
-                      {/* the line */}
-                      <div className="relative h-px bg-luxury-black/60 w-full">
-                        {/* Left slash tick */}
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-3 bg-luxury-black/60" style={{ transform: 'translateY(-50%) rotate(20deg)' }} />
-                        {/* Right slash tick */}
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-3 bg-luxury-black/60" style={{ transform: 'translateY(-50%) rotate(20deg)' }} />
-                        {/* Width label sits over the line */}
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                          <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
-                            {visProps.width}'
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Depth dimension — vertical line spanning left of pergola,
-                        tight to the footprint (top 10% → bottom 90%) */}
-                    <div className="absolute top-[10%] bottom-[10%] left-5">
-                      <div className="relative w-px bg-luxury-black/60 h-full">
-                        {/* Top slash tick */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3 bg-luxury-black/60" style={{ transform: 'translateX(-50%) rotate(20deg)' }} />
-                        {/* Bottom slash tick */}
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px w-3 bg-luxury-black/60" style={{ transform: 'translateX(-50%) rotate(20deg)' }} />
-                        {/* Depth label */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                          <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
-                            {visProps.depth}'
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Height callout — bottom-right corner, separate (top view doesn't show height) */}
-                    <div className="absolute bottom-3 right-3">
-                      <span className="px-3 py-1 bg-white/90 border border-luxury-gold/40 rounded text-[11px] font-bold text-luxury-black shadow-sm">
-                        Height {visProps.height}'
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <TopViewWithDimensions visProps={visProps} />
             </section>
           );
         })()}
