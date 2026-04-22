@@ -3735,63 +3735,64 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       </button>
                     </div>
 
-                    {/* Admin-only: Save + Download Customer-View PDF.
-                        Triggers a regular submission, then opens the proposal
-                        URL with ?auto=1 to kick off a download of the customer
-                        view. */}
+                    {/* Admin-only: Download Customer PDF (no submission,
+                        no customer-info required). Renders the internal
+                        ProposalDocument offscreen using the live pdfData
+                        and stitches it into a PDF for instant download.
+                        Saves nothing to Firestore. */}
                     {adminMode && (
                       <div className={`pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3 ${isDark ? 'text-white/80' : 'text-luxury-black/80'}`}>
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Preview as Customer</span>
                           <span className={`text-[9px] italic ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                            Saves to CRM and downloads the customer-view PDF in a new tab.
+                            Customer info optional — downloads a preview PDF without saving to the CRM.
                           </span>
                         </div>
                         <button
                           type="button"
-                          disabled={isSubmitting || isGeneratingPDF}
+                          disabled={isGeneratingPDF}
                           onClick={async () => {
-                            if (!name || !email || !phone || !city) {
-                              setShowContactModal(true);
-                              toast.info('Fill in customer info, then submit — the proposal will auto-download.');
-                              return;
-                            }
-                            // Subscribe to the next state change where submissionId is available
-                            // — handleSubmission stores submissionId in a local var, not state.
-                            // Simplest path: submit, then grab the latest submission by email.
+                            if (isGeneratingPDF) return;
+                            setIsGeneratingPDF(true);
                             try {
-                              await handleSubmission('email');
-                              // After a short delay, find the most recent submission for this email
-                              setTimeout(async () => {
-                                try {
-                                  const q = query(
-                                    collection(db, 'submissions'),
-                                    where('email', '==', email),
-                                  );
-                                  const snap = await getDocs(q);
-                                  let latest: any = null;
-                                  snap.forEach(d => {
-                                    const data = d.data();
-                                    const ts = data.createdAt?.toMillis?.() || 0;
-                                    if (!latest || ts > (latest.ts || 0)) latest = { id: d.id, ts };
-                                  });
-                                  if (latest?.id) {
-                                    window.open(`/proposal/${latest.id}?auto=1`, '_blank');
-                                  } else {
-                                    toast.error("Couldn't find the saved submission to open — check CRM.");
-                                  }
-                                } catch (err) {
-                                  console.error('Proposal-lookup failed', err);
-                                  toast.error('Open the submission from /admin to download the customer view.');
-                                }
-                              }, 1500);
-                            } catch (err) {
-                              console.error('Submit for customer-view PDF failed', err);
+                              // Give the proposal preview render a beat
+                              await new Promise(r => setTimeout(r, 1500));
+                              const pdf = new jsPDF('p', 'mm', 'a4');
+                              const pages = document.querySelectorAll('.pdf-page');
+                              if (pages.length === 0) {
+                                toast.error('No proposal pages to render. Fill in at least a dimension.');
+                                return;
+                              }
+                              for (let i = 0; i < pages.length; i++) {
+                                if (i > 0) pdf.addPage();
+                                const el = pages[i] as HTMLElement;
+                                const isRenderingPage = el.textContent?.includes('Renderings');
+                                const imgData = isRenderingPage
+                                  ? await toJpeg(el, { pixelRatio: 3, quality: 0.92, backgroundColor: '#ffffff' })
+                                  : await toPng(el, { pixelRatio: 3 });
+                                const props = pdf.getImageProperties(imgData);
+                                const pdfW = pdf.internal.pageSize.getWidth();
+                                const pdfH = pdf.internal.pageSize.getHeight();
+                                const imgRatio = props.width / props.height;
+                                const pageRatio = pdfW / pdfH;
+                                let w = pdfW, h = pdfH, x = 0, y = 0;
+                                if (imgRatio > pageRatio) { h = pdfW / imgRatio; y = (pdfH - h) / 2; }
+                                else { w = pdfH * imgRatio; x = (pdfW - w) / 2; }
+                                pdf.addImage(imgData, isRenderingPage ? 'JPEG' : 'PNG', x, y, w, h);
+                              }
+                              const safeName = (name || 'Preview').replace(/\s+/g, '_');
+                              pdf.save(`Eclipse_Proposal_${safeName}.pdf`);
+                              toast.success('Customer PDF downloaded');
+                            } catch (err: any) {
+                              console.error('PDF generation failed', err);
+                              toast.error(`PDF generation failed: ${err?.message || 'unknown error'}`);
+                            } finally {
+                              setIsGeneratingPDF(false);
                             }
                           }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-black/90 whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          {isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                           Download Customer PDF
                         </button>
                       </div>
