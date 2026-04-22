@@ -1375,11 +1375,15 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         // variants. Each tier strips more fields so submissions survive
         // even if rules are tighter than expected. The lead is always
         // saved — no silent drops.
+        console.log('[submissions] starting write. Payload keys:', Object.keys(cleanPayload));
         const submitWithFallback = async () => {
           // Tier 1 — full modern payload
           try {
-            return await addDoc(collection(db, 'submissions'), cleanPayload);
+            const ref = await addDoc(collection(db, 'submissions'), cleanPayload);
+            console.log('[submissions] tier-1 SUCCESS → doc id:', ref.id);
+            return ref;
           } catch (err: any) {
+            console.error('[submissions] tier-1 error:', { code: err?.code, message: err?.message, full: err });
             if (err?.code !== 'permission-denied') throw err;
             console.warn('[submissions] tier-1 permission-denied, trying tier-2 minimal payload');
           }
@@ -1415,8 +1419,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               dealerName: cleanPayload.dealerName,
               createdAt: cleanPayload.createdAt,
             };
-            return await addDoc(collection(db, 'submissions'), stripUndefined(minimal));
+            const ref = await addDoc(collection(db, 'submissions'), stripUndefined(minimal));
+            console.log('[submissions] tier-2 SUCCESS → doc id:', ref.id);
+            return ref;
           } catch (err: any) {
+            console.error('[submissions] tier-2 error:', { code: err?.code, message: err?.message, full: err });
             if (err?.code !== 'permission-denied') throw err;
             console.warn('[submissions] tier-2 permission-denied, trying tier-3 barebones payload — lead WILL be saved');
           }
@@ -1452,7 +1459,33 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               },
             },
           });
-          return await addDoc(collection(db, 'submissions'), barebones);
+          try {
+            const ref = await addDoc(collection(db, 'submissions'), barebones);
+            console.log('[submissions] tier-3 SUCCESS → doc id:', ref.id);
+            return ref;
+          } catch (err: any) {
+            console.error('[submissions] tier-3 FINAL FAILURE:', { code: err?.code, message: err?.message, full: err });
+            console.error(`
+===============================================================
+  ALL THREE FALLBACK TIERS FAILED WITH permission-denied.
+  This means the deployed Firestore rules are blocking even a
+  minimal 4-field write. The most likely cause is rules not
+  being deployed to the named database the app reads from.
+
+  Expected database: ai-studio-50a4e31b-a41e-4089-bd4a-7641dbcbf9bf
+  Project: gen-lang-client-0219790250
+
+  FIX: Open the Firebase Console rules page for the named
+  database and paste the rules from firestore.rules. Or run:
+
+    firebase deploy --only firestore:rules --project gen-lang-client-0219790250
+
+  If you have multiple databases, you may need to update
+  firebase.json to target the named database explicitly.
+===============================================================
+            `);
+            throw err;
+          }
         };
         const submissionRef = await submitWithFallback();
         submissionId = submissionRef.id;
