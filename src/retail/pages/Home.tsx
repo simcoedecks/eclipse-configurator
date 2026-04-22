@@ -914,6 +914,50 @@ Total Price: $${grandTotal.toFixed(2)}`;
     }
   }, [debouncedConfig, auth.currentUser]);
 
+  // Snapshot the current pergola into extraPergolas and restart the
+  // configurator at Phase 1 (dimensions). Customer info is preserved.
+  const saveAndStartAnotherPergola = () => {
+    const snapshotAccessories = (pdfData.accessories || []).map((a: any) => ({
+      id: a.id || a.name || `acc-${Math.random().toString(36).slice(2, 8)}`,
+      name: a.name || '',
+      cost: typeof a.cost === 'number' ? a.cost : 0,
+      quantity: a.quantity || 1,
+    }));
+    const snapshotTotal = (totalPrice || 0);
+    const snapshot: AdditionalPergolaItem = {
+      id: `pergola-${Date.now()}`,
+      label: `Pergola ${extraPergolas.length + 1}`,
+      width, depth, height,
+      frameColor: getColorName(frameColor),
+      louverColor: getColorName(louverColor),
+      lineItems: snapshotAccessories,
+      price: snapshotTotal,
+    };
+    setExtraPergolas([...extraPergolas, snapshot]);
+
+    // Reset configuration state, but keep customer info (name/email/etc.)
+    setDepth(16);
+    setWidth(12);
+    setHeight(9);
+    setFrameColor('#0A0A0A');
+    setLouverColor('#F6F6F6');
+    setLouverAngle(60);
+    setScreenDrop(100);
+    setGuillotineOpen(0);
+    setHouseWalls(new Set());
+    setSelectedAccessories(new Set());
+    setAccessoryQuantities({});
+    setWallColor('#0A0A0A');
+    setHouseWallColor('#82A0C2');
+    setHeaterControl('switch');
+    setCustomModels({});
+    setFoundationStatus('');
+    setShowFoundationError(false);
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast.success(`${snapshot.label} saved — let's build the next one.`);
+  };
+
   const handleSubmission = async (type: 'email' | 'consultation') => {
     setIsSubmitting(true);
     let finalLeadId = leadId;
@@ -1775,7 +1819,14 @@ Total Price: $${grandTotal.toFixed(2)}`;
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">Phase {currentStep} / 5</span>
+              <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">
+                Phase {currentStep} / 5
+                {extraPergolas.length > 0 && (
+                  <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[9px] tracking-wider ${isDark ? 'bg-luxury-gold/20 text-luxury-gold' : 'bg-luxury-gold/15 text-luxury-gold'}`}>
+                    Pergola {extraPergolas.length + 1}
+                  </span>
+                )}
+              </span>
               <span className={`text-xs font-serif font-medium truncate ml-2 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
                 {currentStep === 1 && <span className="text-base sm:text-lg">Define your space</span>}
                 {currentStep === 2 && <span className="text-base sm:text-lg">The Palette</span>}
@@ -2435,7 +2486,7 @@ Total Price: $${grandTotal.toFixed(2)}`;
                         </span>
                         <button
                           type="button"
-                          onClick={() => { setEditingPergola(null); setAddPergolaModalOpen(true); }}
+                          onClick={saveAndStartAnotherPergola}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-gold/90"
                         >
                           <Plus className="w-3 h-3" />
