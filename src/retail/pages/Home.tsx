@@ -2648,9 +2648,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   );
                 })()}
 
-                {/* Edge Cantilevers — admin-only. Move corner posts
-                    inward to create a beam overhang past the post. */}
-                {adminMode && (
+                {/* Edge Cantilevers — hidden. Functionality superseded
+                    by the Corner Post Adjustments section below. */}
+                {false && adminMode && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Edge Cantilevers</label>
@@ -2666,15 +2666,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         const val = cantileverInsets[side] || 0;
                         const setVal = (v: number) => {
                           const next = { ...cantileverInsets };
-                          if (v === 0) delete next[side];
+                          if (v <= 0) delete next[side];
                           else next[side] = v;
                           setCantileverInsets(next);
                         };
-                        const readout = val > 0
-                          ? `${val}' inset`
-                          : val < 0
-                            ? `${Math.abs(val)}' out`
-                            : 'Default';
+                        const readout = val > 0 ? `${val}' inset` : 'Default';
                         return (
                           <div key={side} className={`rounded-lg border px-2.5 py-2 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
                             <div className="flex items-center justify-between mb-1.5">
@@ -2682,13 +2678,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                               <span className="text-[11px] font-serif text-luxury-gold">{readout}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => setVal(Math.max(-axisMax, val - 1))}
+                              <button type="button" onClick={() => setVal(Math.max(0, val - 1))}
                                 className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center">
                                 <Minus className="w-3 h-3" />
                               </button>
                               <input
                                 type="range"
-                                min={-axisMax}
+                                min={0}
                                 max={axisMax}
                                 step={1}
                                 value={val}
@@ -2710,53 +2706,60 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   </div>
                 )}
 
-                {/* Per-Corner Posts — fine-tune each corner independently
-                    in both X and Z. Layers on top of Edge Cantilevers
-                    above. Admin only. */}
+                {/* Corner Post Adjustments — admin only. Inset each
+                    corner post inward (toward pergola center) in both X
+                    and Z. Beams stay at the pergola edge, creating a
+                    cantilever overhang on each affected side. */}
                 {adminMode && (() => {
-                  const corners: Array<{ key: string; label: string; gridRow: number; gridCol: number }> = [
-                    { key: 'back-left',   label: 'Back-Left',   gridRow: 1, gridCol: 1 },
-                    { key: 'back-right',  label: 'Back-Right',  gridRow: 1, gridCol: 2 },
-                    { key: 'front-left',  label: 'Front-Left',  gridRow: 2, gridCol: 1 },
-                    { key: 'front-right', label: 'Front-Right', gridRow: 2, gridCol: 2 },
+                  // Each corner gets inward-only directions. Sign is
+                  // applied automatically based on which corner.
+                  const corners: Array<{
+                    key: string; label: string;
+                    xSign: 1 | -1;  // sign applied to X inset to move toward center
+                    zSign: 1 | -1;  // sign applied to Z inset to move toward center
+                    xInwardLabel: string; zInwardLabel: string;
+                  }> = [
+                    { key: 'back-left',   label: 'Back-Left',   xSign:  1, zSign:  1, xInwardLabel: 'Right', zInwardLabel: 'Front' },
+                    { key: 'back-right',  label: 'Back-Right',  xSign: -1, zSign:  1, xInwardLabel: 'Left',  zInwardLabel: 'Front' },
+                    { key: 'front-left',  label: 'Front-Left',  xSign:  1, zSign: -1, xInwardLabel: 'Right', zInwardLabel: 'Back'  },
+                    { key: 'front-right', label: 'Front-Right', xSign: -1, zSign: -1, xInwardLabel: 'Left',  zInwardLabel: 'Back'  },
                   ];
-                  const maxX = Math.floor(width / 3);
-                  const maxZ = Math.floor(depth / 3);
+                  const maxX = Math.max(0, Math.floor(width / 3));
+                  const maxZ = Math.max(0, Math.floor(depth / 3));
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Corner Posts (Per-Corner)</label>
-                        <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Corner Post Adjustments</label>
+                        <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin cantilever</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        {corners.map(({ key, label }) => {
+                        {corners.map(({ key, label, xSign, zSign, xInwardLabel, zInwardLabel }) => {
                           const off = cornerPostOffsets[key] || {};
-                          const dx = off.x || 0;
-                          const dz = off.z || 0;
+                          // Stored offsets are already signed (post-center coordinates).
+                          // Convert back to unsigned "inset amount" for the UI.
+                          const xInset = Math.max(0, (off.x || 0) * xSign);
+                          const zInset = Math.max(0, (off.z || 0) * zSign);
                           const isSelected = selectedCorner === key;
-                          const setOff = (delta: Partial<{ x: number; z: number }>) => {
-                            const next = { ...(cornerPostOffsets[key] || {}) };
-                            if ('x' in delta) {
-                              const nx = Math.max(-maxX, Math.min(maxX, (next.x || 0) + (delta.x || 0)));
-                              if (nx === 0) delete next.x; else next.x = nx;
-                            }
-                            if ('z' in delta) {
-                              const nz = Math.max(-maxZ, Math.min(maxZ, (next.z || 0) + (delta.z || 0)));
-                              if (nz === 0) delete next.z; else next.z = nz;
-                            }
+                          const writeOffset = (nextX: number, nextZ: number) => {
+                            const clampedX = Math.max(0, Math.min(maxX, nextX));
+                            const clampedZ = Math.max(0, Math.min(maxZ, nextZ));
                             const out = { ...cornerPostOffsets };
-                            if (!next.x && !next.z) delete out[key];
-                            else out[key] = next;
+                            if (clampedX === 0 && clampedZ === 0) {
+                              delete out[key];
+                            } else {
+                              out[key] = {
+                                ...(clampedX === 0 ? {} : { x: clampedX * xSign }),
+                                ...(clampedZ === 0 ? {} : { z: clampedZ * zSign }),
+                              };
+                            }
                             setCornerPostOffsets(out);
                           };
-                          const reset = () => {
-                            const out = { ...cornerPostOffsets };
-                            delete out[key];
-                            setCornerPostOffsets(out);
-                          };
-                          const readout = (dx === 0 && dz === 0)
+                          const nudgeX = (delta: number) => writeOffset(xInset + delta, zInset);
+                          const nudgeZ = (delta: number) => writeOffset(xInset, zInset + delta);
+                          const reset = () => writeOffset(0, 0);
+                          const readout = (xInset === 0 && zInset === 0)
                             ? 'Default'
-                            : `${dx !== 0 ? `X ${dx > 0 ? '+' : ''}${dx}'` : ''}${dx !== 0 && dz !== 0 ? ' · ' : ''}${dz !== 0 ? `Z ${dz > 0 ? '+' : ''}${dz}'` : ''}`;
+                            : [xInset > 0 && `${xInset}' ${xInwardLabel}`, zInset > 0 && `${zInset}' ${zInwardLabel}`].filter(Boolean).join(' · ');
                           return (
                             <div
                               key={key}
@@ -2769,35 +2772,33 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             >
                               <div className="flex items-center justify-between mb-1">
                                 <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>{label}</span>
-                                <span className={`text-[10px] font-serif ${(dx === 0 && dz === 0) ? (isDark ? 'text-white/30' : 'text-luxury-black/30') : 'text-luxury-gold'}`}>{readout}</span>
+                                <span className={`text-[10px] font-serif ${(xInset === 0 && zInset === 0) ? (isDark ? 'text-white/30' : 'text-luxury-black/30') : 'text-luxury-gold'}`}>{readout}</span>
                               </div>
                               {isSelected && (
                                 <div className="pt-1 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                                  {/* X axis — left/right */}
                                   <div className="flex items-center gap-1">
-                                    <span className={`w-3 text-[9px] font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>X</span>
-                                    <button type="button" onClick={() => setOff({ x: -1 })}
-                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
-                                      ◀ Left 1'
+                                    <button type="button" onClick={() => nudgeX(-1)} disabled={xInset <= 0}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                      −1'
                                     </button>
-                                    <button type="button" onClick={() => setOff({ x: 1 })}
-                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
-                                      Right 1' ▶
+                                    <span className={`flex-1 text-center text-[10px] font-bold ${isDark ? 'text-white/70' : 'text-luxury-black/70'}`}>{xInset}' {xInwardLabel}</span>
+                                    <button type="button" onClick={() => nudgeX(1)} disabled={xInset >= maxX}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                      +1'
                                     </button>
                                   </div>
-                                  {/* Z axis — front/back */}
                                   <div className="flex items-center gap-1">
-                                    <span className={`w-3 text-[9px] font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>Z</span>
-                                    <button type="button" onClick={() => setOff({ z: -1 })}
-                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
-                                      ◀ Back 1'
+                                    <button type="button" onClick={() => nudgeZ(-1)} disabled={zInset <= 0}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                      −1'
                                     </button>
-                                    <button type="button" onClick={() => setOff({ z: 1 })}
-                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
-                                      Front 1' ▶
+                                    <span className={`flex-1 text-center text-[10px] font-bold ${isDark ? 'text-white/70' : 'text-luxury-black/70'}`}>{zInset}' {zInwardLabel}</span>
+                                    <button type="button" onClick={() => nudgeZ(1)} disabled={zInset >= maxZ}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                      +1'
                                     </button>
                                   </div>
-                                  {(dx !== 0 || dz !== 0) && (
+                                  {(xInset > 0 || zInset > 0) && (
                                     <button type="button" onClick={reset}
                                       className="w-full py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
                                       ⟲ Reset Corner
@@ -2810,7 +2811,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         })}
                       </div>
                       <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                        Click a corner to select, then nudge it freely in X (left/right) and Z (back/front). Stacks on top of Edge Cantilevers above.
+                        Click a corner, then inset it inward along either axis. The beam stays at the pergola edge — the post slides under it. Max inset ⅓ of each edge.
                       </p>
                     </div>
                   );
