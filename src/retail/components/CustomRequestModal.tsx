@@ -41,6 +41,8 @@ export default function CustomRequestModal({
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
   const [description, setDescription] = useState('');
+  const [heardAbout, setHeardAbout] = useState('');
+  const [heardAboutOther, setHeardAboutOther] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -96,6 +98,9 @@ export default function CustomRequestModal({
     }
     setSubmitting(true);
     try {
+      const heardAboutValue = heardAbout === 'Other' && heardAboutOther.trim()
+        ? `Other: ${heardAboutOther.trim()}`
+        : heardAbout || null;
       // Create the doc first so we have an ID to scope uploads under.
       const docRef = await addDoc(collection(db, 'submissions'), {
         name: name.trim(),
@@ -106,6 +111,7 @@ export default function CustomRequestModal({
         type: 'custom-request',
         customRequest: true,
         customRequestNotes: description.trim(),
+        heardAbout: heardAboutValue,
         attachments: [],
         pipelineStage: 'new',
         viewedAt: null,
@@ -315,6 +321,40 @@ export default function CustomRequestModal({
                   <input type="text" value={city} onChange={e => setCity(e.target.value)}
                     className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'border-slate-300'}`} placeholder="Toronto" />
                 </div>
+              </div>
+
+              <div>
+                <label className={`block text-[10px] uppercase tracking-widest font-bold mb-1.5 ${isDark ? 'text-white/60' : 'text-luxury-black/50'}`}>
+                  How did you hear about us?
+                </label>
+                <select
+                  value={heardAbout}
+                  onChange={e => { setHeardAbout(e.target.value); if (e.target.value !== 'Other') setHeardAboutOther(''); }}
+                  className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white' : 'border-slate-300'}`}
+                >
+                  <option value="">Select an option</option>
+                  <option value="Google Search">Google search</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="Facebook">Facebook</option>
+                  <option value="TikTok">TikTok</option>
+                  <option value="YouTube">YouTube</option>
+                  <option value="Friend / Referral">Friend or referral</option>
+                  <option value="Home Show / Event">Home show or event</option>
+                  <option value="Dealer / Contractor">Dealer or contractor</option>
+                  <option value="Saw an Installation">Saw one installed</option>
+                  <option value="Print / Magazine">Print or magazine</option>
+                  <option value="Radio / Podcast">Radio or podcast</option>
+                  <option value="Other">Other</option>
+                </select>
+                {heardAbout === 'Other' && (
+                  <input
+                    type="text"
+                    value={heardAboutOther}
+                    onChange={e => setHeardAboutOther(e.target.value)}
+                    placeholder="Please specify…"
+                    className={`mt-2 w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold outline-none ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 placeholder:text-slate-400'}`}
+                  />
+                )}
               </div>
 
               <div className="flex gap-2 pt-3">

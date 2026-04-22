@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout']) &&
              data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&

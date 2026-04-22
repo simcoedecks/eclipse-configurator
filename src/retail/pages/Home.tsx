@@ -376,6 +376,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
     setEmail('');
     setAddress('');
     setCity('');
+    setHeardAbout('');
+    setHeardAboutOther('');
     // For the full flow, return to welcome screen. For /configurator, stay in builder.
     if (!skipIntro) {
       setHasStarted(false);
@@ -396,6 +398,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [heardAbout, setHeardAbout] = useState('');
+  const [heardAboutOther, setHeardAboutOther] = useState('');
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -1008,12 +1012,16 @@ Total Price: $${grandTotal.toFixed(2)}`;
       };
       const summaryText = getQuoteSummary();
       try {
+        const heardAboutValue = heardAbout === 'Other' && heardAboutOther.trim()
+          ? `Other: ${heardAboutOther.trim()}`
+          : heardAbout || null;
         const submissionRef = await addDoc(collection(db, 'submissions'), {
           ...baseData,
           contractorId,
           isDuplicate: isDuplicateLead,
           pricingBreakdown,
           additionalPergolas: extraPergolas,
+          heardAbout: heardAboutValue,
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
@@ -2983,6 +2991,37 @@ Total Price: $${grandTotal.toFixed(2)}`;
                     <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>City *</label>
                     <input type="text" required value={city} onChange={e => setCity(e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 dark:border-white/15'}`} placeholder="Toronto" />
                   </div>
+                </div>
+                <div>
+                  <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>How did you hear about us?</label>
+                  <select
+                    value={heardAbout}
+                    onChange={e => { setHeardAbout(e.target.value); if (e.target.value !== 'Other') setHeardAboutOther(''); }}
+                    className={`w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white' : 'border-slate-300'}`}
+                  >
+                    <option value="">Select an option</option>
+                    <option value="Google Search">Google search</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="YouTube">YouTube</option>
+                    <option value="Friend / Referral">Friend or referral</option>
+                    <option value="Home Show / Event">Home show or event</option>
+                    <option value="Dealer / Contractor">Dealer or contractor</option>
+                    <option value="Saw an Installation">Saw one installed</option>
+                    <option value="Print / Magazine">Print or magazine</option>
+                    <option value="Radio / Podcast">Radio or podcast</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {heardAbout === 'Other' && (
+                    <input
+                      type="text"
+                      value={heardAboutOther}
+                      onChange={e => setHeardAboutOther(e.target.value)}
+                      placeholder="Please specify…"
+                      className={`mt-2 w-full px-3 py-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 placeholder:text-slate-400'}`}
+                    />
+                  )}
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button

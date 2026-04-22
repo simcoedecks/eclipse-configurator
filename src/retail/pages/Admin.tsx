@@ -956,6 +956,12 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                     <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${sub.email}`} className="hover:underline">{sub.email}</a></div>
                     {sub.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${sub.phone}`} className="hover:underline">{sub.phone}</a></div>}
                     {(sub.address || sub.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span>{[sub.address, sub.city].filter(Boolean).join(', ')}</span></div>}
+                    {sub.heardAbout && (
+                      <div className="flex items-start gap-2 text-xs text-gray-500 pt-1">
+                        <span className="uppercase tracking-widest font-bold text-[9px] text-gray-400 shrink-0">Heard via</span>
+                        <span className="text-gray-700">{sub.heardAbout}</span>
+                      </div>
+                    )}
                   </div>
                 </section>
                 <section className="grid grid-cols-2 gap-3">
