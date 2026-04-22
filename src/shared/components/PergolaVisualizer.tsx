@@ -583,9 +583,10 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   const numBaysX = Math.ceil(width / maxLouverSpan);
   const numBaysZ = Math.ceil(depth / maxDepthSpan);
   
-  const hasMiddlePosts = (width * depth > 260);
-  const needsMiddlePostX = (hasMiddlePosts && numBaysX > 1) || width > 20;
-  const needsMiddlePostZ = (hasMiddlePosts && numBaysZ > 1) || depth > 20;
+  // Middle support posts only appear once a beam spans more than 20'.
+  // Below that, louver-bay splits are structural only (no extra post).
+  const needsMiddlePostX = width > 20;
+  const needsMiddlePostZ = depth > 20;
 
   const postCentersX = Array.from({ length: numBaysX + 1 }).map((_, i) => -xOffset + i * ((width - postSize) / numBaysX));
   const postCentersZ = Array.from({ length: numBaysZ + 1 }).map((_, i) => -zOffset + i * ((depth - postSize) / numBaysZ));
