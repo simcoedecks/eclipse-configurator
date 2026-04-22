@@ -715,11 +715,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const hasMiddlePosts = (width * depth > 260);
   const numBaysX = Math.ceil(width / maxLouverSpanOverride);
   const numBaysZ = Math.ceil(depth / maxBaySpanOverride);
-  const numScreenBaysX = (hasMiddlePosts && numBaysX > 1) || width > maxBaySpanOverride ? numBaysX : 1;
-  const numScreenBaysZ = (hasMiddlePosts && numBaysZ > 1) || depth > maxBaySpanOverride ? numBaysZ : 1;
   // Which axes have middle posts — depends on override threshold.
+  // A screen/wall is only split into multiple bays when there's an
+  // actual physical post to anchor it; the louver-bay count alone
+  // shouldn't force a screen split.
   const hasMiddleXPost = width > maxBaySpanOverride;
   const hasMiddleZPost = depth > maxBaySpanOverride;
+  const numScreenBaysX = hasMiddleXPost ? numBaysX : 1;
+  const numScreenBaysZ = hasMiddleZPost ? numBaysZ : 1;
   /** Default X position of middle post at index i (1..numBaysX-1),
    *  relative to the left edge (x=0 at left, x=width at right). */
   const defaultMiddleXPostPosition = (i: number) => (width * i) / numBaysX;

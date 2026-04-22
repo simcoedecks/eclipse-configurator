@@ -6,6 +6,8 @@ import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
+import { ACCESSORIES } from '../../shared/lib/accessories';
+import { calculateScreenPrice } from '../../shared/lib/pricing';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -117,6 +119,161 @@ function TopViewWithDimensions({ visProps }: { visProps: any }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Popular Add-Ons — shown at the bottom of the proposal for items
+ * the customer hasn't selected yet. Each item is selectable via a
+ * checkbox; a "Request These Upgrades" button opens an email to
+ * sales with the customer's name + list of selected items and their
+ * calculated prices for this pergola.
+ *
+ * No Firestore write — the upgrade request flows as an email so it
+ * doesn't require a rule change. Sales can then add the items via
+ * the CRM Pricing Editor or by having the customer re-accept.
+ */
+function PopularAddOns({ submission }: { submission: any }) {
+  const cfg = submission?.configuration || {};
+  const width = Number(cfg.width) || 0;
+  const depth = Number(cfg.depth) || 0;
+  const height = Number(cfg.height) || 9;
+  if (!width || !depth) return null;
+
+  // Work out what's already selected
+  const selectedIds = new Set<string>();
+  if (Array.isArray(cfg.accessoryIds)) cfg.accessoryIds.forEach((id: string) => selectedIds.add(id));
+  else if (Array.isArray(cfg.accessories)) {
+    for (const name of cfg.accessories) {
+      const bare = String(name).split(' × ')[0];
+      const hit = ACCESSORIES.find(a => a.name === bare);
+      if (hit) selectedIds.add(hit.id);
+    }
+  }
+
+  const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+  const unused = ACCESSORIES
+    .filter(a => !selectedIds.has(a.id))
+    .map(a => {
+      let price = 0;
+      if (a.type === 'flat') price = a.price;
+      else if (a.type === 'sqft') price = a.price * (width * depth);
+      else if (a.type === 'screen_width') price = calculateScreenPrice(width, height, Math.ceil(width / 13));
+      else if (a.type === 'screen_depth') price = calculateScreenPrice(depth, height, Math.ceil(depth / 20));
+      else if (a.type === 'wall_width') price = width * height * wallUnitPrice;
+      else if (a.type === 'wall_depth') price = depth * height * wallUnitPrice;
+      return { id: a.id, name: a.name, description: a.description, price };
+    })
+    .filter(a => a.price > 0);
+
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [sent, setSent] = useState(false);
+
+  if (unused.length === 0) return null;
+
+  const toggle = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setPicked(next);
+  };
+
+  const pickedItems = unused.filter(u => picked.has(u.id));
+  const pickedTotal = pickedItems.reduce((s, i) => s + i.price, 0);
+
+  const sendRequest = () => {
+    if (pickedItems.length === 0) return;
+    const subject = `Upgrade Request — ${submission.name || 'Proposal'} ${typeof submission.jobNumber === 'number' ? `(Job #${submission.jobNumber})` : ''}`;
+    const body = [
+      `Hi Eclipse team,`,
+      ``,
+      `I'd like to add the following upgrades to my pergola proposal:`,
+      ``,
+      ...pickedItems.map(i => `  • ${i.name} — $${Math.round(i.price).toLocaleString()}`),
+      ``,
+      `Upgrade subtotal: $${Math.round(pickedTotal).toLocaleString()}`,
+      ``,
+      `Proposal link: ${typeof window !== 'undefined' ? window.location.href.split('?')[0] : ''}`,
+      ``,
+      `Thank you,`,
+      `${submission.name || ''}`,
+    ].join('\n');
+    const mailto = `mailto:info@eclipsepergola.ca?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
+    setSent(true);
+  };
+
+  return (
+    <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-1">Popular Add-Ons</p>
+          <h2 className="text-xl font-serif text-luxury-black">Make It Yours</h2>
+          <p className="text-sm text-gray-500 mt-1 max-w-xl">
+            Upgrades others frequently add after seeing their pergola come together. Select any you'd like us to include and we'll send a revised quote.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {unused.map(item => {
+          const isPicked = picked.has(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => toggle(item.id)}
+              className={`text-left rounded-xl border transition-all p-4 flex items-start gap-3 ${
+                isPicked
+                  ? 'border-luxury-gold bg-luxury-gold/5 ring-1 ring-luxury-gold'
+                  : 'border-luxury-cream bg-white hover:border-luxury-gold/50 hover:bg-luxury-gold/[0.02]'
+              }`}
+            >
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                isPicked ? 'border-luxury-gold bg-luxury-gold' : 'border-slate-300'
+              }`}>
+                {isPicked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-sm font-semibold text-luxury-black">{item.name}</p>
+                  <span className="text-sm font-bold text-luxury-gold whitespace-nowrap">
+                    +${Math.round(item.price).toLocaleString()}
+                  </span>
+                </div>
+                {item.description && (
+                  <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{item.description}</p>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {pickedItems.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-luxury-cream flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+              {pickedItems.length} upgrade{pickedItems.length === 1 ? '' : 's'} selected
+            </p>
+            <p className="text-xl font-serif text-luxury-black mt-0.5">
+              +${Math.round(pickedTotal).toLocaleString()}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={sendRequest}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-luxury-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-luxury-black/90"
+          >
+            {sent ? 'Request sent ✓' : 'Request These Upgrades'}
+          </button>
+        </div>
+      )}
+      {pickedItems.length === 0 && (
+        <p className="mt-5 text-[11px] italic text-gray-400 text-center">
+          Select one or more items above to request a revised quote.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -737,6 +894,12 @@ export default function Proposal() {
             <p className="text-xs text-white/70 mt-1">From cleared deposit</p>
           </div>
         </section>
+
+        {/* Popular Add-Ons — items not already in the quote that the
+            customer can request. Computes from ACCESSORIES minus what
+            the submission has saved. "Add to my quote" emails the sales
+            team with the customer's selections. */}
+        <PopularAddOns submission={data} />
 
         {/* Acceptance Section */}
         {data.acceptance?.signedAt ? (
