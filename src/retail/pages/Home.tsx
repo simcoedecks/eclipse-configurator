@@ -22,7 +22,8 @@ import {
   Minus,
   Loader2,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
@@ -3733,6 +3734,68 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         Add Another Pergola
                       </button>
                     </div>
+
+                    {/* Admin-only: Save + Download Customer-View PDF.
+                        Triggers a regular submission, then opens the proposal
+                        URL with ?auto=1 to kick off a download of the customer
+                        view. */}
+                    {adminMode && (
+                      <div className={`pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3 ${isDark ? 'text-white/80' : 'text-luxury-black/80'}`}>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Preview as Customer</span>
+                          <span className={`text-[9px] italic ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                            Saves to CRM and downloads the customer-view PDF in a new tab.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isSubmitting || isGeneratingPDF}
+                          onClick={async () => {
+                            if (!name || !email || !phone || !city) {
+                              setShowContactModal(true);
+                              toast.info('Fill in customer info, then submit — the proposal will auto-download.');
+                              return;
+                            }
+                            // Subscribe to the next state change where submissionId is available
+                            // — handleSubmission stores submissionId in a local var, not state.
+                            // Simplest path: submit, then grab the latest submission by email.
+                            try {
+                              await handleSubmission('email');
+                              // After a short delay, find the most recent submission for this email
+                              setTimeout(async () => {
+                                try {
+                                  const q = query(
+                                    collection(db, 'submissions'),
+                                    where('email', '==', email),
+                                  );
+                                  const snap = await getDocs(q);
+                                  let latest: any = null;
+                                  snap.forEach(d => {
+                                    const data = d.data();
+                                    const ts = data.createdAt?.toMillis?.() || 0;
+                                    if (!latest || ts > (latest.ts || 0)) latest = { id: d.id, ts };
+                                  });
+                                  if (latest?.id) {
+                                    window.open(`/proposal/${latest.id}?auto=1`, '_blank');
+                                  } else {
+                                    toast.error("Couldn't find the saved submission to open — check CRM.");
+                                  }
+                                } catch (err) {
+                                  console.error('Proposal-lookup failed', err);
+                                  toast.error('Open the submission from /admin to download the customer view.');
+                                }
+                              }, 1500);
+                            } catch (err) {
+                              console.error('Submit for customer-view PDF failed', err);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-black/90 whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          Download Customer PDF
+                        </button>
+                      </div>
+                    )}
 
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
                       <div className="flex flex-col">

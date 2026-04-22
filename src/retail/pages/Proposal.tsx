@@ -6,6 +6,9 @@ import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
+import { toast } from 'sonner';
 
 /** Public customer-facing proposal view — accessed by token in URL.
  *  Phase 1: read-only mirror of the PDF content.
@@ -17,6 +20,67 @@ export default function Proposal() {
   const [data, setData] = useState<any | null>(null);
   const [error, setError] = useState<string>('');
   const [showSignModal, setShowSignModal] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  /** Capture the proposal content area as a multi-page PDF.
+   *  Uses html-to-image + jsPDF to render exactly what the customer sees. */
+  const handleDownloadPdf = async () => {
+    if (!contentRef.current || generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      // Give any async 3D / image rendering a moment to settle
+      await new Promise(r => setTimeout(r, 800));
+      const dataUrl = await toPng(contentRef.current, {
+        pixelRatio: 2,
+        backgroundColor: '#FAF9F6',
+        cacheBust: true,
+      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const imgRatio = imgProps.width / imgProps.height;
+      // Full-width image, paginated by slicing vertically
+      const renderedW = pdfW;
+      const renderedH = renderedW / imgRatio;
+      let positionY = 0;
+      const overlap = 2; // mm
+      // Render image possibly spanning multiple pages by shifting y offset
+      pdf.addImage(dataUrl, 'PNG', 0, positionY, renderedW, renderedH);
+      // Slice across additional pages
+      if (renderedH > pdfH) {
+        let leftover = renderedH - pdfH;
+        while (leftover > 0) {
+          pdf.addPage();
+          positionY -= (pdfH - overlap);
+          pdf.addImage(dataUrl, 'PNG', 0, positionY, renderedW, renderedH);
+          leftover -= (pdfH - overlap);
+        }
+      }
+      const filename = `Eclipse_Proposal_${(data?.name || 'Customer').replace(/\s+/g, '_')}.pdf`;
+      pdf.save(filename);
+      toast.success('Proposal PDF downloaded');
+    } catch (err: any) {
+      console.error('Proposal PDF download failed', err);
+      toast.error(`PDF generation failed: ${err?.message || 'unknown error'}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  /** If the URL has ?auto=1, trigger the download automatically once
+   *  the content has rendered. Used by admin to "print" the customer
+   *  view from the CRM without manual clicks. */
+  useEffect(() => {
+    if (loading || !data) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('auto') === '1') {
+      // Wait a bit for images / 3D to render, then auto-download
+      const t = setTimeout(() => { handleDownloadPdf(); }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [loading, data]);
 
   useEffect(() => {
     if (!id) {
@@ -95,25 +159,21 @@ export default function Proposal() {
   return (
     <div className="min-h-screen bg-[#FAF9F6]">
       {/* Header */}
-      <header className="bg-white border-b border-luxury-cream sticky top-0 z-20 shadow-sm">
+      <header className="bg-white border-b border-luxury-cream sticky top-0 z-20 shadow-sm print:hidden">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <img src="/logo.png" alt="Eclipse Pergola" className="h-8 object-contain" />
-          {data.pdfUrl && (
-            <a
-              href={data.pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              download={data.pdfFilename || undefined}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs uppercase tracking-widest font-bold text-luxury-black border border-luxury-black/20 rounded hover:bg-luxury-black hover:text-white transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Download PDF
-            </a>
-          )}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={generatingPdf}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs uppercase tracking-widest font-bold text-luxury-black border border-luxury-black/20 rounded hover:bg-luxury-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-wait"
+          >
+            {generatingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {generatingPdf ? 'Preparing…' : 'Download PDF'}
+          </button>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
+      <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-10 space-y-10">
         {/* Cover */}
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
           <div className="flex items-start justify-between flex-wrap gap-4 mb-8 pb-6 border-b-2 border-luxury-gold">

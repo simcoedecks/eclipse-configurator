@@ -1324,38 +1324,64 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
           {activeTab === 'tasks' && <TasksPanel submissionId={sub.id} />}
           {activeTab === 'files' && <FilesPanel submissionId={sub.id} />}
           {activeTab === 'pdf' && (
-            <div className="space-y-3">
-              {sub.pdfUrl ? (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Stored Proposal</p>
-                    <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" download={sub.pdfFilename} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-white rounded-lg text-xs font-bold hover:bg-luxury-gold/90">
-                      <Download className="w-3.5 h-3.5" />Download
-                    </a>
+            <div className="space-y-4">
+              {/* Primary: download what the customer sees (public proposal page) */}
+              <div className="bg-white border border-luxury-gold/40 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-luxury-black">Customer-View Proposal</h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Exactly what the customer sees at their proposal link, captured as PDF.</p>
                   </div>
-                  <iframe
-                    src={sub.pdfUrl}
-                    className="w-full rounded-lg border border-slate-200 bg-white"
-                    style={{ height: '75vh' }}
-                    title={`Proposal ${sub.name}`}
-                  />
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
-                    <p className="text-[11px] text-gray-500">
-                      If the preview above is blank, the stored PDF may be missing or blocked. Generate a fresh copy:
-                    </p>
-                    <AdminPdfDownload submission={sub} label="Regenerate PDF" />
-                  </div>
-                </>
-              ) : (
-                <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-8 text-center space-y-3">
-                  <FileText className="w-10 h-10 text-gray-300 mx-auto" />
-                  <p className="text-sm text-gray-500">No stored PDF for this submission.</p>
-                  <p className="text-xs text-gray-400">Generate a fresh proposal from the current configuration:</p>
-                  <div className="flex justify-center pt-2">
-                    <AdminPdfDownload submission={sub} label="Generate Proposal PDF" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { window.open(`/proposal/${sub.id}?auto=1`, '_blank'); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-lg text-xs font-bold hover:bg-luxury-gold/90"
+                  >
+                    <Download className="w-3.5 h-3.5" />Download Customer View
+                  </button>
                 </div>
-              )}
+                <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                  <a
+                    href={`/proposal/${sub.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-luxury-gold hover:underline"
+                  >
+                    <Eye className="w-3 h-3" /> Open in new tab (no download)
+                  </a>
+                </div>
+              </div>
+
+              {/* Secondary: original ProposalDocument template PDF (internal / legacy) */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Internal PDF Template</h3>
+                {sub.pdfUrl ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-gray-500">Auto-generated at submission time.</p>
+                      <div className="flex items-center gap-2">
+                        <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" download={sub.pdfFilename} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-bold hover:bg-luxury-black/90">
+                          <Download className="w-3.5 h-3.5" />Stored PDF
+                        </a>
+                        <AdminPdfDownload submission={sub} label="Regenerate" />
+                      </div>
+                    </div>
+                    <iframe
+                      src={sub.pdfUrl}
+                      className="w-full rounded-lg border border-slate-200 bg-white"
+                      style={{ height: '60vh' }}
+                      title={`Proposal ${sub.name}`}
+                    />
+                  </>
+                ) : (
+                  <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 text-center space-y-2">
+                    <p className="text-xs text-gray-500">No internal PDF stored.</p>
+                    <div className="flex justify-center">
+                      <AdminPdfDownload submission={sub} label="Generate Internal PDF" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
