@@ -358,18 +358,24 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
                     const qty = item.quantity || 1;
                     const signed = item.kind === 'discount' ? -1 : 1;
                     const rowTotal = signed * (item.amount || 0) * qty;
+                    const isTbd = !!item.tbd;
                     return (
-                      <div key={`ci-${idx}`} className={`grid grid-cols-[1fr_100px_50px_100px] px-3 text-[10px] py-2 border-b border-[#f0f0f0] ${item.kind === 'discount' ? 'bg-emerald-50' : ''}`}>
+                      <div key={`ci-${idx}`} className={`grid grid-cols-[1fr_100px_50px_100px] px-3 text-[10px] py-2 border-b border-[#f0f0f0] ${isTbd ? 'bg-[#fef3c7]/40' : item.kind === 'discount' ? 'bg-emerald-50' : ''}`}>
                         <div>
                           <span className="font-bold">
-                            {item.kind === 'discount' && <span className="text-[8px] text-emerald-700 mr-1 uppercase">Disc</span>}
+                            {isTbd && <span className="text-[8px] text-[#92400e] mr-1 uppercase">TBD</span>}
+                            {!isTbd && item.kind === 'discount' && <span className="text-[8px] text-emerald-700 mr-1 uppercase">Disc</span>}
                             {item.name}
                           </span>
                           {item.description && <p className="text-[8px] text-[#777] italic mt-0.5 leading-tight">{item.description}</p>}
                         </div>
-                        <div className="text-center">${fmt(item.amount || 0)}</div>
-                        <div className="text-center">{qty}</div>
-                        <div className={`text-right font-bold ${item.kind === 'discount' ? 'text-emerald-700' : ''}`}>${fmt(rowTotal)}</div>
+                        <div className={`text-center ${isTbd ? 'font-bold text-[#92400e]' : ''}`}>
+                          {isTbd ? 'TBD' : `$${fmt(item.amount || 0)}`}
+                        </div>
+                        <div className="text-center">{isTbd ? '—' : qty}</div>
+                        <div className={`text-right font-bold ${isTbd ? 'text-[#92400e]' : item.kind === 'discount' ? 'text-emerald-700' : ''}`}>
+                          {isTbd ? 'TBD' : `$${fmt(rowTotal)}`}
+                        </div>
                       </div>
                     );
                   })}

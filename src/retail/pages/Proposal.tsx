@@ -799,11 +799,20 @@ export default function Proposal() {
                 <div className="space-y-1">
                   {customCharges.map((i: any) => (
                     <div key={i.id} className="flex justify-between items-start text-sm py-1">
-                      <div>
-                        <span className="text-gray-700">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {i.tbd && (
+                            <span className="inline-flex items-center text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              TBD
+                            </span>
+                          )}
+                          <span className="text-gray-700">{i.name}{!i.tbd && i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                        </div>
                         {i.description && <p className="text-[11px] text-gray-400 italic">{i.description}</p>}
                       </div>
-                      <span className="font-medium text-gray-900 whitespace-nowrap ml-2">{fmt((i.amount || 0) * (i.quantity || 1))}</span>
+                      <span className={`font-medium whitespace-nowrap ml-2 ${i.tbd ? 'text-amber-700 font-bold' : 'text-gray-900'}`}>
+                        {i.tbd ? 'TBD' : fmt((i.amount || 0) * (i.quantity || 1))}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -817,11 +826,20 @@ export default function Proposal() {
                 <div className="space-y-1">
                   {customDiscounts.map((i: any) => (
                     <div key={i.id} className="flex justify-between items-start text-sm py-1">
-                      <div>
-                        <span className="text-emerald-800">{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {i.tbd && (
+                            <span className="inline-flex items-center text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              TBD
+                            </span>
+                          )}
+                          <span className="text-emerald-800">{i.name}{!i.tbd && i.quantity > 1 ? ` × ${i.quantity}` : ''}</span>
+                        </div>
                         {i.description && <p className="text-[11px] text-gray-400 italic">{i.description}</p>}
                       </div>
-                      <span className="font-medium text-emerald-700 whitespace-nowrap ml-2">−{fmt((i.amount || 0) * (i.quantity || 1))}</span>
+                      <span className={`font-medium whitespace-nowrap ml-2 ${i.tbd ? 'text-amber-700 font-bold' : 'text-emerald-700'}`}>
+                        {i.tbd ? 'TBD' : `−${fmt((i.amount || 0) * (i.quantity || 1))}`}
+                      </span>
                     </div>
                   ))}
                 </div>

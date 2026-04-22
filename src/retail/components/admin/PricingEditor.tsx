@@ -63,6 +63,9 @@ export default function PricingEditor({ submission }: Props) {
           amount: Math.abs(Number(i.amount) || 0),
           quantity: i.quantity || 1,
           kind: i.kind || 'add',
+          // Preserve the TBD flag so the proposal page can render
+          // "TBD" instead of the (unset) amount.
+          ...(i.tbd ? { tbd: true } : {}),
         }));
       await setDoc(doc(db, 'submissions', submission.id), { customLineItems: cleaned }, { merge: true });
       await logActivity(submission.id, 'manual', `Updated pricing — ${cleaned.length} custom line item${cleaned.length === 1 ? '' : 's'}, new total: ${formatCurrencyUSD(computeFinalPricing(pb, cleaned).total)}`);
