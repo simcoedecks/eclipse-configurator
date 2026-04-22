@@ -678,6 +678,8 @@ export default function Proposal() {
             sectionChoices: cfg.sectionChoices || {},
             maxLouverSpanOverride: cfg.maxLouverSpanOverride,
             maxBaySpanOverride: cfg.maxBaySpanOverride,
+            forceMiddleXPost: !!cfg.forceMiddleXPost,
+            forceMiddleZPost: !!cfg.forceMiddleZPost,
           };
           return (
             <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">

@@ -464,6 +464,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   //   maxBaySpanOverride:   20 (default) .. 22
   const [maxLouverSpanOverride, setMaxLouverSpanOverride] = useState<number>(13);
   const [maxBaySpanOverride, setMaxBaySpanOverride] = useState<number>(20);
+  // Admin override: force a middle post on the X (width) or Z (depth)
+  // axis even when the span doesn't structurally require one. Useful
+  // when the admin wants to pre-split louver sections or install a
+  // decorative / reinforcement post on a shorter pergola.
+  const [forceMiddleXPost, setForceMiddleXPost] = useState<boolean>(false);
+  const [forceMiddleZPost, setForceMiddleZPost] = useState<boolean>(false);
   // Admin-only: manual discount / charge line items applied to this
   // quote. Saved to the submission as `customLineItems` so the CRM
   // PricingEditor can edit them afterward and they appear on the
@@ -510,6 +516,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setForceMiddleXPost(false);
+    setForceMiddleZPost(false);
     setAdjustmentLines([]);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
@@ -713,14 +721,16 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const basePrice = useMemo(() => calculateBasePrice(depth, width), [depth, width]);
   
   const hasMiddlePosts = (width * depth > 260);
-  const numBaysX = Math.ceil(width / maxLouverSpanOverride);
-  const numBaysZ = Math.ceil(depth / maxBaySpanOverride);
-  // Which axes have middle posts — depends on override threshold.
-  // A screen/wall is only split into multiple bays when there's an
-  // actual physical post to anchor it; the louver-bay count alone
-  // shouldn't force a screen split.
-  const hasMiddleXPost = width > maxBaySpanOverride;
-  const hasMiddleZPost = depth > maxBaySpanOverride;
+  // Natural louver bay count (from max-louver-span rule). If admin
+  // forces a middle post on a shorter span, ensure we have at least 2
+  // bays for that axis so there's a bay boundary at the forced post.
+  const naturalNumBaysX = Math.ceil(width / maxLouverSpanOverride);
+  const naturalNumBaysZ = Math.ceil(depth / maxBaySpanOverride);
+  // Which axes have middle posts — override threshold OR admin forced.
+  const hasMiddleXPost = width > maxBaySpanOverride || forceMiddleXPost;
+  const hasMiddleZPost = depth > maxBaySpanOverride || forceMiddleZPost;
+  const numBaysX = hasMiddleXPost ? Math.max(2, naturalNumBaysX) : naturalNumBaysX;
+  const numBaysZ = hasMiddleZPost ? Math.max(2, naturalNumBaysZ) : naturalNumBaysZ;
   const numScreenBaysX = hasMiddleXPost ? numBaysX : 1;
   const numScreenBaysZ = hasMiddleZPost ? numBaysZ : 1;
   /** Default X position of middle post at index i (1..numBaysX-1),
@@ -1106,6 +1116,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets,
         removedMiddlePosts, cantileverInsets, cornerPostOffsets,
         maxLouverSpanOverride, maxBaySpanOverride,
+        forceMiddleXPost, forceMiddleZPost,
         staticMode: true,
       }
     };
@@ -1316,6 +1327,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setForceMiddleXPost(false);
+    setForceMiddleZPost(false);
     setAdjustmentLines([]);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
@@ -1362,6 +1375,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           sectionChoices,
           maxLouverSpanOverride,
           maxBaySpanOverride,
+          forceMiddleXPost,
+          forceMiddleZPost,
           customerNotes: customerNotes.trim(),
         }
       };
@@ -2333,6 +2348,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           sectionChoices={sectionChoices}
           maxLouverSpanOverride={maxLouverSpanOverride}
           maxBaySpanOverride={maxBaySpanOverride}
+          forceMiddleXPost={forceMiddleXPost}
+          forceMiddleZPost={forceMiddleZPost}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2591,6 +2608,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setForceMiddleXPost(false);
+    setForceMiddleZPost(false);
     setAdjustmentLines([]);
                             } else {
                               const next = new Set(houseWalls);
@@ -2785,6 +2804,83 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     );
                   })}
                 </div>
+
+                {/* Add Middle Post — admin-only. When the pergola is
+                    shorter than the max-bay-span on an axis (no post
+                    structurally required) admin can still choose to
+                    insert one as a decorative / reinforcement post.
+                    Once enabled, the full Posts & Louver Sections
+                    controls below take over for that post. */}
+                {adminMode && (!hasMiddleXPost || !hasMiddleZPost) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Add Middle Post</label>
+                      <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {!hasMiddleXPost && (
+                        <button
+                          type="button"
+                          onClick={() => setForceMiddleXPost(true)}
+                          className={`rounded-lg border-dashed border px-3 py-2 text-left transition-all ${isDark ? 'border-white/15 hover:border-luxury-gold/50 bg-white/[0.02]' : 'border-slate-300 hover:border-luxury-gold bg-luxury-paper/40'}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Plus className="w-3.5 h-3.5 text-luxury-gold" />
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black dark:text-white">Width Axis</span>
+                          </div>
+                          <p className={`text-[9px] italic mt-1 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                            Split the {width}' width into two louver sections with a center post.
+                          </p>
+                        </button>
+                      )}
+                      {hasMiddleXPost && forceMiddleXPost && (
+                        <div className="rounded-lg border border-luxury-gold/40 bg-luxury-gold/5 px-3 py-2 flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Width Post · Forced</p>
+                            <p className={`text-[9px] italic mt-0.5 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>Admin-inserted</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setForceMiddleXPost(false)}
+                            className="text-[9px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                      {!hasMiddleZPost && (
+                        <button
+                          type="button"
+                          onClick={() => setForceMiddleZPost(true)}
+                          className={`rounded-lg border-dashed border px-3 py-2 text-left transition-all ${isDark ? 'border-white/15 hover:border-luxury-gold/50 bg-white/[0.02]' : 'border-slate-300 hover:border-luxury-gold bg-luxury-paper/40'}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Plus className="w-3.5 h-3.5 text-luxury-gold" />
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black dark:text-white">Depth Axis</span>
+                          </div>
+                          <p className={`text-[9px] italic mt-1 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                            Split the {depth}' depth into two bays with a center post.
+                          </p>
+                        </button>
+                      )}
+                      {hasMiddleZPost && forceMiddleZPost && (
+                        <div className="rounded-lg border border-luxury-gold/40 bg-luxury-gold/5 px-3 py-2 flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Depth Post · Forced</p>
+                            <p className={`text-[9px] italic mt-0.5 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>Admin-inserted</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setForceMiddleZPost(false)}
+                            className="text-[9px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Middle Post Adjustments — admin-only. Lets the admin
                     override the default even-distribution position of

@@ -54,6 +54,8 @@ export default function TwoAngleViews({ submission }: Props) {
       sectionChoices: cfg.sectionChoices || {},
       maxLouverSpanOverride: cfg.maxLouverSpanOverride,
       maxBaySpanOverride: cfg.maxBaySpanOverride,
+      forceMiddleXPost: !!cfg.forceMiddleXPost,
+      forceMiddleZPost: !!cfg.forceMiddleZPost,
       staticMode: true,
     };
   }, [submission]);

@@ -148,6 +148,10 @@ interface PergolaVisualizerProps {
    *  bay. Used when admin wants to avoid an extra section break. */
   maxLouverSpanOverride?: number;
   maxBaySpanOverride?: number;
+  /** Admin-only: force a middle post on an axis even if the span
+   *  doesn't structurally require one. */
+  forceMiddleXPost?: boolean;
+  forceMiddleZPost?: boolean;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -602,7 +606,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, maxLouverSpanOverride, maxBaySpanOverride, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, maxLouverSpanOverride, maxBaySpanOverride, forceMiddleXPost, forceMiddleZPost, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -619,13 +623,16 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   const maxLouverSpan = Math.max(13, Math.min(15, maxLouverSpanOverride ?? 13));
   const maxDepthSpan  = Math.max(20, Math.min(22, maxBaySpanOverride ?? 20));
 
-  const numBaysX = Math.ceil(width / maxLouverSpan);
-  const numBaysZ = Math.ceil(depth / maxDepthSpan);
+  const naturalNumBaysX = Math.ceil(width / maxLouverSpan);
+  const naturalNumBaysZ = Math.ceil(depth / maxDepthSpan);
+  // Forced middle post guarantees at least 2 bays on that axis.
+  const numBaysX = forceMiddleXPost ? Math.max(2, naturalNumBaysX) : naturalNumBaysX;
+  const numBaysZ = forceMiddleZPost ? Math.max(2, naturalNumBaysZ) : naturalNumBaysZ;
   
   // Middle support posts only appear once a beam spans more than 20'.
   // Below that, louver-bay splits are structural only (no extra post).
-  const needsMiddlePostX = width > maxDepthSpan;
-  const needsMiddlePostZ = depth > maxDepthSpan;
+  const needsMiddlePostX = width > maxDepthSpan || !!forceMiddleXPost;
+  const needsMiddlePostZ = depth > maxDepthSpan || !!forceMiddleZPost;
 
   // Default post positions — corners at ends, middle posts evenly distributed.
   const defaultPostCentersX = Array.from({ length: numBaysX + 1 }).map((_, i) => -xOffset + i * ((width - postSize) / numBaysX));
