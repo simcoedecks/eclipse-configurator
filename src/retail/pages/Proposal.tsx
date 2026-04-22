@@ -24,9 +24,11 @@ export default function Proposal() {
   const contentRef = useRef<HTMLDivElement>(null);
 
   /** Capture the proposal content area as a multi-page PDF.
-   *  Clones the content into an off-screen container at a fixed
-   *  portrait-A4 width so the output is perfectly centered and
-   *  not affected by the viewer's window size. */
+   *  Each top-level section is captured separately so page breaks
+   *  land between sections (never mid-section). Any section that's
+   *  taller than one page is sliced as a last resort.
+   *  Clones the content into an off-screen fixed-width container so
+   *  the output is perfectly centered regardless of viewport size. */
   const handleDownloadPdf = async () => {
     if (!contentRef.current || generatingPdf) return;
     setGeneratingPdf(true);
@@ -35,64 +37,99 @@ export default function Proposal() {
       // Give any async 3D / image rendering a moment to settle
       await new Promise(r => setTimeout(r, 800));
 
-      // Portrait A4 is 210mm × 297mm. At 96dpi, that's 794 × 1123 CSS
-      // pixels. We render at 800px wide for a slight margin.
-      const targetWidth = 800;
+      const targetWidth = 800; // CSS px — matches ~portrait A4 at 96dpi
       const source = contentRef.current;
 
-      // Clone the content into a fixed-width off-screen container so
-      // the capture isn't affected by the live viewport / zoom.
       offscreen = document.createElement('div');
       offscreen.style.position = 'fixed';
       offscreen.style.top = '0';
-      offscreen.style.left = '-10000px';  // off-screen but still rendered
+      offscreen.style.left = '-10000px';
       offscreen.style.width = targetWidth + 'px';
       offscreen.style.background = '#FAF9F6';
       offscreen.style.padding = '0';
       offscreen.style.margin = '0';
       const clone = source.cloneNode(true) as HTMLDivElement;
-      // Force the clone to fill our fixed width (override max-w-5xl etc.)
       clone.style.maxWidth = 'none';
       clone.style.width = '100%';
       clone.style.margin = '0';
-      clone.style.padding = '24px';
+      clone.style.padding = '0';
       clone.style.boxSizing = 'border-box';
       offscreen.appendChild(clone);
       document.body.appendChild(offscreen);
 
-      // Give cloned images / iframes a tick to render
-      await new Promise(r => setTimeout(r, 300));
-
-      const dataUrl = await toPng(clone, {
-        pixelRatio: 2,
-        backgroundColor: '#FAF9F6',
-        cacheBust: true,
-        width: clone.scrollWidth,
-        height: clone.scrollHeight,
-      });
+      // Give cloned images / 3D previews a tick to render
+      await new Promise(r => setTimeout(r, 400));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfW = pdf.internal.pageSize.getWidth();   // 210mm
-      const pdfH = pdf.internal.pageSize.getHeight();  // 297mm
-      const imgProps = pdf.getImageProperties(dataUrl);
-      // Scale image to fit portrait width with a small horizontal margin
-      const margin = 8; // mm
-      const targetW = pdfW - margin * 2;
-      const scale = targetW / imgProps.width;
-      const scaledH = imgProps.height * scale;
-
-      // Multi-page: if scaled image is taller than one page, slice by
-      // re-placing the full image with a negative y offset on each page.
+      const pdfW = pdf.internal.pageSize.getWidth();    // 210mm
+      const pdfH = pdf.internal.pageSize.getHeight();   // 297mm
+      const margin = 10;                                 // mm around page edges
+      const targetMm = pdfW - margin * 2;
       const pageContentH = pdfH - margin * 2;
-      let placedY = margin;
-      pdf.addImage(dataUrl, 'PNG', margin, placedY, targetW, scaledH);
-      if (scaledH > pageContentH) {
-        let leftover = scaledH - pageContentH;
-        while (leftover > 0) {
-          pdf.addPage();
-          placedY -= (pageContentH - 2); // 2mm page overlap
-          pdf.addImage(dataUrl, 'PNG', margin, placedY, targetW, scaledH);
-          leftover -= (pageContentH - 2);
+
+      // Direct children of the cloned content wrapper are our sections.
+      // (Each <section> in Proposal.tsx renders as one of these.)
+      const sections = Array.from(clone.children) as HTMLElement[];
+      if (sections.length === 0) {
+        throw new Error('No content sections found to render.');
+      }
+
+      let currentY = margin;
+      let onFirstPage = true;
+      const gapBetweenSections = 3; // mm of breathing room
+
+      for (let idx = 0; idx < sections.length; idx++) {
+        const section = sections[idx];
+        // Capture this one section at 2x density
+        const dataUrl = await toPng(section, {
+          pixelRatio: 2,
+          backgroundColor: '#FAF9F6',
+          cacheBust: true,
+          width: section.scrollWidth,
+          height: section.scrollHeight,
+        });
+        const props = pdf.getImageProperties(dataUrl);
+        const scale = targetMm / props.width;
+        const scaledH = props.height * scale;
+
+        const fitsOnCurrentPage = scaledH <= (pdfH - margin - currentY);
+
+        if (scaledH <= pageContentH) {
+          // Section fits on ONE page — if it doesn't fit in the current
+          // remaining space, push to a new page (avoids mid-section break).
+          if (!fitsOnCurrentPage && !onFirstPage) {
+            pdf.addPage();
+            currentY = margin;
+          } else if (!fitsOnCurrentPage && onFirstPage) {
+            // Still on first page but already over: reset (edge case)
+            currentY = margin;
+          }
+          pdf.addImage(dataUrl, 'PNG', margin, currentY, targetMm, scaledH);
+          currentY += scaledH + gapBetweenSections;
+          onFirstPage = false;
+        } else {
+          // Section is taller than a single page — slice it across pages.
+          // Start on a fresh page first so the slicing is clean.
+          if (currentY > margin) {
+            pdf.addPage();
+            currentY = margin;
+          }
+          // Place image and slide up with each new page until it's shown
+          let placedY = currentY;
+          pdf.addImage(dataUrl, 'PNG', margin, placedY, targetMm, scaledH);
+          let remaining = scaledH - (pageContentH - (currentY - margin));
+          while (remaining > 0) {
+            pdf.addPage();
+            placedY -= (pageContentH - 2); // 2mm overlap so content doesn't drop between pages
+            pdf.addImage(dataUrl, 'PNG', margin, placedY, targetMm, scaledH);
+            remaining -= (pageContentH - 2);
+          }
+          currentY = margin;
+          onFirstPage = false;
+          // Force next section onto a fresh page (cleaner visual)
+          if (idx < sections.length - 1) {
+            pdf.addPage();
+          }
         }
       }
 
