@@ -175,8 +175,15 @@ function PopularAddOns({ submission }: { submission: any }) {
   const maxBay = Number(cfg.maxBaySpanOverride) || 20;
   const screenBaysX = width > maxBay ? Math.ceil(width / 13) : 1;
   const screenBaysZ = depth > maxBay ? Math.ceil(depth / 20) : 1;
+  // A side with a structural (house) wall can't have a screen OR a privacy
+  // wall upgrade suggested on it — the side is already closed off.
+  const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
+  const blockedBySide = (id: string) => {
+    const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
+    return m ? houseWallSides.has(m[2]) : false;
+  };
   const unused = ACCESSORIES
-    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id))
+    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id) && !blockedBySide(a.id))
     .map(a => {
       let price = 0;
       if (a.type === 'flat') price = a.price;

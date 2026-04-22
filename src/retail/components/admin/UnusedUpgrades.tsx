@@ -53,11 +53,17 @@ export default function UnusedUpgrades({ submission }: Props) {
   const maxBay = Number(cfg.maxBaySpanOverride) || 20;
   const screenBaysX = width > maxBay ? Math.ceil(width / 13) : 1;
   const screenBaysZ = depth > maxBay ? Math.ceil(depth / 20) : 1;
+  // Sides that already have a structural wall can't be upsold a screen/wall.
+  const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
+  const blockedBySide = (id: string) => {
+    const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
+    return m ? houseWallSides.has(m[2]) : false;
+  };
 
   // Calculate each unused accessory's price at this configuration
   const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
   const unused = ACCESSORIES
-    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id))
+    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id) && !blockedBySide(a.id))
     .map(a => {
       let price = 0;
       if (a.type === 'flat') price = a.price;
