@@ -418,32 +418,62 @@ export default function Proposal() {
                   {cfg.width}' × {cfg.depth}' × {cfg.height}' • {cfg.frameColor} frame • {cfg.louverColor} louvers
                 </p>
               </div>
-              {/* Hero: 3/4 perspective — the marquee shot */}
-              <div className="h-[420px] bg-[#f1f5f9] border-b border-luxury-cream">
-                <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading 3D preview…</div>}>
-                  <PergolaVisualizer {...visProps} view="perspective" />
-                </Suspense>
-              </div>
-              {/* Orthographic views: front elevation + top-down */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-luxury-cream">
+              {/* Two 3/4 perspective angles — front-right and back-left */}
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-luxury-cream border-b border-luxury-cream">
                 <div>
                   <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Front Elevation
+                    Front-Right Perspective
                   </div>
-                  <div className="h-[240px] bg-[#f1f5f9]">
+                  <div className="h-[320px] bg-[#f1f5f9]">
                     <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="front" />
+                      <PergolaVisualizer {...visProps} view="perspective" />
                     </Suspense>
                   </div>
                 </div>
                 <div>
                   <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Top View
+                    Back-Left Perspective
                   </div>
-                  <div className="h-[240px] bg-[#f1f5f9]">
+                  <div className="h-[320px] bg-[#f1f5f9]">
                     <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="top" />
+                      <PergolaVisualizer {...visProps} view="perspective-2" />
                     </Suspense>
+                  </div>
+                </div>
+              </div>
+              {/* Top-down plan with overlaid dimensions */}
+              <div>
+                <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                  Top-Down Plan · Dimensions
+                </div>
+                <div className="relative h-[360px] bg-[#f1f5f9]">
+                  <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                    <PergolaVisualizer {...visProps} view="top" />
+                  </Suspense>
+                  {/* Dimension annotations layered on top */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Width annotation — top edge */}
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                      <span className="inline-block w-12 h-px bg-luxury-black/40" />
+                      <span className="px-3 py-1 bg-white/90 border border-luxury-black/10 rounded text-[11px] font-bold text-luxury-black shadow-sm">
+                        {visProps.width}' wide
+                      </span>
+                      <span className="inline-block w-12 h-px bg-luxury-black/40" />
+                    </div>
+                    {/* Depth annotation — left edge, rotated */}
+                    <div className="absolute top-1/2 left-3 -translate-y-1/2 flex flex-col items-center gap-2">
+                      <span className="inline-block h-12 w-px bg-luxury-black/40" />
+                      <span className="px-3 py-1 bg-white/90 border border-luxury-black/10 rounded text-[11px] font-bold text-luxury-black shadow-sm whitespace-nowrap">
+                        {visProps.depth}' deep
+                      </span>
+                      <span className="inline-block h-12 w-px bg-luxury-black/40" />
+                    </div>
+                    {/* Height callout — bottom-right corner */}
+                    <div className="absolute bottom-3 right-3">
+                      <span className="px-3 py-1 bg-white/90 border border-luxury-gold/40 rounded text-[11px] font-bold text-luxury-black shadow-sm">
+                        Height {visProps.height}'
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

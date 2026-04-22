@@ -1235,6 +1235,9 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
       } else if (view === 'perspective') {
         // Front view in perspective - higher angle to see louvers
         controlsRef.current.setLookAt(props.width * 1.0, centerY + props.height * 2.0, props.depth * 1.5, 0, centerY, 0, true);
+      } else if (view === 'perspective-2') {
+        // Back/opposite corner perspective — mirrored camera position
+        controlsRef.current.setLookAt(-props.width * 1.0, centerY + props.height * 2.0, -props.depth * 1.5, 0, centerY, 0, true);
       }
     }, 50);
     
@@ -1257,26 +1260,33 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
 
       <ErrorBoundary>
         <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true, powerPreference: 'high-performance' }} dpr={[1, 2]} onCreated={() => setIsCanvasReady(true)}>
-          {view === 'perspective' ? (
-            <PerspectiveCamera makeDefault position={[props.width * 1.0, props.height * 2.0, props.depth * 1.5]} fov={50} onUpdate={c => c.lookAt(0, 0, 0)} />
+          {(view === 'perspective' || view === 'perspective-2') ? (
+            <PerspectiveCamera
+              makeDefault
+              position={view === 'perspective-2'
+                ? [-props.width * 1.0, props.height * 2.0, -props.depth * 1.5]
+                : [props.width * 1.0, props.height * 2.0, props.depth * 1.5]}
+              fov={50}
+              onUpdate={c => c.lookAt(0, 0, 0)}
+            />
           ) : (
-            <OrthographicCamera 
-              makeDefault 
+            <OrthographicCamera
+              makeDefault
               position={
-                view === 'top' ? [0, Math.max(45, props.width * 1.5, props.depth * 1.5), 0] : 
-                view === 'front' ? [0, 0, Math.max(45, props.width * 1.5, props.depth * 1.5)] : 
+                view === 'top' ? [0, Math.max(45, props.width * 1.5, props.depth * 1.5), 0] :
+                view === 'front' ? [0, 0, Math.max(45, props.width * 1.5, props.depth * 1.5)] :
                 [Math.max(45, props.width * 1.5, props.depth * 1.5), 0, 0]
-              } 
-              zoom={300 / Math.max(props.width, props.depth)} 
+              }
+              zoom={300 / Math.max(props.width, props.depth)}
               onUpdate={c => c.lookAt(0, 0, 0)}
             />
           )}
-          {view === 'perspective' && <Sky sunPosition={[10, 20, 10]} turbidity={0.3} rayleigh={0.5} />}
-          <ambientLight intensity={view === 'perspective' ? 0.4 : 0.8} />
-          <directionalLight 
-            position={[10, 20, 10]} 
-            intensity={view === 'perspective' ? 2 : 1} 
-            castShadow={view === 'perspective'} 
+          {(view === 'perspective' || view === 'perspective-2') && <Sky sunPosition={[10, 20, 10]} turbidity={0.3} rayleigh={0.5} />}
+          <ambientLight intensity={(view === 'perspective' || view === 'perspective-2') ? 0.4 : 0.8} />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={(view === 'perspective' || view === 'perspective-2') ? 2 : 1}
+            castShadow={view === 'perspective' || view === 'perspective-2'}
             shadow-mapSize={[2048, 2048]} 
             shadow-camera-near={0.5}
             shadow-camera-far={50}
@@ -1292,7 +1302,7 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
             <ambientLight intensity={0.5} />
           )}
           <PergolaModel {...props} />
-          {view === 'perspective' && (
+          {(view === 'perspective' || view === 'perspective-2') && (
             <ContactShadows position={[0, -props.height / 2, 0]} opacity={0.6} scale={40} blur={2.5} far={10} resolution={512} color="#1e293b" />
           )}
           
