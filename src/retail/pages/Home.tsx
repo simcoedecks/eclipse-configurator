@@ -21,7 +21,8 @@ import {
   Plus,
   Minus,
   Loader2,
-  RotateCcw
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
@@ -39,6 +40,7 @@ import { type AccessoryType, type Accessory, ACCESSORIES } from '../../shared/li
 import { COLORS, getColorName } from '../../shared/lib/colors';
 import { useTheme } from '../../shared/hooks/useTheme';
 import AddPergolaModal from '../components/AddPergolaModal';
+import CustomRequestModal from '../components/CustomRequestModal';
 import type { AdditionalPergolaItem } from '../../shared/lib/pricingMath';
 
 enum OperationType {
@@ -401,6 +403,7 @@ Total Price: $${grandTotal.toFixed(2)}`;
   const [extraPergolas, setExtraPergolas] = useState<AdditionalPergolaItem[]>([]);
   const [addPergolaModalOpen, setAddPergolaModalOpen] = useState(false);
   const [editingPergola, setEditingPergola] = useState<AdditionalPergolaItem | null>(null);
+  const [showCustomRequestModal, setShowCustomRequestModal] = useState(false);
   // Capture lead source from URL params (e.g. ?source=contractor&ref=john).
   // When loaded inside /dealer/:slug, the dealer props override.
   const [leadSource] = useState<string>(() => {
@@ -2110,6 +2113,32 @@ Total Price: $${grandTotal.toFixed(2)}`;
                     Includes motorized louver system &amp; LED perimeter lighting
                   </p>
                 </div>
+
+                {/* Custom pergola escape hatch — for customers whose needs don't fit the configurator */}
+                <button
+                  type="button"
+                  onClick={() => setShowCustomRequestModal(true)}
+                  className={`mt-4 w-full text-left group rounded-lg border border-dashed transition-all px-4 py-3 flex items-center gap-3 ${
+                    isDark
+                      ? 'border-luxury-gold/30 bg-luxury-gold/[0.03] hover:bg-luxury-gold/[0.08] hover:border-luxury-gold/50'
+                      : 'border-luxury-gold/40 bg-luxury-gold/[0.04] hover:bg-luxury-gold/[0.08] hover:border-luxury-gold'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-luxury-gold/15 flex items-center justify-center shrink-0 group-hover:bg-luxury-gold/25 transition-colors">
+                    <Sparkles className="w-4 h-4 text-luxury-gold" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[11px] font-serif font-medium leading-tight ${isDark ? 'text-white' : 'text-luxury-black'}`}>
+                      Can't configure what you're envisioning?
+                    </p>
+                    <p className={`text-[10px] mt-0.5 leading-snug ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
+                      Let's design a fully custom pergola — beyond the standard range.
+                    </p>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-widest font-bold text-luxury-gold whitespace-nowrap">
+                    Start →
+                  </span>
+                </button>
               </div>
             </motion.div>
           )}
@@ -2288,6 +2317,14 @@ Total Price: $${grandTotal.toFixed(2)}`;
               <div>
                 <div className="space-y-4">
                   <div className="border border-luxury-cream p-4 space-y-4">
+                    {extraPergolas.length > 0 && (
+                      <div className="flex items-center gap-2 -mt-1 mb-1">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
+                          Pergola {extraPergolas.length + 1}
+                        </span>
+                        <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">current design</span>
+                      </div>
+                    )}
                     <div className="flex flex-col border-b border-luxury-cream pb-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -2478,62 +2515,97 @@ Total Price: $${grandTotal.toFixed(2)}`;
                       );
                     })()}
 
-                    {/* Additional Pergolas Section */}
-                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">
-                          Multi-Pergola Project?
-                        </span>
-                        <button
-                          type="button"
-                          onClick={saveAndStartAnotherPergola}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-gold/90"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Another Pergola
-                        </button>
-                      </div>
-                      {extraPergolas.length === 0 ? (
-                        <p className={`text-[10px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                          Building a larger space? Add a second or third pergola to the same project and we'll quote the whole thing.
-                        </p>
-                      ) : (
-                        <div className="space-y-1.5 mt-2">
-                          {extraPergolas.map(p => {
-                            const price = typeof p.price === 'number' ? p.price : 0;
-                            return (
-                              <div key={p.id} className={`rounded-lg p-2.5 border ${isDark ? 'bg-white/5 border-white/10' : 'bg-luxury-gold/5 border-luxury-gold/20'}`}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-sm font-serif font-medium truncate ${isDark ? 'text-white' : 'text-luxury-black'}`}>{p.label}</p>
-                                    <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
-                                      {p.width}' × {p.depth}' × {p.height}' · {p.frameColor}
+                    {/* Saved (Additional) Pergolas — full itemized breakdown, one block per pergola */}
+                    {extraPergolas.length > 0 && (
+                      <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 space-y-6">
+                        {extraPergolas.map((p, idx) => {
+                          const price = typeof p.price === 'number' ? p.price : 0;
+                          const items = p.lineItems || [];
+                          return (
+                            <div key={p.id} className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
+                                  Pergola {idx + 1}
+                                </span>
+                                <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">{p.label}</span>
+                                <div className="flex-1" />
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
+                                  className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
+                                >
+                                  Edit
+                                </button>
+                                <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
+                                  className="text-[9px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-600"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              <div className="flex flex-col border-b border-luxury-cream pb-3">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
+                                    <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
+                                      {p.width}' × {p.depth}' × {p.height}' <br />
+                                      {p.frameColor} Frame <br />
+                                      {p.louverColor} Louvers
+                                      {p.notes && <><br /><span className="normal-case italic">{p.notes}</span></>}
+                                    </p>
+                                    <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
+                                      Includes motorized louver system &amp; LED perimeter lighting
                                     </p>
                                   </div>
-                                  <span className="text-sm font-serif text-luxury-gold font-bold whitespace-nowrap">{formatCurrency(price)}</span>
-                                </div>
-                                <div className="flex gap-1 mt-1.5 pt-1.5 border-t border-luxury-gold/10">
-                                  <button
-                                    type="button"
-                                    onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
-                                    className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
-                                  >
-                                    Edit
-                                  </button>
-                                  <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
-                                    className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-rose-400 hover:text-rose-300' : 'text-rose-600 hover:text-rose-700'}`}
-                                  >
-                                    Remove
-                                  </button>
+                                  <span className="text-lg font-serif text-luxury-gold">{formatCurrency(price - items.reduce((s, i) => s + (i.cost || 0), 0))}</span>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
+
+                              {items.length > 0 && (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 pb-1">
+                                    <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Options &amp; Add-Ons</span>
+                                    <div className="flex-1 h-px bg-luxury-gold/20" />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {items.map((it, i) => (
+                                      <div key={`${p.id}-${it.id || i}`} className="flex justify-between items-center text-[11px]">
+                                        <span className="font-serif text-luxury-black/60 dark:text-white/60">
+                                          {it.name}{(it.quantity && it.quantity > 1) ? ` × ${it.quantity}` : ''}
+                                        </span>
+                                        <span className="font-serif text-luxury-black/80 dark:text-white/80">{formatCurrency(it.cost || 0)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex justify-between items-center pt-2 border-t border-luxury-black/10 dark:border-white/10">
+                                <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Pergola {idx + 1} Subtotal</span>
+                                <span className="text-base font-serif text-luxury-gold">{formatCurrency(price)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Add Another Pergola CTA */}
+                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3">
+                      <span className={`text-[10px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/50'}`}>
+                        Building a larger space? Add another pergola to this project.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={saveAndStartAnotherPergola}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-gold/90 whitespace-nowrap shrink-0"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Another Pergola
+                      </button>
                     </div>
 
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
@@ -2772,6 +2844,23 @@ Total Price: $${grandTotal.toFixed(2)}`;
             setAddPergolaModalOpen(false);
             setEditingPergola(null);
           }}
+        />
+      )}
+
+      {/* Custom Request Modal — Phase 1 escape hatch */}
+      {showCustomRequestModal && (
+        <CustomRequestModal
+          isDark={isDark}
+          onClose={() => setShowCustomRequestModal(false)}
+          initialName={name}
+          initialEmail={email}
+          initialPhone={phone}
+          initialAddress={address}
+          initialCity={city}
+          leadId={leadId}
+          dealerSlug={dealerSlug || null}
+          dealerEmail={dealerEmail || null}
+          dealerName={dealerName || null}
         />
       )}
 
