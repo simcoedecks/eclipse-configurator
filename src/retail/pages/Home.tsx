@@ -2316,6 +2316,82 @@ Total Price: $${grandTotal.toFixed(2)}`;
             >
               <div>
                 <div className="space-y-4">
+                  {/* Previously-saved pergolas render FIRST, in save order */}
+                  {extraPergolas.map((p, idx) => {
+                    const price = typeof p.price === 'number' ? p.price : 0;
+                    const items = p.lineItems || [];
+                    const itemsTotal = items.reduce((s, i) => s + (i.cost || 0), 0);
+                    return (
+                      <div key={p.id} className="border border-luxury-cream p-4 space-y-4">
+                        <div className="flex items-center gap-2 -mt-1 mb-1">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
+                            Pergola {idx + 1}
+                          </span>
+                          <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">{p.label}</span>
+                          <div className="flex-1" />
+                          <button
+                            type="button"
+                            onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
+                            className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
+                          >
+                            Edit
+                          </button>
+                          <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
+                          <button
+                            type="button"
+                            onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
+                            className="text-[9px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col border-b border-luxury-cream pb-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
+                              <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
+                                {p.width}' × {p.depth}' × {p.height}' <br />
+                                {p.frameColor} Frame <br />
+                                {p.louverColor} Louvers
+                                {p.notes && <><br /><span className="normal-case italic">{p.notes}</span></>}
+                              </p>
+                              <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
+                                Includes motorized louver system &amp; LED perimeter lighting
+                              </p>
+                            </div>
+                            <span className="text-lg font-serif text-luxury-gold">{formatCurrency(price - itemsTotal)}</span>
+                          </div>
+                        </div>
+
+                        {items.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 pb-1">
+                              <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Options &amp; Add-Ons</span>
+                              <div className="flex-1 h-px bg-luxury-gold/20" />
+                            </div>
+                            <div className="space-y-1.5">
+                              {items.map((it, i) => (
+                                <div key={`${p.id}-${it.id || i}`} className="flex justify-between items-center text-[11px]">
+                                  <span className="font-serif text-luxury-black/60 dark:text-white/60">
+                                    {it.name}{(it.quantity && it.quantity > 1) ? ` × ${it.quantity}` : ''}
+                                  </span>
+                                  <span className="font-serif text-luxury-black/80 dark:text-white/80">{formatCurrency(it.cost || 0)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center pt-2 border-t border-luxury-black/10 dark:border-white/10">
+                          <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Pergola {idx + 1} Subtotal</span>
+                          <span className="text-base font-serif text-luxury-gold">{formatCurrency(price)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Active / current pergola (last — the one being configured now) */}
                   <div className="border border-luxury-cream p-4 space-y-4">
                     {extraPergolas.length > 0 && (
                       <div className="flex items-center gap-2 -mt-1 mb-1">
@@ -2514,84 +2590,6 @@ Total Price: $${grandTotal.toFixed(2)}`;
                         </>
                       );
                     })()}
-
-                    {/* Saved (Additional) Pergolas — full itemized breakdown, one block per pergola */}
-                    {extraPergolas.length > 0 && (
-                      <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 space-y-6">
-                        {extraPergolas.map((p, idx) => {
-                          const price = typeof p.price === 'number' ? p.price : 0;
-                          const items = p.lineItems || [];
-                          return (
-                            <div key={p.id} className="space-y-3">
-                              <div className="flex items-center gap-2">
-                                <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
-                                  Pergola {idx + 1}
-                                </span>
-                                <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">{p.label}</span>
-                                <div className="flex-1" />
-                                <button
-                                  type="button"
-                                  onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
-                                  className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
-                                >
-                                  Edit
-                                </button>
-                                <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
-                                <button
-                                  type="button"
-                                  onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
-                                  className="text-[9px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-600"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-
-                              <div className="flex flex-col border-b border-luxury-cream pb-3">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
-                                    <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
-                                      {p.width}' × {p.depth}' × {p.height}' <br />
-                                      {p.frameColor} Frame <br />
-                                      {p.louverColor} Louvers
-                                      {p.notes && <><br /><span className="normal-case italic">{p.notes}</span></>}
-                                    </p>
-                                    <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
-                                      Includes motorized louver system &amp; LED perimeter lighting
-                                    </p>
-                                  </div>
-                                  <span className="text-lg font-serif text-luxury-gold">{formatCurrency(price - items.reduce((s, i) => s + (i.cost || 0), 0))}</span>
-                                </div>
-                              </div>
-
-                              {items.length > 0 && (
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2 pb-1">
-                                    <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Options &amp; Add-Ons</span>
-                                    <div className="flex-1 h-px bg-luxury-gold/20" />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    {items.map((it, i) => (
-                                      <div key={`${p.id}-${it.id || i}`} className="flex justify-between items-center text-[11px]">
-                                        <span className="font-serif text-luxury-black/60 dark:text-white/60">
-                                          {it.name}{(it.quantity && it.quantity > 1) ? ` × ${it.quantity}` : ''}
-                                        </span>
-                                        <span className="font-serif text-luxury-black/80 dark:text-white/80">{formatCurrency(it.cost || 0)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="flex justify-between items-center pt-2 border-t border-luxury-black/10 dark:border-white/10">
-                                <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Pergola {idx + 1} Subtotal</span>
-                                <span className="text-base font-serif text-luxury-gold">{formatCurrency(price)}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
 
                     {/* Add Another Pergola CTA */}
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3">
