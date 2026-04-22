@@ -4332,7 +4332,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       disabled={isSubmitting || isGeneratingPDF}
                       className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Quote to CRM'}
+                      {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Submit for Quote'}
                     </button>
                   ) : (
                     <button
