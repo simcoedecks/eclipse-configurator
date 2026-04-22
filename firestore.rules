@@ -75,15 +75,18 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas']) &&
-             data.keys().hasAll(['name', 'email', 'type', 'configuration', 'createdAt']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId']) &&
+             data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
-             data.type in ['email', 'consultation'] &&
-             data.configuration is map &&
+             data.type in ['email', 'consultation', 'custom-request'] &&
+             (!('configuration' in data) || data.configuration is map) &&
              data.createdAt is timestamp &&
              (!('contractorId' in data) || data.contractorId == null || data.contractorId is string) &&
-             (!('isDuplicate' in data) || data.isDuplicate is bool);
+             (!('isDuplicate' in data) || data.isDuplicate is bool) &&
+             (!('customRequest' in data) || data.customRequest is bool) &&
+             (!('customRequestNotes' in data) || data.customRequestNotes is string) &&
+             (!('attachments' in data) || data.attachments is list);
     }
 
     function isValidLead(data) {

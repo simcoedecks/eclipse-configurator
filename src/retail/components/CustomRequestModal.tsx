@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, X, Loader2 } from 'lucide-react';
-import { db, addDoc, collection, serverTimestamp } from '../../shared/firebase';
+import { Sparkles, X, Loader2, Paperclip, Image as ImageIcon, FileText, Trash2 } from 'lucide-react';
+import { db, addDoc, collection, serverTimestamp, storage, storageRef, uploadBytes, getDownloadURL } from '../../shared/firebase';
 import { toast } from 'sonner';
+
+const MAX_FILE_MB = 15;
+const MAX_FILES = 6;
+const ACCEPT = 'image/*,application/pdf,.heic,.heif';
 
 interface Props {
   isDark: boolean;
@@ -37,8 +41,52 @@ export default function CustomRequestModal({
   const [address, setAddress] = useState(initialAddress);
   const [city, setCity] = useState(initialCity);
   const [description, setDescription] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (incoming: FileList | File[]) => {
+    const list = Array.from(incoming);
+    const accepted: File[] = [];
+    for (const f of list) {
+      if (f.size > MAX_FILE_MB * 1024 * 1024) {
+        toast.error(`${f.name} exceeds ${MAX_FILE_MB}MB — skipped`);
+        continue;
+      }
+      accepted.push(f);
+    }
+    const combined = [...files, ...accepted].slice(0, MAX_FILES);
+    if (files.length + accepted.length > MAX_FILES) {
+      toast.error(`Maximum ${MAX_FILES} attachments`);
+    }
+    setFiles(combined);
+  };
+
+  const removeFile = (idx: number) => {
+    setFiles(files.filter((_, i) => i !== idx));
+  };
+
+  const uploadFiles = async (submissionId: string): Promise<Array<{ name: string; url: string; size: number; type: string }>> => {
+    if (files.length === 0) return [];
+    setUploading(true);
+    const uploaded: Array<{ name: string; url: string; size: number; type: string }> = [];
+    try {
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+        const path = `custom-requests/${submissionId}/${Date.now()}-${safeName}`;
+        const ref = storageRef(storage, path);
+        await uploadBytes(ref, file);
+        const url = await getDownloadURL(ref);
+        uploaded.push({ name: file.name, url, size: file.size, type: file.type });
+      }
+      return uploaded;
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +96,8 @@ export default function CustomRequestModal({
     }
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'submissions'), {
+      // Create the doc first so we have an ID to scope uploads under.
+      const docRef = await addDoc(collection(db, 'submissions'), {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -57,6 +106,7 @@ export default function CustomRequestModal({
         type: 'custom-request',
         customRequest: true,
         customRequestNotes: description.trim(),
+        attachments: [],
         pipelineStage: 'new',
         viewedAt: null,
         source: 'configurator-custom-request',
@@ -68,12 +118,25 @@ export default function CustomRequestModal({
         createdAt: serverTimestamp(),
       });
 
+      // Upload attachments (if any) and patch the doc with URLs.
+      let attachments: Array<{ name: string; url: string; size: number; type: string }> = [];
+      if (files.length > 0) {
+        try {
+          attachments = await uploadFiles(docRef.id);
+          const { doc, setDoc } = await import('firebase/firestore');
+          await setDoc(doc(db, 'submissions', docRef.id), { attachments }, { merge: true });
+        } catch (err) {
+          console.error('Attachment upload failed', err);
+          toast.error('Some attachments failed to upload, but your request was saved.');
+        }
+      }
+
       // Notify sales side via existing endpoint (best-effort).
       try {
         await fetch('/api/custom-request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, phone, address, city, description }),
+          body: JSON.stringify({ name, email, phone, address, city, description, attachments }),
         });
       } catch (err) {
         // Endpoint may not exist yet — Firestore is the source of truth.
@@ -145,6 +208,83 @@ export default function CustomRequestModal({
                 />
               </div>
 
+              {/* Attachments */}
+              <div>
+                <label className={`block text-[10px] uppercase tracking-widest font-bold mb-1.5 ${isDark ? 'text-white/60' : 'text-luxury-black/50'}`}>
+                  Inspiration, sketches, or site photos <span className="font-normal normal-case tracking-normal opacity-60">(optional)</span>
+                </label>
+                <div
+                  onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActive(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                  className={`w-full rounded-lg border border-dashed px-3 py-4 cursor-pointer transition-colors flex flex-col items-center justify-center text-center ${
+                    dragActive
+                      ? 'border-luxury-gold bg-luxury-gold/10'
+                      : isDark
+                        ? 'border-white/15 bg-white/[0.02] hover:border-luxury-gold/50 hover:bg-luxury-gold/[0.04]'
+                        : 'border-slate-300 bg-slate-50/50 hover:border-luxury-gold hover:bg-luxury-gold/[0.04]'
+                  }`}
+                >
+                  <Paperclip className={`w-4 h-4 mb-1.5 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`} />
+                  <p className={`text-[11px] font-medium ${isDark ? 'text-white/70' : 'text-luxury-black/70'}`}>
+                    Drop files here or <span className="text-luxury-gold underline">browse</span>
+                  </p>
+                  <p className={`text-[9px] mt-0.5 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                    Images or PDFs · up to {MAX_FILES} files · {MAX_FILE_MB}MB each
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) addFiles(e.target.files);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  />
+                </div>
+
+                {files.length > 0 && (
+                  <ul className="mt-2 space-y-1.5">
+                    {files.map((f, i) => {
+                      const isImage = f.type.startsWith('image/');
+                      const sizeKb = Math.round(f.size / 1024);
+                      const sizeLabel = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
+                      return (
+                        <li
+                          key={`${f.name}-${i}`}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-[11px] ${isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50'}`}
+                        >
+                          {isImage
+                            ? <ImageIcon className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`} />
+                            : <FileText className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`} />}
+                          <span className={`flex-1 truncate font-medium ${isDark ? 'text-white/80' : 'text-luxury-black/80'}`}>{f.name}</span>
+                          <span className={`shrink-0 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>{sizeLabel}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                            aria-label={`Remove ${f.name}`}
+                            className={`shrink-0 p-1 rounded hover:bg-rose-500/10 ${isDark ? 'text-white/40 hover:text-rose-400' : 'text-luxury-black/40 hover:text-rose-600'}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={`block text-[10px] uppercase tracking-widest font-bold mb-1.5 ${isDark ? 'text-white/60' : 'text-luxury-black/50'}`}>Name *</label>
@@ -188,10 +328,14 @@ export default function CustomRequestModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || uploading}
                   className="luxury-button flex-1 !px-4 !py-2.5 text-[11px] inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</> : 'Send to Designer'}
+                  {uploading
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                    : submitting
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                      : 'Send to Designer'}
                 </button>
               </div>
             </form>
