@@ -464,6 +464,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   //   maxBaySpanOverride:   20 (default) .. 22
   const [maxLouverSpanOverride, setMaxLouverSpanOverride] = useState<number>(13);
   const [maxBaySpanOverride, setMaxBaySpanOverride] = useState<number>(20);
+  // Admin-only: manual discount / charge line items applied to this
+  // quote. Saved to the submission as `customLineItems` so the CRM
+  // PricingEditor can edit them afterward and they appear on the
+  // customer-facing proposal.
+  type AdjustmentLine = { id: string; name: string; amount: number; kind: 'discount' | 'charge'; quantity?: number };
+  const [adjustmentLines, setAdjustmentLines] = useState<AdjustmentLine[]>([]);
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
@@ -504,6 +510,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setAdjustmentLines([]);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -906,11 +913,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     return total;
   }, [louverColor, wallColor, width, depth, height, selectedAccessories, numScreenBaysX, numScreenBaysZ, houseWalls, houseWallLengths, sectionChoices]);
 
+  const adjustmentsTotal = useMemo(() => {
+    return adjustmentLines.reduce((sum, l) => {
+      const q = l.quantity || 1;
+      const signed = l.kind === 'discount' ? -Math.abs(l.amount) : l.amount;
+      return sum + signed * q;
+    }, 0);
+  }, [adjustmentLines]);
+
   const totalPrice = useMemo(() => {
     if (basePrice === null) return null;
-    const subtotal = basePrice + accessoriesPrice + woodgrainUpgrade;
+    const subtotal = basePrice + accessoriesPrice + woodgrainUpgrade + adjustmentsTotal;
     return subtotal;
-  }, [basePrice, accessoriesPrice, woodgrainUpgrade]);
+  }, [basePrice, accessoriesPrice, woodgrainUpgrade, adjustmentsTotal]);
 
   const pdfData = useMemo(() => {
     const sqft = width * depth;
@@ -1298,6 +1313,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setAdjustmentLines([]);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1387,6 +1403,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           isDuplicate: isDuplicateLead,
           pricingBreakdown,
           additionalPergolas: extraPergolas,
+          customLineItems: adjustmentLines,
           heardAbout: heardAboutValue,
           summary: summaryText,
           viewedAt: null,
@@ -2571,6 +2588,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setSectionChoices({});
     setMaxLouverSpanOverride(13);
     setMaxBaySpanOverride(20);
+    setAdjustmentLines([]);
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -3865,6 +3883,104 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         </>
                       );
                     })()}
+
+                    {/* Admin-only: Discounts & Charges.
+                        Lets admin add named adjustment lines during
+                        the quote. Saved as `customLineItems` on the
+                        submission so the CRM and proposal page see
+                        them, and pricing is adjusted immediately in
+                        the footer Running Total. */}
+                    {adminMode && (
+                      <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Discounts &amp; Charges</span>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setAdjustmentLines([...adjustmentLines, { id: `adj-${Date.now()}`, name: 'Discount', amount: 0, kind: 'discount', quantity: 1 }])}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 hover:bg-emerald-500/20"
+                            >
+                              <Minus className="w-2.5 h-2.5" /> Discount
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAdjustmentLines([...adjustmentLines, { id: `adj-${Date.now()}`, name: 'Charge', amount: 0, kind: 'charge', quantity: 1 }])}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold/15 text-luxury-black border border-luxury-gold/40 hover:bg-luxury-gold/25"
+                            >
+                              <Plus className="w-2.5 h-2.5" /> Charge
+                            </button>
+                          </div>
+                        </div>
+
+                        {adjustmentLines.length === 0 ? (
+                          <p className={`text-[10px] italic ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                            No adjustments. Add a discount or charge to apply it instantly to the quote total.
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {adjustmentLines.map((line, idx) => {
+                              const qty = line.quantity || 1;
+                              const signed = line.kind === 'discount' ? -Math.abs(line.amount) : line.amount;
+                              const lineTotal = signed * qty;
+                              const update = (patch: Partial<AdjustmentLine>) => {
+                                const next = [...adjustmentLines];
+                                next[idx] = { ...line, ...patch };
+                                setAdjustmentLines(next);
+                              };
+                              const remove = () => {
+                                setAdjustmentLines(adjustmentLines.filter((_, i) => i !== idx));
+                              };
+                              const isDiscount = line.kind === 'discount';
+                              return (
+                                <div key={line.id} className={`grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-2 py-1.5 rounded border ${isDiscount ? 'border-emerald-500/30 bg-emerald-500/[0.03]' : 'border-luxury-gold/30 bg-luxury-gold/[0.03]'}`}>
+                                  <input
+                                    type="text"
+                                    value={line.name}
+                                    onChange={(e) => update({ name: e.target.value })}
+                                    placeholder={isDiscount ? 'e.g. Seasonal promo' : 'e.g. Rush delivery'}
+                                    className={`px-2 py-1 text-[11px] bg-transparent border-b border-transparent focus:border-luxury-gold focus:outline-none ${isDark ? 'text-white placeholder:text-white/30' : 'text-luxury-black placeholder:text-luxury-black/30'}`}
+                                  />
+                                  <div className="flex items-center gap-0.5">
+                                    <span className={`text-[9px] uppercase tracking-widest font-bold ${isDiscount ? 'text-emerald-700' : 'text-luxury-gold'}`}>
+                                      {isDiscount ? '−$' : '+$'}
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step={1}
+                                      value={line.amount}
+                                      onChange={(e) => update({ amount: Math.max(0, Number(e.target.value) || 0) })}
+                                      className="w-20 px-1 py-0.5 text-[11px] text-right font-bold bg-transparent border-b border-luxury-black/10 focus:border-luxury-gold focus:outline-none"
+                                    />
+                                  </div>
+                                  <span className={`text-[11px] font-bold whitespace-nowrap ${isDiscount ? 'text-emerald-700' : 'text-luxury-black'}`}>
+                                    {isDiscount ? '−' : ''}{formatCurrency(Math.abs(lineTotal))}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={remove}
+                                    className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/40 hover:text-rose-400' : 'text-luxury-black/30 hover:text-rose-500'}`}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-luxury-black/5 dark:border-white/5">
+                              <span className={`uppercase tracking-widest font-bold ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
+                                Net Adjustment
+                              </span>
+                              <span className={`font-serif font-bold ${adjustmentsTotal < 0 ? 'text-emerald-700' : adjustmentsTotal > 0 ? 'text-luxury-black' : (isDark ? 'text-white/40' : 'text-luxury-black/40')}`}>
+                                {adjustmentsTotal < 0 ? '−' : ''}{formatCurrency(Math.abs(adjustmentsTotal))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <p className={`text-[9px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>
+                          Adjustments apply to the pre-tax total. Saved on the submission — the CRM Pricing Editor can edit them afterward.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Add Another Pergola CTA */}
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3">
