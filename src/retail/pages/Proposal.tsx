@@ -34,11 +34,26 @@ export default function Proposal() {
     setGeneratingPdf(true);
     let offscreen: HTMLDivElement | null = null;
     try {
-      // Give any async 3D / image rendering a moment to settle
-      await new Promise(r => setTimeout(r, 800));
+      // Wait longer for the 3D scene to finish its initial render —
+      // Three.js + React-Fiber can take 1-2s on first paint.
+      await new Promise(r => setTimeout(r, 2000));
 
       const targetWidth = 800; // CSS px — matches ~portrait A4 at 96dpi
       const source = contentRef.current;
+
+      // BEFORE cloning, snapshot every live <canvas> (the WebGL context
+      // doesn't survive cloneNode — the cloned canvas is blank). We'll
+      // swap the blank clones with <img> elements holding the pixel data.
+      const canvasSnapshots: string[] = [];
+      const originalCanvases = source.querySelectorAll('canvas');
+      originalCanvases.forEach(canvas => {
+        try {
+          canvasSnapshots.push(canvas.toDataURL('image/png'));
+        } catch (e) {
+          console.warn('Could not snapshot canvas for PDF', e);
+          canvasSnapshots.push('');
+        }
+      });
 
       offscreen = document.createElement('div');
       offscreen.style.position = 'fixed';
@@ -54,10 +69,35 @@ export default function Proposal() {
       clone.style.margin = '0';
       clone.style.padding = '0';
       clone.style.boxSizing = 'border-box';
+
+      // Replace every cloned canvas with an <img> of its snapshot so
+      // the 3D preview shows up in the PDF.
+      const clonedCanvases = clone.querySelectorAll('canvas');
+      clonedCanvases.forEach((clonedCanvas, i) => {
+        const dataUrl = canvasSnapshots[i];
+        if (!dataUrl) return;
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.style.display = 'block';
+        img.style.width = '100%';
+        img.style.height = 'auto';
+        // Preserve the parent's aspect by matching the canvas's rendered size
+        const originalCanvas = originalCanvases[i] as HTMLCanvasElement;
+        if (originalCanvas) {
+          const rect = originalCanvas.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            img.style.aspectRatio = `${rect.width} / ${rect.height}`;
+          }
+        }
+        clonedCanvas.replaceWith(img);
+      });
+
       offscreen.appendChild(clone);
       document.body.appendChild(offscreen);
 
-      // Give cloned images / 3D previews a tick to render
+      // Give cloned images a tick to load (canvas→img conversions are
+      // data URLs so they're effectively immediate, but other assets
+      // in the clone may still be fetching)
       await new Promise(r => setTimeout(r, 400));
 
       const pdf = new jsPDF('p', 'mm', 'a4');
