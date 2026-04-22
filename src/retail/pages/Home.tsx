@@ -2552,7 +2552,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                           return (
                             <div
                               key={`${axis}-${index}`}
-                              onClick={() => setSelectedMiddlePost(isSelected ? null : { axis, index })}
+                              onClick={() => {
+                                const nextSelected = isSelected ? null : { axis, index };
+                                setSelectedMiddlePost(nextSelected);
+                                // Reset to Post+Beam mode each time a new post is selected
+                                // so the default nudge always moves the beam with the post.
+                                if (nextSelected) setPostMoveMode('together');
+                              }}
                               className={`rounded-lg border transition-all px-3 py-2 cursor-pointer ${
                                 isRemoved
                                   ? 'border-rose-400/40 bg-rose-500/5'
