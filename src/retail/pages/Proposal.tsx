@@ -178,9 +178,17 @@ function PopularAddOns({ submission }: { submission: any }) {
   // A side with a structural (house) wall can't have a screen OR a privacy
   // wall upgrade suggested on it — the side is already closed off.
   const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
+  // A side is "closed" if it already has a structural wall, a motorized
+  // screen, or a privacy wall — in any of those cases, don't offer the
+  // opposite enclosure as an upsell on that same side.
+  const closedSides = new Set<string>(houseWallSides);
+  for (const id of selectedIds) {
+    const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
+    if (m) closedSides.add(m[2]);
+  }
   const blockedBySide = (id: string) => {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
-    return m ? houseWallSides.has(m[2]) : false;
+    return m ? closedSides.has(m[2]) : false;
   };
   const unused = ACCESSORIES
     .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id) && !blockedBySide(a.id))

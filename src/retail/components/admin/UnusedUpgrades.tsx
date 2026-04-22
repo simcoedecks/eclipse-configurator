@@ -55,9 +55,16 @@ export default function UnusedUpgrades({ submission }: Props) {
   const screenBaysZ = depth > maxBay ? Math.ceil(depth / 20) : 1;
   // Sides that already have a structural wall can't be upsold a screen/wall.
   const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
+  // A side is "closed" if it has a structural wall, a motorized screen,
+  // or a privacy wall — don't offer the opposite enclosure on that side.
+  const closedSides = new Set<string>(houseWallSides);
+  for (const id of selectedIds) {
+    const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
+    if (m) closedSides.add(m[2]);
+  }
   const blockedBySide = (id: string) => {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
-    return m ? houseWallSides.has(m[2]) : false;
+    return m ? closedSides.has(m[2]) : false;
   };
 
   // Calculate each unused accessory's price at this configuration
