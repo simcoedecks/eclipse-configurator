@@ -1289,6 +1289,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             if (!acc) return id;
             return qty > 1 ? `${acc.name} × ${qty}` : acc.name;
           }),
+          accessoryIds: Array.from(selectedAccessories),
           houseWalls: Array.from(houseWalls),
           houseWallLengths,
           houseWallAnchors,

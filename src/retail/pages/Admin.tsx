@@ -28,7 +28,11 @@ import SourceSelector from '../components/admin/SourceSelector';
 import ContractorInviteForm from '../components/admin/ContractorInviteForm';
 import PricingEditor from '../components/admin/PricingEditor';
 import AdminPdfDownload from '../components/admin/AdminPdfDownload';
+import InlineEditField from '../components/admin/InlineEditField';
+import UnusedUpgrades from '../components/admin/UnusedUpgrades';
+import TwoAngleViews from '../components/admin/TwoAngleViews';
 import { computeFinalPricing } from '../../shared/lib/pricingMath';
+import { calculateBasePrice } from '../../shared/lib/pricing';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
@@ -980,7 +984,21 @@ export default function Admin() {
 function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; contractors: any[] }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
-  const pb = sub.pricingBreakdown || {};
+  // Fallback: recompute basePrice from dimensions if the stored
+  // pricingBreakdown is missing or zeroed. Also use calculateBasePrice
+  // only for non-custom submissions (custom requests legitimately have
+  // no price).
+  const pb = (() => {
+    const stored = sub.pricingBreakdown || {};
+    const storedBase = typeof stored.basePrice === 'number' ? stored.basePrice : 0;
+    const isCustom = sub.customRequest === true || sub.type === 'custom-request';
+    if (storedBase > 0 || isCustom) return stored;
+    const recomputed = calculateBasePrice(Number(cfg.depth) || 0, Number(cfg.width) || 0);
+    if (typeof recomputed === 'number' && recomputed > 0) {
+      return { ...stored, basePrice: recomputed };
+    }
+    return stored;
+  })();
   const finalPricing = computeFinalPricing(pb, sub.customLineItems || [], sub.additionalPergolas || []);
   const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
   const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
@@ -1072,15 +1090,29 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                 <section>
                   <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Contact</h3>
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center gap-2"><Mail className="w-4 h-4 text-gray-400" /><a href={`mailto:${sub.email}`} className="hover:underline">{sub.email}</a></div>
-                    {sub.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-gray-400" /><a href={`tel:${sub.phone}`} className="hover:underline">{sub.phone}</a></div>}
-                    {(sub.address || sub.city) && <div className="flex items-start gap-2"><MapPin className="w-4 h-4 text-gray-400 mt-0.5" /><span>{[sub.address, sub.city].filter(Boolean).join(', ')}</span></div>}
-                    {sub.heardAbout && (
-                      <div className="flex items-start gap-2 text-xs text-gray-500 pt-1">
-                        <span className="uppercase tracking-widest font-bold text-[9px] text-gray-400 shrink-0">Heard via</span>
-                        <span className="text-gray-700">{sub.heardAbout}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase text-gray-400 w-14 shrink-0">Name</span>
+                      <InlineEditField docId={sub.id} path="name" value={sub.name} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <InlineEditField docId={sub.id} path="email" value={sub.email} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-gray-400" />
+                      <InlineEditField docId={sub.id} path="phone" value={sub.phone} placeholder="—" />
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                      <div className="flex-1 space-y-0.5">
+                        <div><InlineEditField docId={sub.id} path="address" value={sub.address} placeholder="Street address" /></div>
+                        <div><InlineEditField docId={sub.id} path="city" value={sub.city} placeholder="City" /></div>
                       </div>
-                    )}
+                    </div>
+                    <div className="flex items-start gap-2 text-xs pt-1">
+                      <span className="uppercase tracking-widest font-bold text-[9px] text-gray-400 shrink-0 w-14">Heard via</span>
+                      <InlineEditField docId={sub.id} path="heardAbout" value={sub.heardAbout} placeholder="—" className="text-gray-700" />
+                    </div>
                   </div>
                 </section>
                 <section className="grid grid-cols-2 gap-3">
@@ -1213,6 +1245,12 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                     </table>
                   </div>
                 </section>
+                {!(sub.customRequest === true || sub.type === 'custom-request') && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Optional Upgrades (Not Selected)</h3>
+                    <UnusedUpgrades submission={sub} />
+                  </section>
+                )}
                 {dealer && dealerCost != null && (
                   <section className="border-2 border-luxury-gold/30 bg-luxury-gold/5 rounded-lg p-4">
                     <div className="flex items-start gap-3 mb-3">
@@ -1263,6 +1301,12 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                 )}
               </div>
               <div className="space-y-5">
+                {!(sub.customRequest === true || sub.type === 'custom-request') && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">3D Previews</h3>
+                    <TwoAngleViews submission={sub} />
+                  </section>
+                )}
                 <section>
                   <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Open Tasks</h3>
                   <TasksPanel submissionId={sub.id} />
@@ -1280,12 +1324,39 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
           {activeTab === 'tasks' && <TasksPanel submissionId={sub.id} />}
           {activeTab === 'files' && <FilesPanel submissionId={sub.id} />}
           {activeTab === 'pdf' && (
-            sub.pdfUrl ? (
-              <div className="space-y-2">
-                <iframe src={sub.pdfUrl} className="w-full rounded-lg border border-slate-200" style={{ height: '75vh' }} title={`Proposal ${sub.name}`} />
-                <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" download={sub.pdfFilename} className="inline-flex items-center gap-1.5 px-3 py-2 bg-luxury-gold text-white rounded-lg text-xs font-bold"><Download className="w-4 h-4" />Download</a>
-              </div>
-            ) : <p className="text-sm text-gray-400 italic text-center py-10">No PDF attached to this submission.</p>
+            <div className="space-y-3">
+              {sub.pdfUrl ? (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Stored Proposal</p>
+                    <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" download={sub.pdfFilename} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-white rounded-lg text-xs font-bold hover:bg-luxury-gold/90">
+                      <Download className="w-3.5 h-3.5" />Download
+                    </a>
+                  </div>
+                  <iframe
+                    src={sub.pdfUrl}
+                    className="w-full rounded-lg border border-slate-200 bg-white"
+                    style={{ height: '75vh' }}
+                    title={`Proposal ${sub.name}`}
+                  />
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                    <p className="text-[11px] text-gray-500">
+                      If the preview above is blank, the stored PDF may be missing or blocked. Generate a fresh copy:
+                    </p>
+                    <AdminPdfDownload submission={sub} label="Regenerate PDF" />
+                  </div>
+                </>
+              ) : (
+                <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-8 text-center space-y-3">
+                  <FileText className="w-10 h-10 text-gray-300 mx-auto" />
+                  <p className="text-sm text-gray-500">No stored PDF for this submission.</p>
+                  <p className="text-xs text-gray-400">Generate a fresh proposal from the current configuration:</p>
+                  <div className="flex justify-center pt-2">
+                    <AdminPdfDownload submission={sub} label="Generate Proposal PDF" />
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </motion.div>
