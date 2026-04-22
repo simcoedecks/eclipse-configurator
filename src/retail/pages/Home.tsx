@@ -2508,101 +2508,75 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   );
                 })()}
 
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Width</label>
-                    <span className="text-lg font-serif font-medium text-luxury-gold">{width}'</span>
+                {/* Dimension inputs — typable + slider + ± buttons.
+                    Common renderer so we keep consistent behavior across W/D/H. */}
+                {([
+                  { label: 'Width',  value: width,  setter: setWidth,  min: 7, max: 100, ariaKey: 'width' },
+                  { label: 'Depth',  value: depth,  setter: setDepth,  min: 8, max: 40,  ariaKey: 'depth' },
+                  { label: 'Height', value: height, setter: setHeight, min: 8, max: 11,  ariaKey: 'height' },
+                ] as const).map(({ label, value, setter, min, max, ariaKey }) => (
+                  <div key={ariaKey} className="space-y-2">
+                    <div className="flex justify-between items-end">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">{label}</label>
+                      <div className="flex items-baseline gap-0.5">
+                        <input
+                          type="number"
+                          min={min}
+                          max={max}
+                          step="1"
+                          value={value}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            // Allow empty while typing; commit on blur
+                            if (v === '') return;
+                            const n = parseInt(v, 10);
+                            if (!Number.isNaN(n)) setter(Math.max(min, Math.min(max, n)));
+                          }}
+                          onBlur={(e) => {
+                            const n = parseInt(e.target.value, 10);
+                            if (Number.isNaN(n)) setter(min);
+                            else setter(Math.max(min, Math.min(max, n)));
+                          }}
+                          aria-label={`Pergola ${ariaKey} in feet`}
+                          className="w-14 text-right text-lg font-serif font-medium text-luxury-gold bg-transparent border-b border-luxury-black/10 dark:border-white/10 focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <span className="text-lg font-serif font-medium text-luxury-gold">'</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setter(Math.max(min, value - 1))}
+                        className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                        aria-label={`Decrease ${ariaKey}`}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        step="1"
+                        value={value}
+                        onChange={(e) => setter(Number(e.target.value))}
+                        aria-label={`Pergola ${ariaKey} slider`}
+                        aria-valuetext={`${value} feet`}
+                        className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
+                      />
+                      <button
+                        onClick={() => setter(Math.min(max, value + 1))}
+                        className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                        aria-label={`Increase ${ariaKey}`}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] text-luxury-black/30 dark:text-white/30">
+                      <span>{min}'</span>
+                      <span>Range: {min}'–{max}'</span>
+                      <span>{max}'</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setWidth(Math.max(7, width - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <input
-                      type="range"
-                      min="7"
-                      max="100"
-                      step="1"
-                      value={width}
-                      onChange={(e) => setWidth(Number(e.target.value))}
-                      aria-label="Pergola width in feet"
-                      aria-valuetext={`${width} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
-                    />
-                    <button 
-                      onClick={() => setWidth(Math.min(100, width + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Depth</label>
-                    <span className="text-lg font-serif font-medium text-luxury-gold">{depth}'</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setDepth(Math.max(8, depth - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <input
-                      type="range"
-                      min="8"
-                      max="40"
-                      step="1"
-                      value={depth}
-                      onChange={(e) => setDepth(Number(e.target.value))}
-                      aria-label="Pergola depth in feet"
-                      aria-valuetext={`${depth} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
-                    />
-                    <button 
-                      onClick={() => setDepth(Math.min(40, depth + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Height</label>
-                    <span className="text-lg font-serif font-medium text-luxury-gold">{height}'</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setHeight(Math.max(8, height - 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <input
-                      type="range"
-                      min="8"
-                      max="11"
-                      step="1"
-                      value={height}
-                      onChange={(e) => setHeight(Number(e.target.value))}
-                      aria-label="Pergola height in feet"
-                      aria-valuetext={`${height} feet`}
-                      className="flex-1 h-[2px] sm:h-[1px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
-                    />
-                    <button 
-                      onClick={() => setHeight(Math.min(11, height + 1))}
-                      className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
+                ))}
 
                 <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
                   <div className="flex justify-between items-center">
