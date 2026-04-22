@@ -55,7 +55,16 @@ export default function PricingEditor({ submission }: Props) {
     setSaving(true);
     try {
       const cleaned = items
-        .filter(i => i.name.trim() && Math.abs(i.amount) > 0)
+        .filter(i => {
+          // Drop empty rows (no name)
+          if (!i.name.trim()) return false;
+          // TBD items save even with amount 0 — that's the whole point
+          if (i.tbd) return true;
+          // Allow $0 items (admin might be mid-edit) — only drop
+          // completely-empty fresh rows where BOTH name and amount
+          // are blank. Here name has content, so keep it.
+          return true;
+        })
         .map(i => ({
           id: i.id || Math.random().toString(36).slice(2, 10),
           name: i.name.trim(),
