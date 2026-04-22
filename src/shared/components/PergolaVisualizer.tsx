@@ -115,6 +115,10 @@ interface PergolaVisualizerProps {
   houseWallLengths?: Partial<Record<'back'|'front'|'left'|'right', number>>;
   /** Anchor/position of the partial structure wall on its side. */
   houseWallAnchors?: Partial<Record<'back'|'front'|'left'|'right', 'start'|'center'|'end'>>;
+  /** Per-end extension toggle: when false, the wall terminates flush at
+   *  the pergola edge instead of extending past it. Default (true) keeps
+   *  the original "house continues past pergola" visual. */
+  houseWallExtensions?: Partial<Record<'back'|'front'|'left'|'right', { start?: boolean; end?: boolean }>>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -569,7 +573,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -980,13 +984,26 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
               const end1Intersects = touchesEnd1 && structureSides.has(perpEnd1);
               const end2Intersects = touchesEnd2 && structureSides.has(perpEnd2);
 
-              // Only extend past the pergola edge when the wall reaches
-              // that edge. Otherwise terminate flush at the covered range.
+              // Per-end extension choice: default true (extend past the
+              // pergola), false means terminate flush at the pergola edge.
+              // 'start' maps to end1, 'end' maps to end2.
+              const extChoice = houseWallExtensions?.[side as 'front'|'back'|'left'|'right'];
+              const wantExtStart = extChoice?.start !== false;
+              const wantExtEnd = extChoice?.end !== false;
+
+              // Resolve each end's position. If it doesn't touch the edge,
+              // it terminates at the covered range. If it does touch, the
+              // customer's extension toggle chooses between flush and
+              // extend-past.
               const end1 = touchesEnd1
-                ? (end1Intersects ? coveredStart - CORNER_EXT : coveredStart - EXT)
+                ? (end1Intersects
+                    ? coveredStart - CORNER_EXT
+                    : (wantExtStart ? coveredStart - EXT : coveredStart))
                 : coveredStart;
               const end2 = touchesEnd2
-                ? (end2Intersects ? coveredEnd + CORNER_EXT : coveredEnd + EXT)
+                ? (end2Intersects
+                    ? coveredEnd + CORNER_EXT
+                    : (wantExtEnd ? coveredEnd + EXT : coveredEnd))
                 : coveredEnd;
               const wallLength = end2 - end1;
               const wallCenter = (end1 + end2) / 2;

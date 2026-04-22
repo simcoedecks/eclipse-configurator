@@ -308,7 +308,7 @@ Pricing:
 Bespoke Pergola: $${(basePrice || 0).toFixed(2)}
 Accessories: $${(accessoriesPrice || 0).toFixed(2)}
 Woodgrain Upgrade: $${(woodgrainUpgrade || 0).toFixed(2)}${woodgrainDetails}${extraPergolas.length > 0 ? `\nAdditional Pergolas (${extraPergolas.length}): $${extraPergolasTotal.toFixed(2)}` : ''}
-Total Price: $${grandTotal.toFixed(2)}`;
+Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Notes:\n${customerNotes.trim()}` : ''}`;
   };
 
   const updatePipedrive = async (currentLeadId: string, additionalImages: {name: string, data: string}[] = []) => {
@@ -360,6 +360,16 @@ Total Price: $${grandTotal.toFixed(2)}`;
   //   end    → right for front/back, back for left/right
   const [houseWallLengths, setHouseWallLengths] = useState<Partial<Record<'back'|'front'|'left'|'right', number>>>({});
   const [houseWallAnchors, setHouseWallAnchors] = useState<Partial<Record<'back'|'front'|'left'|'right', 'start'|'center'|'end'>>>({});
+  // Per-end extension toggle: when true (default), the structure wall
+  // extends past the pergola edge to imply the house continues. When
+  // false, the wall terminates flush at the pergola edge. Only applies
+  // when that end touches the pergola edge (i.e., partial walls with
+  // 'center' anchor don't show extensions at either end).
+  const [houseWallExtensions, setHouseWallExtensions] = useState<Partial<Record<'back'|'front'|'left'|'right', { start?: boolean; end?: boolean }>>>({});
+  // Free-form customer notes surfaced on Phase 5 — persisted to
+  // Firestore submission so sales can see "change requests" alongside
+  // the configured spec.
+  const [customerNotes, setCustomerNotes] = useState('');
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
   const [accessoryQuantities, setAccessoryQuantities] = useState<Record<string, number>>({});
   const [wallColor, setWallColor] = useState<string>('#0A0A0A');
@@ -382,6 +392,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
     setHouseWalls(new Set());
     setHouseWallLengths({});
     setHouseWallAnchors({});
+    setHouseWallExtensions({});
+    setCustomerNotes('');
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -1058,6 +1070,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
     setHouseWalls(new Set());
     setHouseWallLengths({});
     setHouseWallAnchors({});
+    setHouseWallExtensions({});
+    setCustomerNotes('');
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1098,6 +1112,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
           houseWalls: Array.from(houseWalls),
           houseWallLengths,
           houseWallAnchors,
+          houseWallExtensions,
+          customerNotes: customerNotes.trim(),
         }
       };
 
@@ -1861,6 +1877,7 @@ Total Price: $${grandTotal.toFixed(2)}`;
           houseWalls={houseWalls}
           houseWallLengths={houseWallLengths}
           houseWallAnchors={houseWallAnchors}
+          houseWallExtensions={houseWallExtensions}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2099,6 +2116,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
                               setHouseWalls(new Set());
     setHouseWallLengths({});
     setHouseWallAnchors({});
+    setHouseWallExtensions({});
+    setCustomerNotes('');
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2107,8 +2126,10 @@ Total Price: $${grandTotal.toFixed(2)}`;
                                 // Clean up partial-length state for the removed side
                                 const nl = { ...houseWallLengths }; delete (nl as any)[opt.value];
                                 const na = { ...houseWallAnchors }; delete (na as any)[opt.value];
+                                const nx = { ...houseWallExtensions }; delete (nx as any)[opt.value];
                                 setHouseWallLengths(nl);
                                 setHouseWallAnchors(na);
+                                setHouseWallExtensions(nx);
                               } else {
                                 next.add(opt.value as any);
                               }
@@ -2145,6 +2166,23 @@ Total Price: $${grandTotal.toFixed(2)}`;
                       (side === 'front' || side === 'back')
                         ? [{ value: 'start', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'end', label: 'Right' }]
                         : [{ value: 'start', label: 'Front' }, { value: 'center', label: 'Center' }, { value: 'end', label: 'Back' }];
+                    const extensions = houseWallExtensions[side] || {};
+                    const extendStart = extensions.start !== false; // default true
+                    const extendEnd = extensions.end !== false;     // default true
+                    // Which ends actually touch the pergola edge (and therefore
+                    // show an "extend past" choice)
+                    const touchesStart = !isPartial || anchor === 'start';
+                    const touchesEnd = !isPartial || anchor === 'end';
+                    const startLabel = (side === 'front' || side === 'back') ? 'Left end' : 'Front end';
+                    const endLabel   = (side === 'front' || side === 'back') ? 'Right end' : 'Back end';
+                    const toggleExt = (which: 'start'|'end') => {
+                      const curr = houseWallExtensions[side] || {};
+                      const currVal = curr[which] !== false; // default true
+                      setHouseWallExtensions({
+                        ...houseWallExtensions,
+                        [side]: { ...curr, [which]: !currVal },
+                      });
+                    };
                     return (
                       <div key={`struct-${side}`} className={`mt-2 p-3 rounded-lg border ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
                         <div className="flex items-center justify-between mb-2">
@@ -2222,6 +2260,50 @@ Total Price: $${grandTotal.toFixed(2)}`;
                             <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
                               Open portion ({total - currentLen}') is available for privacy walls or motorized screens in Phase 3.
                             </p>
+                          </div>
+                        )}
+
+                        {/* End styles — extend past pergola vs end flush. Only offered
+                            for ends that actually touch the pergola edge. */}
+                        {(touchesStart || touchesEnd) && (
+                          <div className="mt-3 pt-3 border-t border-luxury-black/5 dark:border-white/5">
+                            <p className={`text-[9px] uppercase tracking-widest font-bold mb-1.5 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                              Wall Ends
+                            </p>
+                            <div className="space-y-1">
+                              {touchesStart && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExt('start')}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md border text-[10px] font-medium transition-colors ${
+                                    isDark
+                                      ? 'bg-white/[0.02] border-white/10 hover:border-luxury-gold/40'
+                                      : 'bg-white border-slate-200 hover:border-luxury-gold/60'
+                                  }`}
+                                >
+                                  <span className={isDark ? 'text-white/70' : 'text-luxury-black/70'}>{startLabel}</span>
+                                  <span className={`font-bold uppercase tracking-widest text-[9px] ${extendStart ? 'text-luxury-gold' : (isDark ? 'text-white/50' : 'text-luxury-black/50')}`}>
+                                    {extendStart ? 'Extend past →' : 'End flush ▌'}
+                                  </span>
+                                </button>
+                              )}
+                              {touchesEnd && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExt('end')}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md border text-[10px] font-medium transition-colors ${
+                                    isDark
+                                      ? 'bg-white/[0.02] border-white/10 hover:border-luxury-gold/40'
+                                      : 'bg-white border-slate-200 hover:border-luxury-gold/60'
+                                  }`}
+                                >
+                                  <span className={isDark ? 'text-white/70' : 'text-luxury-black/70'}>{endLabel}</span>
+                                  <span className={`font-bold uppercase tracking-widest text-[9px] ${extendEnd ? 'text-luxury-gold' : (isDark ? 'text-white/50' : 'text-luxury-black/50')}`}>
+                                    {extendEnd ? '← Extend past' : '▐ End flush'}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2848,6 +2930,32 @@ Total Price: $${grandTotal.toFixed(2)}`;
                     <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed">
                       Please note that the configurator is provided for budgetary purposes only. Each pergola must be finalized with a site visit so we can provide an accurate final quote based on the specific site conditions and project details.
                     </p>
+                  </div>
+
+                  {/* Customer Notes — change requests, context, special instructions */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Notes &amp; Change Requests</h4>
+                      <span className={`text-[9px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>Optional</span>
+                    </div>
+                    <textarea
+                      value={customerNotes}
+                      onChange={(e) => setCustomerNotes(e.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Site-specific details, design tweaks, colour-match requests, or anything else we should know…"
+                      className={`w-full px-3 py-2.5 rounded-lg border text-sm leading-relaxed focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${
+                        isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 placeholder:text-slate-400'
+                      }`}
+                    />
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className={isDark ? 'text-white/40' : 'text-luxury-black/40'}>
+                        Your sales rep will review these notes alongside the quote.
+                      </span>
+                      <span className={isDark ? 'text-white/30' : 'text-luxury-black/30'}>
+                        {customerNotes.length}/2000
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-4">

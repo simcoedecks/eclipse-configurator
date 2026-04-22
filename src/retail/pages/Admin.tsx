@@ -1135,6 +1135,12 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                     </div>
                   </section>
                 )}
+                {cfg.customerNotes && (
+                  <section className="bg-luxury-gold/5 border border-luxury-gold/30 rounded-lg p-3">
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-1.5">Customer Notes &amp; Change Requests</h3>
+                    <p className="text-sm text-luxury-black whitespace-pre-wrap leading-relaxed">{cfg.customerNotes}</p>
+                  </section>
+                )}
                 <section>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Pricing Breakdown</h3>
