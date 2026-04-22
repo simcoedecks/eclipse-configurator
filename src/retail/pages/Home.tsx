@@ -1359,21 +1359,24 @@ Total Price: $${grandTotal.toFixed(2)}`;
                 <img src="/logo.png" alt="Eclipse Pergola" className="h-6 lg:h-10 object-contain mb-1" />
               </motion.div>
             </div>
+
+            {/* Theme Toggle — floats on visualizer, reachable in all viewports */}
+            <button
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className={`absolute top-3 right-3 lg:top-6 lg:right-6 z-20 w-9 h-9 lg:w-10 lg:h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all shadow-lg ${
+                isDark
+                  ? 'bg-black/40 border-white/15 hover:bg-black/60 hover:border-luxury-gold/40'
+                  : 'bg-white/70 border-luxury-black/10 hover:bg-white/90 hover:border-luxury-gold/40'
+              }`}
+            >
+              {isDark ? <Moon className="w-4 h-4 text-luxury-gold" /> : <Sun className="w-4 h-4 text-amber-500" />}
+            </button>
           </div>
 
           {/* Right: Lead Capture Form (Sidebar) */}
           <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
             <div className="p-6 lg:p-8 flex flex-col justify-center min-h-full relative">
-              {/* Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="absolute top-4 right-4 theme-toggle"
-                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                <div className="theme-toggle-knob">
-                  {isDark ? <Moon className="w-3 h-3 text-luxury-gold" /> : <Sun className="w-3 h-3 text-amber-500" />}
-                </div>
-              </button>
               <h3 className={`text-2xl font-serif mb-2 ${isDark ? 'text-white' : 'text-luxury-black'}`}>Welcome</h3>
               <p className={`text-sm mb-6 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>Please enter your details to start configuring your bespoke pergola.</p>
 
@@ -1760,6 +1763,19 @@ Total Price: $${grandTotal.toFixed(2)}`;
           </motion.div>
         </div>
 
+        {/* Theme Toggle — floats on visualizer, reachable in all viewports */}
+        <button
+          onClick={toggleTheme}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          className={`absolute top-3 right-3 lg:top-6 lg:right-6 z-20 w-9 h-9 lg:w-10 lg:h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all shadow-lg ${
+            isDark
+              ? 'bg-black/40 border-white/15 hover:bg-black/60 hover:border-luxury-gold/40'
+              : 'bg-white/70 border-luxury-black/10 hover:bg-white/90 hover:border-luxury-gold/40'
+          }`}
+        >
+          {isDark ? <Moon className="w-4 h-4 text-luxury-gold" /> : <Sun className="w-4 h-4 text-amber-500" />}
+        </button>
+
         <div className="absolute bottom-4 left-4 lg:bottom-8 lg:left-8 flex flex-col gap-1 md:gap-3 lg:gap-4 z-10">
           <div className="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-36 sm:w-44 lg:w-56">
             <div className="flex items-center justify-between mb-1 lg:mb-2">
@@ -1809,16 +1825,6 @@ Total Price: $${grandTotal.toFixed(2)}`;
       <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
         {/* Step Indicator */}
         <div className={`px-3 py-3 lg:px-5 lg:py-5 border-b shrink-0 flex items-center gap-3 ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-luxury-paper dark:bg-[#111]/50'}`}>
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="theme-toggle shrink-0"
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            <div className="theme-toggle-knob">
-              {isDark ? <Moon className="w-3 h-3 text-luxury-gold" /> : <Sun className="w-3 h-3 text-amber-500" />}
-            </div>
-          </button>
           {/* Reset Button */}
           <button
             onClick={() => setShowResetModal(true)}
