@@ -37,10 +37,20 @@ export default function UnusedUpgrades({ submission }: Props) {
     }
   }
 
+  // Phase 3 + Phase 4 accessory IDs — the user-facing "add-ons" list
+  // on the configurator. We exclude "extras" (LED, audio, in-lite)
+  // that aren't in the primary configurator flow.
+  const PHASE_3_4_IDS = new Set([
+    'screen_front', 'screen_back', 'screen_left', 'screen_right',
+    'wall_front', 'wall_back', 'wall_left', 'wall_right',
+    'guillotine_front',
+    'sensor', 'app_control', 'fan', 'heater',
+  ]);
+
   // Calculate each unused accessory's price at this configuration
   const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
   const unused = ACCESSORIES
-    .filter(a => !selectedIds.has(a.id))
+    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id))
     .map(a => {
       let price = 0;
       if (a.type === 'flat') price = a.price;
@@ -55,7 +65,7 @@ export default function UnusedUpgrades({ submission }: Props) {
       }
       else if (a.type === 'wall_width') price = width * height * wallUnitPrice;
       else if (a.type === 'wall_depth') price = depth * height * wallUnitPrice;
-      return { id: a.id, name: a.name, description: a.description, price };
+      return { id: a.id, name: a.name, description: a.description, price, imageUrl: a.imageUrl };
     })
     // Hide items we can't meaningfully quote (no matching price table entry)
     .filter(a => a.price > 0);
@@ -76,18 +86,27 @@ export default function UnusedUpgrades({ submission }: Props) {
   const Group = ({ label, items }: { label: string; items: typeof unused }) => (
     items.length > 0 ? (
       <div>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">{label}</p>
-        <ul className="space-y-1">
+        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">{label}</p>
+        <div className="grid grid-cols-2 gap-2">
           {items.map(a => (
-            <li key={a.id} className="flex items-center justify-between gap-3 text-sm py-1 border-b border-slate-100 last:border-b-0">
-              <div className="min-w-0">
-                <p className="text-luxury-black truncate">{a.name}</p>
-                {a.description && <p className="text-[11px] text-gray-500 truncate">{a.description}</p>}
+            <div key={a.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden flex flex-col">
+              <div className="w-full h-24 bg-luxury-paper overflow-hidden relative">
+                {a.imageUrl ? (
+                  <img src={a.imageUrl} alt={a.name} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 italic">No image</div>
+                )}
+                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-luxury-gold text-luxury-black text-[10px] font-bold rounded-full">
+                  +{formatCurrency(a.price)}
+                </span>
               </div>
-              <span className="font-bold text-luxury-gold whitespace-nowrap">+{formatCurrency(a.price)}</span>
-            </li>
+              <div className="p-2 flex-1">
+                <p className="text-[11px] font-semibold text-luxury-black leading-tight mb-0.5">{a.name}</p>
+                {a.description && <p className="text-[10px] text-gray-500 leading-snug line-clamp-2">{a.description}</p>}
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     ) : null
   );

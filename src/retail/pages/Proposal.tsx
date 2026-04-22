@@ -152,8 +152,19 @@ function PopularAddOns({ submission }: { submission: any }) {
   }
 
   const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+  // Only show accessories actually surfaced on Phase 3 / Phase 4 of
+  // the configurator — skip "extras" like LED, audio, in-lite scope/halo
+  // which don't appear in the primary flow.
+  const PHASE_3_4_IDS = new Set([
+    // Phase 3 — Privacy & Protection
+    'screen_front', 'screen_back', 'screen_left', 'screen_right',
+    'wall_front', 'wall_back', 'wall_left', 'wall_right',
+    'guillotine_front',
+    // Phase 4 — Optional Features
+    'sensor', 'app_control', 'fan', 'heater',
+  ]);
   const unused = ACCESSORIES
-    .filter(a => !selectedIds.has(a.id))
+    .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id))
     .map(a => {
       let price = 0;
       if (a.type === 'flat') price = a.price;
@@ -162,7 +173,7 @@ function PopularAddOns({ submission }: { submission: any }) {
       else if (a.type === 'screen_depth') price = calculateScreenPrice(depth, height, Math.ceil(depth / 20));
       else if (a.type === 'wall_width') price = width * height * wallUnitPrice;
       else if (a.type === 'wall_depth') price = depth * height * wallUnitPrice;
-      return { id: a.id, name: a.name, description: a.description, price };
+      return { id: a.id, name: a.name, description: a.description, price, imageUrl: a.imageUrl };
     })
     .filter(a => a.price > 0);
 
@@ -214,7 +225,7 @@ function PopularAddOns({ submission }: { submission: any }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {unused.map(item => {
           const isPicked = picked.has(item.id);
           return (
@@ -222,26 +233,49 @@ function PopularAddOns({ submission }: { submission: any }) {
               key={item.id}
               type="button"
               onClick={() => toggle(item.id)}
-              className={`text-left rounded-xl border transition-all p-4 flex items-start gap-3 ${
+              className={`group text-left rounded-xl border overflow-hidden transition-all flex flex-col ${
                 isPicked
-                  ? 'border-luxury-gold bg-luxury-gold/5 ring-1 ring-luxury-gold'
-                  : 'border-luxury-cream bg-white hover:border-luxury-gold/50 hover:bg-luxury-gold/[0.02]'
+                  ? 'border-luxury-gold ring-2 ring-luxury-gold/40 shadow-md'
+                  : 'border-luxury-cream bg-white hover:border-luxury-gold/60 hover:shadow-md'
               }`}
             >
-              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                isPicked ? 'border-luxury-gold bg-luxury-gold' : 'border-slate-300'
-              }`}>
-                {isPicked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-sm font-semibold text-luxury-black">{item.name}</p>
-                  <span className="text-sm font-bold text-luxury-gold whitespace-nowrap">
-                    +${Math.round(item.price).toLocaleString()}
-                  </span>
+              {/* Image — hero area */}
+              <div className="relative w-full h-36 bg-luxury-paper overflow-hidden">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 italic">
+                    No image
+                  </div>
+                )}
+                {/* Selected indicator */}
+                <div className={`absolute top-2 right-2 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                  isPicked
+                    ? 'bg-luxury-gold border-luxury-gold shadow-lg'
+                    : 'bg-white/90 border-white/80 group-hover:border-luxury-gold'
+                }`}>
+                  {isPicked ? (
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                  ) : (
+                    <span className="text-luxury-gold font-bold text-sm">+</span>
+                  )}
                 </div>
+                {/* Price pill overlays the image */}
+                <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-luxury-gold text-luxury-black rounded-full text-xs font-bold shadow-sm">
+                  +${Math.round(item.price).toLocaleString()}
+                </span>
+              </div>
+              {/* Text body */}
+              <div className="p-3 flex-1">
+                <p className="text-sm font-semibold text-luxury-black mb-1">{item.name}</p>
                 {item.description && (
-                  <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{item.description}</p>
+                  <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-3">{item.description}</p>
                 )}
               </div>
             </button>
