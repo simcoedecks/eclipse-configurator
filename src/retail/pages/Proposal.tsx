@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../shared/firebase';
-import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser } from 'lucide-react';
+import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser, User } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
@@ -318,6 +318,72 @@ export default function Proposal() {
             based on the configuration you designed. Every pergola is built to order —
             motorized, engineered, and installed for all-season Canadian weather.
           </p>
+
+          {/* Customer Information block — mirrors what the admin CRM sees */}
+          {(data.name || data.email || data.phone || data.address || data.city) && (
+            <div className="mt-8 pt-6 border-t border-luxury-cream grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <div className="sm:col-span-2">
+                <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Prepared For</p>
+              </div>
+              {data.name && (
+                <div className="flex items-start gap-2">
+                  <User className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Name</p>
+                    <p className="text-luxury-black font-medium">{data.name}</p>
+                  </div>
+                </div>
+              )}
+              {data.email && (
+                <div className="flex items-start gap-2">
+                  <Mail className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Email</p>
+                    <a href={`mailto:${data.email}`} className="text-luxury-black font-medium hover:text-luxury-gold break-all">{data.email}</a>
+                  </div>
+                </div>
+              )}
+              {data.phone && (
+                <div className="flex items-start gap-2">
+                  <Phone className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Phone</p>
+                    <a href={`tel:${data.phone}`} className="text-luxury-black font-medium hover:text-luxury-gold">{data.phone}</a>
+                  </div>
+                </div>
+              )}
+              {(data.address || data.city) && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Site Address</p>
+                    <p className="text-luxury-black font-medium">
+                      {data.address && <span>{data.address}<br /></span>}
+                      {data.city && <span>{data.city}</span>}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {data.heardAbout && (
+                <div className="flex items-start gap-2">
+                  <svg className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /></svg>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Referral Source</p>
+                    <p className="text-luxury-black font-medium">{data.heardAbout}</p>
+                  </div>
+                </div>
+              )}
+              {typeof data.jobNumber === 'number' && (
+                <div className="flex items-start gap-2">
+                  <FileText className="w-3.5 h-3.5 text-luxury-gold shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400">Job Number</p>
+                    <p className="text-luxury-black font-medium font-mono">#{data.jobNumber}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* 3D Visualizer */}
