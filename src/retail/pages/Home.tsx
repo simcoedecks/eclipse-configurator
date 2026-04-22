@@ -1044,7 +1044,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       visualizerProps: {
         width, depth, height, accessories: selectedAccessories, frameColor, louverColor,
         louverAngle: 0, screenDrop: 100, guillotineOpen: 50, wallColor: wallColor, houseWallColor: '#e2e8f0',
-        houseWall: 'none' as any, houseWalls, staticMode: true
+        houseWall: 'none' as any, houseWalls,
+        houseWallLengths, houseWallAnchors, houseWallExtensions, sectionChoices,
+        postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets,
+        removedMiddlePosts, cantileverInsets, cornerPostOffsets,
+        staticMode: true,
       }
     };
   }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas, houseWalls, houseWallLengths]);

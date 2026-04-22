@@ -166,6 +166,14 @@ export default function Proposal() {
                   wallColor={frameHex}
                   houseWallColor="#e2e8f0"
                   houseWall="none"
+                  // Thread the saved structure/section/admin config through
+                  // so the customer-facing proposal matches what they
+                  // designed (or what the admin customized).
+                  houseWalls={new Set<'back'|'front'|'left'|'right'>((cfg.houseWalls || []) as any)}
+                  houseWallLengths={cfg.houseWallLengths || {}}
+                  houseWallAnchors={cfg.houseWallAnchors || {}}
+                  houseWallExtensions={cfg.houseWallExtensions || {}}
+                  sectionChoices={cfg.sectionChoices || {}}
                   view="perspective"
                 />
               </Suspense>
