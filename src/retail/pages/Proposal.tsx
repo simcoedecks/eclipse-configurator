@@ -386,44 +386,70 @@ export default function Proposal() {
           )}
         </section>
 
-        {/* 3D Visualizer */}
-        {(cfg.width || cfg.depth) && (
-          <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">
-            <div className="p-6 border-b border-luxury-cream">
-              <h2 className="text-lg font-serif text-luxury-black">Your Design</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                {cfg.width}' × {cfg.depth}' × {cfg.height}' • {cfg.frameColor} frame • {cfg.louverColor} louvers
-              </p>
-            </div>
-            <div className="h-[420px] bg-[#f1f5f9]">
-              <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading 3D preview…</div>}>
-                <PergolaVisualizer
-                  width={Number(cfg.width) || 12}
-                  depth={Number(cfg.depth) || 16}
-                  height={Number(cfg.height) || 9}
-                  accessories={new Set<string>(items.map((i: any) => i.id).filter(Boolean))}
-                  frameColor={frameHex}
-                  louverColor={louverHex}
-                  louverAngle={0}
-                  screenDrop={100}
-                  guillotineOpen={50}
-                  wallColor={frameHex}
-                  houseWallColor="#e2e8f0"
-                  houseWall="none"
-                  // Thread the saved structure/section/admin config through
-                  // so the customer-facing proposal matches what they
-                  // designed (or what the admin customized).
-                  houseWalls={new Set<'back'|'front'|'left'|'right'>((cfg.houseWalls || []) as any)}
-                  houseWallLengths={cfg.houseWallLengths || {}}
-                  houseWallAnchors={cfg.houseWallAnchors || {}}
-                  houseWallExtensions={cfg.houseWallExtensions || {}}
-                  sectionChoices={cfg.sectionChoices || {}}
-                  view="perspective"
-                />
-              </Suspense>
-            </div>
-          </section>
-        )}
+        {/* 3D Visualizer — Perspective (large) + Front + Top (small) */}
+        {(cfg.width || cfg.depth) && (() => {
+          const visProps = {
+            width: Number(cfg.width) || 12,
+            depth: Number(cfg.depth) || 16,
+            height: Number(cfg.height) || 9,
+            accessories: new Set<string>(items.map((i: any) => i.id).filter(Boolean)),
+            frameColor: frameHex,
+            louverColor: louverHex,
+            louverAngle: 0,
+            screenDrop: 100,
+            guillotineOpen: 50,
+            wallColor: frameHex,
+            houseWallColor: '#e2e8f0',
+            houseWall: 'none' as const,
+            // Thread the saved structure/section/admin config through
+            // so the customer-facing proposal matches what they
+            // designed (or what the admin customized).
+            houseWalls: new Set<'back'|'front'|'left'|'right'>((cfg.houseWalls || []) as any),
+            houseWallLengths: cfg.houseWallLengths || {},
+            houseWallAnchors: cfg.houseWallAnchors || {},
+            houseWallExtensions: cfg.houseWallExtensions || {},
+            sectionChoices: cfg.sectionChoices || {},
+          };
+          return (
+            <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">
+              <div className="p-6 border-b border-luxury-cream">
+                <h2 className="text-lg font-serif text-luxury-black">Your Design</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  {cfg.width}' × {cfg.depth}' × {cfg.height}' • {cfg.frameColor} frame • {cfg.louverColor} louvers
+                </p>
+              </div>
+              {/* Hero: 3/4 perspective — the marquee shot */}
+              <div className="h-[420px] bg-[#f1f5f9] border-b border-luxury-cream">
+                <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading 3D preview…</div>}>
+                  <PergolaVisualizer {...visProps} view="perspective" />
+                </Suspense>
+              </div>
+              {/* Orthographic views: front elevation + top-down */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-luxury-cream">
+                <div>
+                  <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                    Front Elevation
+                  </div>
+                  <div className="h-[240px] bg-[#f1f5f9]">
+                    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                      <PergolaVisualizer {...visProps} view="front" />
+                    </Suspense>
+                  </div>
+                </div>
+                <div>
+                  <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                    Top View
+                  </div>
+                  <div className="h-[240px] bg-[#f1f5f9]">
+                    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                      <PergolaVisualizer {...visProps} view="top" />
+                    </Suspense>
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Pricing Breakdown */}
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
