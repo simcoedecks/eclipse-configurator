@@ -38,6 +38,8 @@ import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, g
 import { type AccessoryType, type Accessory, ACCESSORIES } from '../../shared/lib/accessories';
 import { COLORS, getColorName } from '../../shared/lib/colors';
 import { useTheme } from '../../shared/hooks/useTheme';
+import AddPergolaModal from '../components/AddPergolaModal';
+import type { AdditionalPergolaItem } from '../../shared/lib/pricingMath';
 
 enum OperationType {
   CREATE = 'create',
@@ -257,6 +259,20 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
       }
     }
 
+    let extraPergolasText = '';
+    if (extraPergolas.length > 0) {
+      const lines = extraPergolas.map((p, i) => {
+        const dims = (p.width && p.depth && p.height) ? ` ${p.width}'W x ${p.depth}'D x ${p.height}'H` : '';
+        const colors = (p.frameColor || p.louverColor) ? ` / Frame: ${p.frameColor || '—'}, Louver: ${p.louverColor || '—'}` : '';
+        const notes = p.notes ? ` — ${p.notes}` : '';
+        return `- Pergola ${i + 2}: ${p.label}${dims}${colors}${notes}: $${(p.price || 0).toFixed(2)}`;
+      });
+      extraPergolasText = `\n\nAdditional Pergolas:\n${lines.join('\n')}`;
+    }
+
+    const extraPergolasTotal = extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
+    const grandTotal = (totalPrice || 0) + extraPergolasTotal;
+
     return `Pergola Quote for ${name}
 Dimensions: ${width}' W x ${depth}' D x ${height}' H
 Frame Color: ${getColorName(frameColor)}
@@ -266,13 +282,13 @@ Foundation: ${foundationStatus || 'Not specified'}
 Heater Control: ${selectedAccessories.has('heater') ? heaterControl : 'N/A'}
 Screen Drop: ${screenDrop}%
 Guillotine Open: ${guillotineOpen}%
-Accessories: ${accessoriesText}
+Accessories: ${accessoriesText}${extraPergolasText}
 
 Pricing:
 Bespoke Pergola: $${(basePrice || 0).toFixed(2)}
 Accessories: $${(accessoriesPrice || 0).toFixed(2)}
-Woodgrain Upgrade: $${(woodgrainUpgrade || 0).toFixed(2)}${woodgrainDetails}
-Total Price: $${(totalPrice || 0).toFixed(2)}`;
+Woodgrain Upgrade: $${(woodgrainUpgrade || 0).toFixed(2)}${woodgrainDetails}${extraPergolas.length > 0 ? `\nAdditional Pergolas (${extraPergolas.length}): $${extraPergolasTotal.toFixed(2)}` : ''}
+Total Price: $${grandTotal.toFixed(2)}`;
   };
 
   const updatePipedrive = async (currentLeadId: string, additionalImages: {name: string, data: string}[] = []) => {
@@ -340,6 +356,9 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     setHouseWalls(new Set());
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
+    setExtraPergolas([]);
+    setAddPergolaModalOpen(false);
+    setEditingPergola(null);
     setWallColor('#0A0A0A');
     setHouseWallColor('#82A0C2');
     setHeaterControl('switch');
@@ -378,6 +397,10 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  // Additional pergolas the customer added to this project
+  const [extraPergolas, setExtraPergolas] = useState<AdditionalPergolaItem[]>([]);
+  const [addPergolaModalOpen, setAddPergolaModalOpen] = useState(false);
+  const [editingPergola, setEditingPergola] = useState<AdditionalPergolaItem | null>(null);
   // Capture lead source from URL params (e.g. ?source=contractor&ref=john).
   // When loaded inside /dealer/:slug, the dealer props override.
   const [leadSource] = useState<string>(() => {
@@ -681,7 +704,8 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
     }
 
     const accessoriesTotal = itemizedAccessories.reduce((sum, item) => sum + item.cost, 0);
-    const subtotal = (basePrice || 0) + accessoriesTotal;
+    const extraPergolasTotal = extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
+    const subtotal = (basePrice || 0) + accessoriesTotal + extraPergolasTotal;
     const hst = subtotal * 0.13;
     const finalTotal = subtotal + hst;
 
@@ -725,6 +749,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
       discountedSubtotal: subtotal,
       hst,
       total: finalTotal,
+      additionalPergolas: extraPergolas,
       availableUpgrades,
       visualizerProps: {
         width, depth, height, accessories: selectedAccessories, frameColor, louverColor,
@@ -732,7 +757,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
         houseWall: 'none' as any, houseWalls, staticMode: true
       }
     };
-  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ]);
+  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas]);
 
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
@@ -906,7 +931,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           height,
           frameColor: COLORS.find(c => c.hex === frameColor)?.name || frameColor,
           louverColor: COLORS.find(c => c.hex === louverColor)?.name || louverColor,
-          totalPrice: totalPrice ? formatCurrency(totalPrice) : 'N/A',
+          totalPrice: totalPrice ? formatCurrency((totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0)) : 'N/A',
           accessories: Array.from(selectedAccessories).map(id => {
             const acc = ACCESSORIES.find(a => a.id === id);
             const qty = acc?.quantifiable ? (accessoryQuantities[id] || 1) : 1;
@@ -941,6 +966,7 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           contractorId,
           isDuplicate: isDuplicateLead,
           pricingBreakdown,
+          additionalPergolas: extraPergolas,
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
@@ -2401,11 +2427,76 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
                       );
                     })()}
 
+                    {/* Additional Pergolas Section */}
+                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">
+                          Multi-Pergola Project?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPergola(null); setAddPergolaModalOpen(true); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-full text-[11px] font-bold uppercase tracking-wider hover:bg-luxury-gold/90"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Another Pergola
+                        </button>
+                      </div>
+                      {extraPergolas.length === 0 ? (
+                        <p className={`text-[10px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                          Building a larger space? Add a second or third pergola to the same project and we'll quote the whole thing.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 mt-2">
+                          {extraPergolas.map(p => {
+                            const price = typeof p.price === 'number' ? p.price : 0;
+                            return (
+                              <div key={p.id} className={`rounded-lg p-2.5 border ${isDark ? 'bg-white/5 border-white/10' : 'bg-luxury-gold/5 border-luxury-gold/20'}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-serif font-medium truncate ${isDark ? 'text-white' : 'text-luxury-black'}`}>{p.label}</p>
+                                    <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
+                                      {p.width}' × {p.depth}' × {p.height}' · {p.frameColor}
+                                    </p>
+                                  </div>
+                                  <span className="text-sm font-serif text-luxury-gold font-bold whitespace-nowrap">{formatCurrency(price)}</span>
+                                </div>
+                                <div className="flex gap-1 mt-1.5 pt-1.5 border-t border-luxury-gold/10">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
+                                    className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
+                                  >
+                                    Edit
+                                  </button>
+                                  <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
+                                    className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-rose-400 hover:text-rose-300' : 'text-rose-600 hover:text-rose-700'}`}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
                       <div className="flex flex-col">
                         <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">Total Investment</span>
+                        {extraPergolas.length > 0 && (
+                          <span className="text-[10px] text-luxury-black/50 dark:text-white/50 italic">
+                            Across {extraPergolas.length + 1} pergolas
+                          </span>
+                        )}
                       </div>
-                      <span className="text-2xl font-serif text-luxury-black dark:text-white">{formatCurrency(totalPrice || 0)}</span>
+                      <span className="text-2xl font-serif text-luxury-black dark:text-white">
+                        {formatCurrency((totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0))}
+                      </span>
                     </div>
                     <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed pt-2">
                       Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
@@ -2450,13 +2541,15 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
               )}
             </div>
             <motion.span
-              key={totalPrice || 0}
+              key={(totalPrice || 0) + extraPergolas.length}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
               className="text-lg font-serif font-medium text-luxury-gold"
             >
-              {totalPrice !== null ? formatCurrency(totalPrice) : '—'}
+              {totalPrice !== null
+                ? formatCurrency(totalPrice + extraPergolas.reduce((s, p) => s + (p.price || 0), 0))
+                : '—'}
             </motion.span>
           </div>
           {submitSuccess && (
@@ -2611,6 +2704,25 @@ Total Price: $${(totalPrice || 0).toFixed(2)}`;
           </div>
         )}
       </AnimatePresence>
+
+      {/* Add / Edit Pergola Modal */}
+      {addPergolaModalOpen && (
+        <AddPergolaModal
+          initial={editingPergola}
+          indexNumber={editingPergola ? extraPergolas.findIndex(p => p.id === editingPergola.id) + 2 : extraPergolas.length + 2}
+          isDark={isDark}
+          onClose={() => { setAddPergolaModalOpen(false); setEditingPergola(null); }}
+          onSave={(pergola) => {
+            if (editingPergola) {
+              setExtraPergolas(extraPergolas.map(p => p.id === pergola.id ? pergola : p));
+            } else {
+              setExtraPergolas([...extraPergolas, pergola]);
+            }
+            setAddPergolaModalOpen(false);
+            setEditingPergola(null);
+          }}
+        />
+      )}
 
       {/* Reset Confirmation Modal */}
       <AnimatePresence>
