@@ -846,27 +846,56 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
     if (isWoodgrainWalls) {
       const numPanelsPerBay = Math.ceil((height * 12) / 7);
+      const addPanelCost = (panelLength: number) => {
+        if (panelLength <= 0) return;
+        if (panelLength < 12)        total += 100 * numPanelsPerBay;
+        else if (panelLength <= 20)  total += 150 * numPanelsPerBay;
+        else                         total += 150 * numPanelsPerBay;
+      };
+
+      // Per-section walls (admin-only). When a side is in per-section
+      // mode, only count the bays whose choice is 'wall'. The uniform
+      // wall_<side> accessory is skipped for that side below.
+      const perSectionSides = new Set<'front'|'back'|'left'|'right'>();
+      (['front','back','left','right'] as const).forEach(side => {
+        if (!sideUsesSections(side)) return;
+        perSectionSides.add(side);
+        const choices = getSectionChoicesForSide(side);
+        const bayLen = getBayLengthOnSide(side);
+        choices.forEach(choice => {
+          if (choice === 'wall') addPanelCost(bayLen);
+        });
+      });
+
+      // Uniform per-side walls — but skip sides covered by per-section above
+      // and use the OPEN portion length when the side has a partial structure.
       selectedAccessories.forEach(id => {
         const accessory = ACCESSORIES.find(a => a.id === id);
-        if (accessory && (accessory.type === 'wall_width' || accessory.type === 'wall_depth')) {
-          const isWidth = accessory.type === 'wall_width';
-          const sideLength = isWidth ? width : depth;
-          const numBays = isWidth ? numScreenBaysX : numScreenBaysZ;
-          
-          const panelLength = sideLength / numBays;
-          
-          for (let i = 0; i < numBays; i++) {
-            if (panelLength < 12) {
-              total += 100 * numPanelsPerBay;
-            } else if (panelLength <= 20) {
-              total += 150 * numPanelsPerBay;
-            }
-          }
+        if (!accessory) return;
+        if (accessory.type !== 'wall_width' && accessory.type !== 'wall_depth') return;
+        const sideKey = id.endsWith('_front') ? 'front'
+                      : id.endsWith('_back') ? 'back'
+                      : id.endsWith('_left') ? 'left'
+                      : id.endsWith('_right') ? 'right' : null;
+        if (sideKey && perSectionSides.has(sideKey)) return; // handled above
+        const isWidth = accessory.type === 'wall_width';
+        // If the side has a partial structure wall, the privacy wall only
+        // spans the open portion — fewer panels needed.
+        const open = sideKey ? getOpenLengthOnSide(sideKey) : (isWidth ? width : depth);
+        const sideLength = sideKey && open > 0 && open < (isWidth ? width : depth)
+          ? open
+          : (isWidth ? width : depth);
+        const numBays = sideKey && open > 0 && open < (isWidth ? width : depth)
+          ? 1  // partial = single panel
+          : (isWidth ? numScreenBaysX : numScreenBaysZ);
+        const panelLength = sideLength / numBays;
+        for (let i = 0; i < numBays; i++) {
+          addPanelCost(panelLength);
         }
       });
     }
     return total;
-  }, [louverColor, wallColor, width, depth, height, selectedAccessories, numScreenBaysX, numScreenBaysZ]);
+  }, [louverColor, wallColor, width, depth, height, selectedAccessories, numScreenBaysX, numScreenBaysZ, houseWalls, houseWallLengths, sectionChoices]);
 
   const totalPrice = useMemo(() => {
     if (basePrice === null) return null;
