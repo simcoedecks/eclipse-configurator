@@ -139,6 +139,10 @@ interface PergolaVisualizerProps {
    *  on top of cantileverInsets. Keys: 'back-left', 'back-right',
    *  'front-left', 'front-right'. Positive x = right, positive z = front. */
   cornerPostOffsets?: Record<string, { x?: number; z?: number }>;
+  /** Admin-only: per-section customization for multi-bay sides. When set,
+   *  each entry in the array says what to render for that bay: 'open',
+   *  'screen', or 'wall'. Overrides the uniform screen_/wall_ side toggle. */
+  sectionChoices?: Partial<Record<'front'|'back'|'left'|'right', Array<'open'|'screen'|'wall'>>>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -593,7 +597,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -955,31 +959,68 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         );
       })}
 
+      {/* Per-section rendering — when an admin has customized a side,
+          render each bay according to its choice instead of using the
+          uniform screen_/wall_ accessories for that side. */}
+      {(['front','back','left','right'] as const).map(side => {
+        const choices = sectionChoices?.[side];
+        if (!choices || choices.length === 0) return null;
+        const horizontal = side === 'front' || side === 'back';
+        const centers = horizontal ? screenCentersX : screenCentersZ;
+        const widths = horizontal ? screenWidthsX : screenWidthsZ;
+        return (
+          <React.Fragment key={`sections-${side}`}>
+            {choices.map((choice, i) => {
+              if (choice === 'open') return null;
+              const c = centers[i] ?? 0;
+              const w = widths[i] ?? (horizontal ? screenWidthX : screenWidthZ);
+              // Position along the side — push to face (front/back/left/right)
+              const pos: [number, number, number] = horizontal
+                ? [c, height / 2, side === 'front' ? zOffset - 0.1 : -zOffset + 0.1]
+                : [side === 'right' ? xOffset - 0.1 : -xOffset + 0.1, height / 2, c];
+              const rot: [number, number, number] = horizontal ? [0, 0, 0] : [0, Math.PI / 2, 0];
+              const keyBase = `sec-${side}-${i}`;
+              if (choice === 'screen') {
+                return (
+                  <MotorizedScreen key={keyBase} width={w} height={height} position={pos} rotation={rot} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+                );
+              }
+              // wall
+              const wallPos: [number, number, number] = horizontal
+                ? [c, height / 2, side === 'front' ? zOffset - 0.2 : -zOffset + 0.2]
+                : [side === 'right' ? xOffset - 0.2 : -xOffset + 0.2, height / 2, c];
+              return <PrivacyWall key={keyBase} width={w} height={height} position={wallPos} rotation={rot} color={wallColor} />;
+            })}
+          </React.Fragment>
+        );
+      })}
+
       {/* Motorized Screens — render over the whole side unless there's
           a partial structure wall on the same side, in which case render
-          only over the open portion. */}
-      {accessories.has('screen_front') && (() => {
+          only over the open portion. Skipped when per-section mode is
+          active for this side. */}
+      {accessories.has('screen_front') && !sectionChoices?.front?.length && (() => {
         const seg = getOpenSegmentOnSide('front');
         if (seg) return <MotorizedScreen key="sf-partial" width={seg.width} height={height} position={[seg.center, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersX.map((x, i) => (
           <MotorizedScreen key={`sf-${i}`} width={screenWidthsX[i] ?? screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
-      {accessories.has('screen_back') && (() => {
+      {accessories.has('screen_back') && !sectionChoices?.back?.length && (() => {
         const seg = getOpenSegmentOnSide('back');
         if (seg) return <MotorizedScreen key="sb-partial" width={seg.width} height={height} position={[seg.center, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersX.map((x, i) => (
           <MotorizedScreen key={`sb-${i}`} width={screenWidthsX[i] ?? screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
-      {accessories.has('screen_right') && (() => {
+      {accessories.has('screen_right') && !sectionChoices?.right?.length && (() => {
         const seg = getOpenSegmentOnSide('right');
         if (seg) return <MotorizedScreen key="sr-partial" width={seg.width} height={height} position={[xOffset - 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersZ.map((z, i) => (
           <MotorizedScreen key={`sr-${i}`} width={screenWidthsZ[i] ?? screenWidthZ} height={height} position={[xOffset - 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
         ));
       })()}
-      {accessories.has('screen_left') && (() => {
+      {accessories.has('screen_left') && !sectionChoices?.left?.length && (() => {
         const seg = getOpenSegmentOnSide('left');
         if (seg) return <MotorizedScreen key="sl-partial" width={seg.width} height={height} position={[-xOffset + 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
         return screenCentersZ.map((z, i) => (
@@ -1022,14 +1063,14 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
           <>
             {/* Front/back privacy walls — span post-to-post (or just the
                 open portion when the side has a partial structure wall) */}
-            {accessories.has('wall_front') && (() => {
+            {accessories.has('wall_front') && !sectionChoices?.front?.length && (() => {
               const seg = getOpenSegmentOnSide('front');
               if (seg) return <PrivacyWall key="wf-partial" width={seg.width} height={privacyHeight} position={[seg.center, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />;
               return screenCentersX.map((x, i) => (
                 <PrivacyWall key={`wf-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
               ));
             })()}
-            {accessories.has('wall_back') && (() => {
+            {accessories.has('wall_back') && !sectionChoices?.back?.length && (() => {
               const seg = getOpenSegmentOnSide('back');
               if (seg) return <PrivacyWall key="wb-partial" width={seg.width} height={privacyHeight} position={[seg.center, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />;
               return screenCentersX.map((x, i) => (
@@ -1039,7 +1080,7 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
 
             {/* Left/right privacy walls — one continuous panel spanning all bays,
                 post-to-post, shortened at corners where another wall exists */}
-            {accessories.has('wall_right') && (() => {
+            {accessories.has('wall_right') && !sectionChoices?.right?.length && (() => {
               const seg = getOpenSegmentOnSide('right');
               if (seg) return <PrivacyWall key="wr-partial" width={seg.width} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
               const fullSpan = leftRightBayWidth * screenCentersZ.length;
@@ -1047,7 +1088,7 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
               const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
               return <PrivacyWall key="wr-joined" width={adjustedWidth} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
             })()}
-            {accessories.has('wall_left') && (() => {
+            {accessories.has('wall_left') && !sectionChoices?.left?.length && (() => {
               const seg = getOpenSegmentOnSide('left');
               if (seg) return <PrivacyWall key="wl-partial" width={seg.width} height={privacyHeight} position={[-xOffset + 0.2, privacyHeight / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
               const fullSpan = leftRightBayWidth * screenCentersZ.length;

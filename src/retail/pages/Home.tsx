@@ -447,6 +447,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   //   z > 0 = move front (toward +Z), z < 0 = move back (toward -Z)
   const [cornerPostOffsets, setCornerPostOffsets] = useState<Record<string, { x?: number; z?: number }>>({});
   const [selectedCorner, setSelectedCorner] = useState<string | null>(null);
+  // Admin-only: per-section coverage for multi-bay sides. Array length
+  // matches the side's bay count (numBaysX for front/back, numBaysZ for
+  // left/right). When set, it OVERRIDES the uniform screen_/wall_ side
+  // toggle — pricing and visualizer render per-bay.
+  //   'open'   → nothing
+  //   'screen' → motorized screen bay
+  //   'wall'   → privacy wall bay
+  const [sectionChoices, setSectionChoices] = useState<Partial<Record<'front'|'back'|'left'|'right', Array<'open'|'screen'|'wall'>>>>({});
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
@@ -484,6 +492,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCantileverInsets({});
     setCornerPostOffsets({});
     setSelectedCorner(null);
+    setSectionChoices({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -715,6 +724,36 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     return Math.max(0, total - structLen);
   };
 
+  // Per-section helpers — number of bays on a side and whether the side
+  // is eligible for the admin per-section selector (needs >1 bays).
+  const getSideBayCount = (side: 'front'|'back'|'left'|'right'): number => {
+    return (side === 'front' || side === 'back') ? numBaysX : numBaysZ;
+  };
+  const sideIsMultiBay = (side: 'front'|'back'|'left'|'right'): boolean => {
+    return getSideBayCount(side) > 1;
+  };
+  // Returns the per-bay choices array for a side, padded/trimmed to the
+  // current bay count. Missing side returns an empty array.
+  const getSectionChoicesForSide = (side: 'front'|'back'|'left'|'right'): Array<'open'|'screen'|'wall'> => {
+    const arr = sectionChoices[side];
+    if (!arr) return [];
+    const count = getSideBayCount(side);
+    if (arr.length === count) return arr;
+    const padded = arr.slice(0, count);
+    while (padded.length < count) padded.push('open');
+    return padded;
+  };
+  // For a given side, is per-section mode active? (i.e. sectionChoices has
+  // a non-empty array for this side)
+  const sideUsesSections = (side: 'front'|'back'|'left'|'right'): boolean => {
+    return Array.isArray(sectionChoices[side]) && (sectionChoices[side] as any).length > 0;
+  };
+  // Per-bay width along the side. Length of each bay equals
+  // total-side / bayCount (approximate — matches visualizer's even-bay math).
+  const getBayLengthOnSide = (side: 'front'|'back'|'left'|'right'): number => {
+    return getSideTotalLength(side) / getSideBayCount(side);
+  };
+
   const accessoriesPrice = useMemo(() => {
     let total = 0;
     const sqft = depth * width;
@@ -736,10 +775,26 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       return fullLen;
     };
 
+    // Helper: get side from accessory id (null if not side-based)
+    const sideOfAcc = (id: string): 'front'|'back'|'left'|'right'|null =>
+      id.endsWith('_front') ? 'front'
+      : id.endsWith('_back') ? 'back'
+      : id.endsWith('_left') ? 'left'
+      : id.endsWith('_right') ? 'right' : null;
+
     selectedAccessories.forEach(id => {
       const accessory = ACCESSORIES.find(a => a.id === id);
       if (accessory) {
         const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
+        // If this accessory is a side-based screen/wall AND the side is
+        // in per-section mode, skip the uniform side cost — the per-bay
+        // costs will be added below in a dedicated pass.
+        const sideOfThis = sideOfAcc(id);
+        const sideIsSectioned = sideOfThis && sideUsesSections(sideOfThis);
+        if (sideIsSectioned && (accessory.type === 'screen_width' || accessory.type === 'screen_depth' || accessory.type === 'wall_width' || accessory.type === 'wall_depth')) {
+          return; // skip — handled below per-bay
+        }
+
         if (accessory.type === 'flat') {
           total += accessory.price * qty;
           if (id === 'heater' && heaterControl === 'dimmer') {
@@ -760,8 +815,23 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         }
       }
     });
+
+    // Per-section pass — add costs for each bay on sides using sections.
+    (['front','back','left','right'] as const).forEach(side => {
+      if (!sideUsesSections(side)) return;
+      const choices = getSectionChoicesForSide(side);
+      const bayLen = getBayLengthOnSide(side);
+      choices.forEach(choice => {
+        if (choice === 'screen') {
+          total += (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+        } else if (choice === 'wall') {
+          total += bayLen * height * wallUnitPrice;
+        }
+      });
+    });
+
     return total;
-  }, [selectedAccessories, accessoryQuantities, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ, houseWalls, houseWallLengths]);
+  }, [selectedAccessories, accessoryQuantities, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ, houseWalls, houseWallLengths, sectionChoices]);
 
   const woodgrainUpgrade = useMemo(() => {
     let total = 0;
@@ -1181,6 +1251,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCantileverInsets({});
     setCornerPostOffsets({});
     setSelectedCorner(null);
+    setSectionChoices({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1222,6 +1293,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           houseWallLengths,
           houseWallAnchors,
           houseWallExtensions,
+          sectionChoices,
           customerNotes: customerNotes.trim(),
         }
       };
@@ -2000,6 +2072,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           removedMiddlePosts={removedMiddlePosts}
           cantileverInsets={cantileverInsets}
           cornerPostOffsets={cornerPostOffsets}
+          sectionChoices={sectionChoices}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2255,6 +2328,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCantileverInsets({});
     setCornerPostOffsets({});
     setSelectedCorner(null);
+    setSectionChoices({});
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2988,6 +3062,92 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Fixed Privacy</h4>
                     {renderGroupedAccessory('Privacy Walls', 'wall', PanelRight, '/privacywall.png')}
                   </div>
+
+                  {/* Per-Section Customization — admin only, visible for multi-bay sides.
+                      Lets admin pick Open / Screen / Wall independently per bay. */}
+                  {adminMode && (['front','back','left','right'] as const).some(sideIsMultiBay) && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Per-Section Customization</h4>
+                        <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin</span>
+                      </div>
+                      <div className="space-y-3">
+                        {(['front','back','left','right'] as const).filter(sideIsMultiBay).map(side => {
+                          const sideLabel = { front: 'Front', back: 'Rear', left: 'Left', right: 'Right' }[side];
+                          const bayCount = getSideBayCount(side);
+                          const bayLen = getBayLengthOnSide(side);
+                          const choices = getSectionChoicesForSide(side);
+                          const isActive = sideUsesSections(side);
+                          const enableSide = () => {
+                            const arr: Array<'open'|'screen'|'wall'> = Array.from({ length: bayCount }, () => 'open');
+                            setSectionChoices({ ...sectionChoices, [side]: arr });
+                          };
+                          const disableSide = () => {
+                            const next = { ...sectionChoices };
+                            delete (next as any)[side];
+                            setSectionChoices(next);
+                          };
+                          const setBay = (i: number, choice: 'open'|'screen'|'wall') => {
+                            const arr = [...(choices.length ? choices : Array.from({ length: bayCount }, () => 'open' as const))];
+                            arr[i] = choice;
+                            setSectionChoices({ ...sectionChoices, [side]: arr });
+                          };
+                          return (
+                            <div key={side} className={`rounded-lg border px-3 py-2.5 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className={`text-[10px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
+                                  {sideLabel} Side · {bayCount} sections × ~{bayLen.toFixed(1)}'
+                                </span>
+                                {isActive ? (
+                                  <button type="button" onClick={disableSide} className="text-[9px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-600">
+                                    Disable
+                                  </button>
+                                ) : (
+                                  <button type="button" onClick={enableSide} className="text-[9px] font-bold uppercase tracking-widest text-luxury-gold hover:text-luxury-black">
+                                    Customize
+                                  </button>
+                                )}
+                              </div>
+                              {isActive && (
+                                <div className="space-y-1.5">
+                                  {choices.map((choice, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                      <span className={`text-[10px] font-bold w-14 shrink-0 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                                        § {i + 1}
+                                      </span>
+                                      <div className="flex-1 flex gap-1">
+                                        {(['open','screen','wall'] as const).map(opt => {
+                                          const selected = choice === opt;
+                                          const optLabel = opt === 'open' ? 'Open' : opt === 'screen' ? 'Screen' : 'Wall';
+                                          return (
+                                            <button
+                                              key={opt}
+                                              type="button"
+                                              onClick={() => setBay(i, opt)}
+                                              className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                                selected
+                                                  ? (opt === 'screen' ? 'bg-emerald-500 text-white' : opt === 'wall' ? 'bg-luxury-gold text-luxury-black' : (isDark ? 'bg-white/15 text-white' : 'bg-luxury-black text-white'))
+                                                  : (isDark ? 'bg-white/[0.03] text-white/50 border border-white/10 hover:text-white' : 'bg-white text-luxury-black/50 border border-slate-200 hover:text-luxury-black')
+                                              }`}
+                                            >
+                                              {optLabel}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                        When a side is customized, each section's choice overrides the per-side Motorized Screen / Privacy Wall toggle for that side. Per-section pricing replaces the uniform side price.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Privacy Wall Finish</h4>
