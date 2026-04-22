@@ -129,10 +129,18 @@ export default function CustomRequestModal({
       };
       if (typeof jobNumber === 'number') basePayload.jobNumber = jobNumber;
       // Strip any undefined values Firestore would reject.
+      // Skip non-plain objects (FieldValue sentinels, Timestamp, etc.)
+      // so serverTimestamp() etc. pass through unmodified.
+      const isPlainObject = (v: any): boolean => {
+        if (v === null || typeof v !== 'object') return false;
+        const proto = Object.getPrototypeOf(v);
+        return proto === Object.prototype || proto === null;
+      };
       const stripUndefined = (v: any): any => {
         if (v === undefined) return undefined;
-        if (v === null || typeof v !== 'object') return v;
+        if (v === null) return v;
         if (Array.isArray(v)) return v.map(stripUndefined).filter((x: any) => x !== undefined);
+        if (!isPlainObject(v)) return v;
         const out: any = {};
         for (const k of Object.keys(v)) {
           const cleaned = stripUndefined(v[k]);

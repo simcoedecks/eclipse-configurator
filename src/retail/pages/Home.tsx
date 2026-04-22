@@ -1358,10 +1358,22 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         };
         if (typeof jobNumber === 'number') submissionPayload.jobNumber = jobNumber;
         // Firestore rejects documents that contain `undefined` anywhere.
+        // We only recurse into PLAIN objects — Firestore sentinels like
+        // serverTimestamp() / Timestamp / GeoPoint / DocumentReference
+        // are non-plain objects and must pass through untouched. (Earlier
+        // version recursed into them and turned serverTimestamp() into
+        // an empty {}, which then failed the `createdAt is timestamp`
+        // rule check on the server side.)
+        const isPlainObject = (v: any): boolean => {
+          if (v === null || typeof v !== 'object') return false;
+          const proto = Object.getPrototypeOf(v);
+          return proto === Object.prototype || proto === null;
+        };
         const stripUndefined = (v: any): any => {
           if (v === undefined) return undefined;
-          if (v === null || typeof v !== 'object') return v;
+          if (v === null) return v;
           if (Array.isArray(v)) return v.map(stripUndefined).filter(x => x !== undefined);
+          if (!isPlainObject(v)) return v; // FieldValue / Timestamp / etc.
           const out: any = {};
           for (const k of Object.keys(v)) {
             const cleaned = stripUndefined(v[k]);
