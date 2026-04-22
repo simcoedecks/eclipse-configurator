@@ -275,11 +275,29 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
     const extraPergolasTotal = extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
     const grandTotal = (totalPrice || 0) + extraPergolasTotal;
 
+    // Structure wall attachment summary
+    let structureText = 'Free-standing';
+    if (houseWalls.size > 0) {
+      const sideLabels: Record<string, string> = { front: 'Front', back: 'Rear', left: 'Left', right: 'Right' };
+      const posLabels: Record<string, string> = { start: 'from left/front', center: 'centered', end: 'from right/back' };
+      const sides = Array.from(houseWalls).map(s => {
+        const total = (s === 'front' || s === 'back') ? width : depth;
+        const len = houseWallLengths[s];
+        if (typeof len === 'number' && len < total) {
+          const anchor = houseWallAnchors[s] || 'start';
+          return `${sideLabels[s]} (${len}' of ${total}' ${posLabels[anchor]})`;
+        }
+        return `${sideLabels[s]} (full ${total}')`;
+      });
+      structureText = sides.join(', ');
+    }
+
     return `Pergola Quote for ${name}
 Dimensions: ${width}' W x ${depth}' D x ${height}' H
 Frame Color: ${getColorName(frameColor)}
 Louver Color: ${getColorName(louverColor)}
 Wall Color: ${getColorName(wallColor)}
+Structure: ${structureText}
 Foundation: ${foundationStatus || 'Not specified'}
 Heater Control: ${selectedAccessories.has('heater') ? heaterControl : 'N/A'}
 Screen Drop: ${screenDrop}%
@@ -336,6 +354,12 @@ Total Price: $${grandTotal.toFixed(2)}`;
   const [activeColorWarning, setActiveColorWarning] = useState<string | null>(null);
   const [guillotineOpen, setGuillotineOpen] = useState<number>(0);
   const [houseWalls, setHouseWalls] = useState<Set<'back' | 'left' | 'right' | 'front'>>(new Set());
+  // Partial structure-wall support: per-side length in feet (undefined = full
+  // side length) + anchor position ('start' | 'center' | 'end').
+  //   start  → left for front/back, front for left/right
+  //   end    → right for front/back, back for left/right
+  const [houseWallLengths, setHouseWallLengths] = useState<Partial<Record<'back'|'front'|'left'|'right', number>>>({});
+  const [houseWallAnchors, setHouseWallAnchors] = useState<Partial<Record<'back'|'front'|'left'|'right', 'start'|'center'|'end'>>>({});
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
   const [accessoryQuantities, setAccessoryQuantities] = useState<Record<string, number>>({});
   const [wallColor, setWallColor] = useState<string>('#0A0A0A');
@@ -356,6 +380,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
     setScreenDrop(100);
     setGuillotineOpen(0);
     setHouseWalls(new Set());
+    setHouseWallLengths({});
+    setHouseWallAnchors({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -568,6 +594,22 @@ Total Price: $${grandTotal.toFixed(2)}`;
     const sqft = depth * width;
     const wallUnitPrice = sqft < 120 ? 60 : 55;
 
+    // Effective length for a screen/wall on a given side:
+    // if the side has a partial structure wall, the screen/wall can only
+    // cover the open portion → shorter linear footage → reduced price.
+    const effLen = (id: string, fullLen: number): number => {
+      const side = id.endsWith('_front') ? 'front'
+                 : id.endsWith('_back')  ? 'back'
+                 : id.endsWith('_left')  ? 'left'
+                 : id.endsWith('_right') ? 'right' : null;
+      if (!side) return fullLen;
+      if (houseWalls.has(side as any)) {
+        const open = getOpenLengthOnSide(side as any);
+        return open > 0 ? open : fullLen;
+      }
+      return fullLen;
+    };
+
     selectedAccessories.forEach(id => {
       const accessory = ACCESSORIES.find(a => a.id === id);
       if (accessory) {
@@ -580,18 +622,20 @@ Total Price: $${grandTotal.toFixed(2)}`;
         } else if (accessory.type === 'sqft') {
           total += accessory.price * sqft * qty;
         } else if (accessory.type === 'screen_width') {
-          total += calculateScreenPrice(width, height, numScreenBaysX);
+          const len = effLen(id, width);
+          total += calculateScreenPrice(len, height, len === width ? numScreenBaysX : 1);
         } else if (accessory.type === 'screen_depth') {
-          total += calculateScreenPrice(depth, height, numScreenBaysZ);
+          const len = effLen(id, depth);
+          total += calculateScreenPrice(len, height, len === depth ? numScreenBaysZ : 1);
         } else if (accessory.type === 'wall_width') {
-          total += width * height * wallUnitPrice;
+          total += effLen(id, width) * height * wallUnitPrice;
         } else if (accessory.type === 'wall_depth') {
-          total += depth * height * wallUnitPrice;
+          total += effLen(id, depth) * height * wallUnitPrice;
         }
       }
     });
     return total;
-  }, [selectedAccessories, accessoryQuantities, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ]);
+  }, [selectedAccessories, accessoryQuantities, depth, width, height, heaterControl, numScreenBaysX, numScreenBaysZ, houseWalls, houseWallLengths]);
 
   const woodgrainUpgrade = useMemo(() => {
     let total = 0;
@@ -640,11 +684,32 @@ Total Price: $${grandTotal.toFixed(2)}`;
     const louverCount = calculateLouverCount(width, depth);
     const louverUpgrade = louverColor === '#8B5A2B' ? louverCount * 150 : 0;
 
+    // Effective length for a screen/wall on a given side — partial
+    // structure walls shrink the screen/wall to the open portion.
+    const sideFromId = (id: string) =>
+      id.endsWith('_front') ? 'front'
+      : id.endsWith('_back') ? 'back'
+      : id.endsWith('_left') ? 'left'
+      : id.endsWith('_right') ? 'right'
+      : null;
+    const partialLen = (id: string): number | null => {
+      const s = sideFromId(id);
+      if (!s) return null;
+      if (!houseWalls.has(s as any)) return null;
+      const open = getOpenLengthOnSide(s as any);
+      return open > 0 ? open : null;
+    };
+
     const itemizedAccessories = Array.from(selectedAccessories).flatMap(id => {
       const acc = ACCESSORIES.find(a => a.id === id);
       if (!acc) return [];
-      
+
       if (acc.type === 'screen_width') {
+        const partial = partialLen(id);
+        if (partial !== null) {
+          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05;
+          return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
+        }
         const base = Math.floor(width / numScreenBaysX);
         const remainder = width % numScreenBaysX;
         const screens = [];
@@ -656,6 +721,11 @@ Total Price: $${grandTotal.toFixed(2)}`;
         return screens;
       }
       if (acc.type === 'screen_depth') {
+        const partial = partialLen(id);
+        if (partial !== null) {
+          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05;
+          return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
+        }
         const base = Math.floor(depth / numScreenBaysZ);
         const remainder = depth % numScreenBaysZ;
         const screens = [];
@@ -667,9 +737,17 @@ Total Price: $${grandTotal.toFixed(2)}`;
         return screens;
       }
       if (acc.type === 'wall_width') {
+        const partial = partialLen(id);
+        const numPanelsPerBay = Math.ceil((height * 12) / 7);
+        if (partial !== null) {
+          let price = partial * height * wallUnitPrice;
+          if (wallColor === '#8B5A2B') {
+            price += numPanelsPerBay * (partial < 12 ? 100 : 150);
+          }
+          return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
+        }
         const wallLength = width / numScreenBaysX;
         const walls = [];
-        const numPanelsPerBay = Math.ceil((height * 12) / 7);
         for (let i = 0; i < numScreenBaysX; i++) {
           let price = wallLength * height * wallUnitPrice;
           if (wallColor === '#8B5A2B') {
@@ -680,9 +758,17 @@ Total Price: $${grandTotal.toFixed(2)}`;
         return walls;
       }
       if (acc.type === 'wall_depth') {
+        const partial = partialLen(id);
+        const numPanelsPerBay = Math.ceil((height * 12) / 7);
+        if (partial !== null) {
+          let price = partial * height * wallUnitPrice;
+          if (wallColor === '#8B5A2B') {
+            price += numPanelsPerBay * (partial < 12 ? 100 : 150);
+          }
+          return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
+        }
         const wallLength = depth / numScreenBaysZ;
         const walls = [];
-        const numPanelsPerBay = Math.ceil((height * 12) / 7);
         for (let i = 0; i < numScreenBaysZ; i++) {
           let price = wallLength * height * wallUnitPrice;
           if (wallColor === '#8B5A2B') {
@@ -765,7 +851,7 @@ Total Price: $${grandTotal.toFixed(2)}`;
         houseWall: 'none' as any, houseWalls, staticMode: true
       }
     };
-  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas]);
+  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas, houseWalls, houseWallLengths]);
 
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
@@ -830,11 +916,28 @@ Total Price: $${grandTotal.toFixed(2)}`;
     return null;
   };
 
+  // Compute the length (ft) of the OPEN portion of a side — the part NOT
+  // covered by a structure (house) wall. Used to price screens/privacy walls
+  // on a side that's partially attached to a building.
+  const getSideTotalLength = (side: 'front'|'back'|'left'|'right'): number => {
+    return (side === 'front' || side === 'back') ? width : depth;
+  };
+  const getOpenLengthOnSide = (side: 'front'|'back'|'left'|'right'): number => {
+    const total = getSideTotalLength(side);
+    if (!houseWalls.has(side)) return total;
+    const structLen = houseWallLengths[side];
+    // undefined = full side is structure wall → zero open length
+    if (structLen === undefined || structLen >= total) return 0;
+    return Math.max(0, total - structLen);
+  };
+
   const getConflictReason = (id: string): 'structure' | 'screen' | null => {
     const side = getSideOfAccessory(id);
     if (!side) return null;
-    // Structure wall on same side → any vertical coverage is a conflict
-    if (houseWalls.has(side)) return 'structure';
+    // Structure wall on same side is only a conflict when it spans the
+    // entire side — partial structure walls leave an open portion that a
+    // screen or privacy wall can fill.
+    if (houseWalls.has(side) && getOpenLengthOnSide(side) <= 0) return 'structure';
     // Screen on same side → privacy wall is a conflict
     if (id.startsWith('wall_') && selectedAccessories.has(`screen_${side}`)) return 'screen';
     return null;
@@ -953,6 +1056,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
     setScreenDrop(100);
     setGuillotineOpen(0);
     setHouseWalls(new Set());
+    setHouseWallLengths({});
+    setHouseWallAnchors({});
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -989,7 +1094,10 @@ Total Price: $${grandTotal.toFixed(2)}`;
             const qty = acc?.quantifiable ? (accessoryQuantities[id] || 1) : 1;
             if (!acc) return id;
             return qty > 1 ? `${acc.name} × ${qty}` : acc.name;
-          })
+          }),
+          houseWalls: Array.from(houseWalls),
+          houseWallLengths,
+          houseWallAnchors,
         }
       };
 
@@ -1751,6 +1859,8 @@ Total Price: $${grandTotal.toFixed(2)}`;
           houseWallColor={houseWallColor}
           customModels={customModels}
           houseWalls={houseWalls}
+          houseWallLengths={houseWallLengths}
+          houseWallAnchors={houseWallAnchors}
         />
 
         {/* Luxury Overlay Elements */}
@@ -1987,10 +2097,21 @@ Total Price: $${grandTotal.toFixed(2)}`;
                           onClick={() => {
                             if (opt.value === 'none') {
                               setHouseWalls(new Set());
+    setHouseWallLengths({});
+    setHouseWallAnchors({});
                             } else {
                               const next = new Set(houseWalls);
-                              if (next.has(opt.value as any)) next.delete(opt.value as any);
-                              else next.add(opt.value as any);
+                              const removing = next.has(opt.value as any);
+                              if (removing) {
+                                next.delete(opt.value as any);
+                                // Clean up partial-length state for the removed side
+                                const nl = { ...houseWallLengths }; delete (nl as any)[opt.value];
+                                const na = { ...houseWallAnchors }; delete (na as any)[opt.value];
+                                setHouseWallLengths(nl);
+                                setHouseWallAnchors(na);
+                              } else {
+                                next.add(opt.value as any);
+                              }
                               setHouseWalls(next);
                             }
                           }}
@@ -2012,6 +2133,100 @@ Total Price: $${grandTotal.toFixed(2)}`;
                       );
                     })}
                   </div>
+
+                  {/* Partial structure-wall controls — one expandable panel per selected side */}
+                  {Array.from(houseWalls).map((side) => {
+                    const sideLabel = side.charAt(0).toUpperCase() + side.slice(1);
+                    const total = getSideTotalLength(side);
+                    const currentLen = houseWallLengths[side] ?? total;
+                    const isPartial = currentLen < total;
+                    const anchor = houseWallAnchors[side] ?? 'start';
+                    const anchorOptions: Array<{ value: 'start'|'center'|'end'; label: string }> =
+                      (side === 'front' || side === 'back')
+                        ? [{ value: 'start', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'end', label: 'Right' }]
+                        : [{ value: 'start', label: 'Front' }, { value: 'center', label: 'Center' }, { value: 'end', label: 'Back' }];
+                    return (
+                      <div key={`struct-${side}`} className={`mt-2 p-3 rounded-lg border ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-[10px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
+                            {sideLabel} Structure Wall
+                          </span>
+                          <span className="text-[11px] font-serif text-luxury-gold">
+                            {currentLen}' of {total}'
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...houseWallLengths };
+                              delete next[side];
+                              setHouseWallLengths(next);
+                            }}
+                            className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                              !isPartial
+                                ? 'bg-luxury-gold text-luxury-black'
+                                : (isDark ? 'bg-white/5 text-white/50 hover:text-white' : 'bg-slate-100 text-luxury-black/50 hover:text-luxury-black')
+                            }`}
+                          >
+                            Full
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHouseWallLengths({ ...houseWallLengths, [side]: Math.max(4, Math.floor(total / 2)) });
+                              if (!houseWallAnchors[side]) {
+                                setHouseWallAnchors({ ...houseWallAnchors, [side]: 'start' });
+                              }
+                            }}
+                            className={`px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                              isPartial
+                                ? 'bg-luxury-gold text-luxury-black'
+                                : (isDark ? 'bg-white/5 text-white/50 hover:text-white' : 'bg-slate-100 text-luxury-black/50 hover:text-luxury-black')
+                            }`}
+                          >
+                            Partial
+                          </button>
+                        </div>
+                        {isPartial && (
+                          <div className="space-y-2">
+                            <input
+                              type="range"
+                              min={4}
+                              max={total}
+                              step={1}
+                              value={currentLen}
+                              onChange={(e) => setHouseWallLengths({ ...houseWallLengths, [side]: Number(e.target.value) })}
+                              aria-label={`${sideLabel} structure wall length in feet`}
+                              className="w-full h-[2px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
+                            />
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[9px] uppercase tracking-widest font-bold mr-2 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                                Position
+                              </span>
+                              {anchorOptions.map(({ value, label }) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => setHouseWallAnchors({ ...houseWallAnchors, [side]: value })}
+                                  className={`flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${
+                                    anchor === value
+                                      ? 'bg-luxury-gold/20 text-luxury-gold border border-luxury-gold/40'
+                                      : (isDark ? 'bg-white/[0.03] text-white/50 border border-white/10 hover:text-white' : 'bg-white text-luxury-black/50 border border-slate-200 hover:text-luxury-black')
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                              Open portion ({total - currentLen}') is available for privacy walls or motorized screens in Phase 3.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="space-y-2">

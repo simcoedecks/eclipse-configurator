@@ -111,6 +111,10 @@ interface PergolaVisualizerProps {
   customModels?: { post?: string; beam?: string; louver?: string };
   houseWall?: 'none' | 'back' | 'left' | 'right' | 'front';
   houseWalls?: Set<'back' | 'left' | 'right' | 'front'>;
+  /** Partial structure-wall length (in feet) per side. Undefined = full side length. */
+  houseWallLengths?: Partial<Record<'back'|'front'|'left'|'right', number>>;
+  /** Anchor/position of the partial structure wall on its side. */
+  houseWallAnchors?: Partial<Record<'back'|'front'|'left'|'right', 'start'|'center'|'end'>>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -565,7 +569,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -606,6 +610,43 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
 
   const screenCentersZ = Array.from({ length: numScreenBaysZ }).map((_, i) => -zOffset + (i + 0.5) * ((depth - postSize) / numScreenBaysZ));
   const screenWidthZ = ((depth - postSize) / numScreenBaysZ) - postSize;
+
+  /** If a side has a partial structure wall, return the center + width
+   *  (in pergola-axis coordinates) of the OPEN portion so screens/walls
+   *  are rendered only there. Returns null when the side isn't partial,
+   *  signalling the caller to fall back to normal bay-based rendering. */
+  const getOpenSegmentOnSide = (side: 'front'|'back'|'left'|'right'): { center: number; width: number } | null => {
+    const isSide = side === 'left' || side === 'right';
+    const baseDim = isSide ? depth : width;
+    const partialLen = houseWallLengths?.[side];
+    if (typeof partialLen !== 'number' || partialLen >= baseDim) return null;
+    const anchor = houseWallAnchors?.[side] ?? 'start';
+    const openLen = baseDim - partialLen;
+    // Structure-wall covered range
+    let coveredStart: number, coveredEnd: number;
+    if (anchor === 'start') {
+      coveredStart = -baseDim / 2;
+      coveredEnd = -baseDim / 2 + partialLen;
+    } else if (anchor === 'end') {
+      coveredEnd = baseDim / 2;
+      coveredStart = baseDim / 2 - partialLen;
+    } else {
+      coveredStart = -partialLen / 2;
+      coveredEnd = partialLen / 2;
+    }
+    // Open segment is the complement — for start/end anchors it's contiguous;
+    // for center anchor we take the larger open segment.
+    let openCenter: number;
+    if (anchor === 'start') {
+      openCenter = (coveredEnd + baseDim / 2) / 2;
+    } else if (anchor === 'end') {
+      openCenter = (-baseDim / 2 + coveredStart) / 2;
+    } else {
+      // Center anchor leaves two open segments; pick the front/right one.
+      openCenter = (coveredEnd + baseDim / 2) / 2;
+    }
+    return { center: openCenter, width: openLen - postSize };
+  };
 
   // Louver bay logic (always depends on structural bays)
   const louverBayCentersZ = Array.from({ length: numBaysZ }).map((_, i) => -zOffset + (i + 0.5) * ((depth - postSize) / numBaysZ));
@@ -792,19 +833,37 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         </React.Fragment>
       ))}
 
-      {/* Motorized Screens */}
-      {accessories.has('screen_front') && screenCentersX.map((x, i) => (
-        <MotorizedScreen key={`sf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
-      ))}
-      {accessories.has('screen_back') && screenCentersX.map((x, i) => (
-        <MotorizedScreen key={`sb-${i}`} width={screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
-      ))}
-      {accessories.has('screen_right') && screenCentersZ.map((z, i) => (
-        <MotorizedScreen key={`sr-${i}`} width={screenWidthZ} height={height} position={[xOffset - 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
-      ))}
-      {accessories.has('screen_left') && screenCentersZ.map((z, i) => (
-        <MotorizedScreen key={`sl-${i}`} width={screenWidthZ} height={height} position={[-xOffset + 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
-      ))}
+      {/* Motorized Screens — render over the whole side unless there's
+          a partial structure wall on the same side, in which case render
+          only over the open portion. */}
+      {accessories.has('screen_front') && (() => {
+        const seg = getOpenSegmentOnSide('front');
+        if (seg) return <MotorizedScreen key="sf-partial" width={seg.width} height={height} position={[seg.center, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
+        return screenCentersX.map((x, i) => (
+          <MotorizedScreen key={`sf-${i}`} width={screenWidthX} height={height} position={[x, height / 2, zOffset - 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+        ));
+      })()}
+      {accessories.has('screen_back') && (() => {
+        const seg = getOpenSegmentOnSide('back');
+        if (seg) return <MotorizedScreen key="sb-partial" width={seg.width} height={height} position={[seg.center, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
+        return screenCentersX.map((x, i) => (
+          <MotorizedScreen key={`sb-${i}`} width={screenWidthX} height={height} position={[x, height / 2, -zOffset + 0.1]} rotation={[0, 0, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+        ));
+      })()}
+      {accessories.has('screen_right') && (() => {
+        const seg = getOpenSegmentOnSide('right');
+        if (seg) return <MotorizedScreen key="sr-partial" width={seg.width} height={height} position={[xOffset - 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
+        return screenCentersZ.map((z, i) => (
+          <MotorizedScreen key={`sr-${i}`} width={screenWidthZ} height={height} position={[xOffset - 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+        ));
+      })()}
+      {accessories.has('screen_left') && (() => {
+        const seg = getOpenSegmentOnSide('left');
+        if (seg) return <MotorizedScreen key="sl-partial" width={seg.width} height={height} position={[-xOffset + 0.1, height / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />;
+        return screenCentersZ.map((z, i) => (
+          <MotorizedScreen key={`sl-${i}`} width={screenWidthZ} height={height} position={[-xOffset + 0.1, height / 2, z]} rotation={[0, Math.PI / 2, 0]} color={screenColor} frameColor={frameColor} dropPercentage={screenDrop} staticMode={staticMode} />
+        ));
+      })()}
 
       {/* Guillotine Windows */}
       {accessories.has('guillotine_front') && screenCentersX.map((x, i) => (
@@ -839,23 +898,36 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
 
         return (
           <>
-            {/* Front/back privacy walls — span post-to-post */}
-            {accessories.has('wall_front') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wf-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
-            ))}
-            {accessories.has('wall_back') && screenCentersX.map((x, i) => (
-              <PrivacyWall key={`wb-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
-            ))}
+            {/* Front/back privacy walls — span post-to-post (or just the
+                open portion when the side has a partial structure wall) */}
+            {accessories.has('wall_front') && (() => {
+              const seg = getOpenSegmentOnSide('front');
+              if (seg) return <PrivacyWall key="wf-partial" width={seg.width} height={privacyHeight} position={[seg.center, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />;
+              return screenCentersX.map((x, i) => (
+                <PrivacyWall key={`wf-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, zOffset - 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              ));
+            })()}
+            {accessories.has('wall_back') && (() => {
+              const seg = getOpenSegmentOnSide('back');
+              if (seg) return <PrivacyWall key="wb-partial" width={seg.width} height={privacyHeight} position={[seg.center, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />;
+              return screenCentersX.map((x, i) => (
+                <PrivacyWall key={`wb-${i}`} width={frontBackBayWidth} height={privacyHeight} position={[x, privacyHeight / 2, -zOffset + 0.2]} rotation={[0, 0, 0]} color={wallColor} />
+              ));
+            })()}
 
             {/* Left/right privacy walls — one continuous panel spanning all bays,
                 post-to-post, shortened at corners where another wall exists */}
             {accessories.has('wall_right') && (() => {
+              const seg = getOpenSegmentOnSide('right');
+              if (seg) return <PrivacyWall key="wr-partial" width={seg.width} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
               const fullSpan = leftRightBayWidth * screenCentersZ.length;
               const adjustedWidth = Math.max(0.5, fullSpan - lrLengthDelta);
               const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
               return <PrivacyWall key="wr-joined" width={adjustedWidth} height={privacyHeight} position={[xOffset - 0.2, privacyHeight / 2, adjustedZ]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
             })()}
             {accessories.has('wall_left') && (() => {
+              const seg = getOpenSegmentOnSide('left');
+              if (seg) return <PrivacyWall key="wl-partial" width={seg.width} height={privacyHeight} position={[-xOffset + 0.2, privacyHeight / 2, seg.center]} rotation={[0, Math.PI / 2, 0]} color={wallColor} />;
               const fullSpan = leftRightBayWidth * screenCentersZ.length;
               const adjustedWidth = Math.max(0.5, fullSpan - lrLengthDelta);
               const adjustedZ = (screenCentersZ.reduce((s, c) => s + c, 0) / Math.max(1, screenCentersZ.length)) + lrCenterShift;
@@ -866,7 +938,10 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
                 Outside-corner join: each wall extends past the pergola edge
                 by the full wall thickness on any end that meets another
                 structure wall, so the corner fully overlaps and each wall
-                terminates at the outer face of its perpendicular neighbour. */}
+                terminates at the outer face of its perpendicular neighbour.
+                If a side has a partial-length structure wall, the wall is
+                rendered only over the covered portion and anchored per
+                houseWallAnchors[side] (start / center / end). */}
             {Array.from(structureSides).map(side => {
               const EXT = 10;              // ft past pergola if no intersection
               const CORNER_EXT = 1;        // matches HouseWall backing thickness (1ft)
@@ -876,11 +951,43 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
               const perpEnd2 = isSide ? 'front' : 'right'; // +Z or +X end
               const baseDim = isSide ? depth : width;
 
-              const end1Intersects = structureSides.has(perpEnd1);
-              const end2Intersects = structureSides.has(perpEnd2);
+              // Partial-length support: figure out which portion of the
+              // side is covered by structure wall. Coordinates run
+              // -baseDim/2 .. +baseDim/2 along the side axis.
+              const partialLen = houseWallLengths?.[side as 'front'|'back'|'left'|'right'];
+              const isPartial = typeof partialLen === 'number' && partialLen < baseDim;
+              const anchor = houseWallAnchors?.[side as 'front'|'back'|'left'|'right'] ?? 'start';
 
-              const end1 = end1Intersects ? -baseDim / 2 - CORNER_EXT : -baseDim / 2 - EXT;
-              const end2 = end2Intersects ?  baseDim / 2 + CORNER_EXT :  baseDim / 2 + EXT;
+              let coveredStart: number, coveredEnd: number;
+              if (isPartial) {
+                if (anchor === 'start') {
+                  coveredStart = -baseDim / 2;
+                  coveredEnd = -baseDim / 2 + (partialLen as number);
+                } else if (anchor === 'end') {
+                  coveredEnd = baseDim / 2;
+                  coveredStart = baseDim / 2 - (partialLen as number);
+                } else { // center
+                  coveredStart = -(partialLen as number) / 2;
+                  coveredEnd = (partialLen as number) / 2;
+                }
+              } else {
+                coveredStart = -baseDim / 2;
+                coveredEnd = baseDim / 2;
+              }
+
+              const touchesEnd1 = Math.abs(coveredStart - (-baseDim / 2)) < 0.01;
+              const touchesEnd2 = Math.abs(coveredEnd - (baseDim / 2)) < 0.01;
+              const end1Intersects = touchesEnd1 && structureSides.has(perpEnd1);
+              const end2Intersects = touchesEnd2 && structureSides.has(perpEnd2);
+
+              // Only extend past the pergola edge when the wall reaches
+              // that edge. Otherwise terminate flush at the covered range.
+              const end1 = touchesEnd1
+                ? (end1Intersects ? coveredStart - CORNER_EXT : coveredStart - EXT)
+                : coveredStart;
+              const end2 = touchesEnd2
+                ? (end2Intersects ? coveredEnd + CORNER_EXT : coveredEnd + EXT)
+                : coveredEnd;
               const wallLength = end2 - end1;
               const wallCenter = (end1 + end2) / 2;
 
