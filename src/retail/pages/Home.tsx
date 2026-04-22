@@ -1352,7 +1352,23 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           createdAt: serverTimestamp()
         };
         if (typeof jobNumber === 'number') submissionPayload.jobNumber = jobNumber;
-        const submissionRef = await addDoc(collection(db, 'submissions'), submissionPayload);
+        // Firestore rejects documents that contain `undefined` anywhere.
+        // Strip them from the payload recursively before writing — keeps
+        // null (explicitly cleared) but drops bare undefined values that
+        // sometimes sneak in from optional fields being unset.
+        const stripUndefined = (v: any): any => {
+          if (v === undefined) return undefined;
+          if (v === null || typeof v !== 'object') return v;
+          if (Array.isArray(v)) return v.map(stripUndefined).filter(x => x !== undefined);
+          const out: any = {};
+          for (const k of Object.keys(v)) {
+            const cleaned = stripUndefined(v[k]);
+            if (cleaned !== undefined) out[k] = cleaned;
+          }
+          return out;
+        };
+        const cleanPayload = stripUndefined(submissionPayload);
+        const submissionRef = await addDoc(collection(db, 'submissions'), cleanPayload);
         submissionId = submissionRef.id;
 
         // Create or update Pipedrive lead
@@ -1628,22 +1644,31 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       // Run background task
       processBackground();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving submission:", error);
-      // Surface the actual message (trimmed) so the user can share it
-      // when something specific is wrong with permissions or payload.
-      let msg = 'There was an error saving your request. Please try again.';
-      if (error instanceof Error) {
-        const raw = error.message || '';
-        // handleFirestoreError throws a JSON blob — strip that down
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed?.error) msg = `Save failed: ${String(parsed.error).slice(0, 140)}`;
-        } catch {
-          msg = `Save failed: ${raw.slice(0, 140)}`;
+      // Best-effort extraction of a human-readable cause. Covers:
+      //   - Firebase SDK errors (have .code and .message)
+      //   - handleFirestoreError which throws Error(JSON.stringify({error, ...}))
+      //   - Plain Error / string / unknown
+      let detail = '';
+      if (error) {
+        const code = (error as any).code ? ` (${(error as any).code})` : '';
+        let msg = '';
+        if (typeof error === 'string') {
+          msg = error;
+        } else if (error.message) {
+          msg = String(error.message);
+          try {
+            const parsed = JSON.parse(msg);
+            if (parsed?.error) msg = String(parsed.error);
+          } catch { /* message isn't JSON — use raw */ }
         }
+        detail = (msg + code).slice(0, 180);
       }
-      toast.error(msg, { duration: 8000 });
+      const toastMsg = detail
+        ? `Save failed: ${detail}`
+        : 'Save failed. Please check the browser console for details and try again.';
+      toast.error(toastMsg, { duration: 10000 });
       setIsSubmitting(false);
     }
   };

@@ -128,7 +128,19 @@ export default function CustomRequestModal({
         createdAt: serverTimestamp(),
       };
       if (typeof jobNumber === 'number') basePayload.jobNumber = jobNumber;
-      const docRef = await addDoc(collection(db, 'submissions'), basePayload);
+      // Strip any undefined values Firestore would reject.
+      const stripUndefined = (v: any): any => {
+        if (v === undefined) return undefined;
+        if (v === null || typeof v !== 'object') return v;
+        if (Array.isArray(v)) return v.map(stripUndefined).filter((x: any) => x !== undefined);
+        const out: any = {};
+        for (const k of Object.keys(v)) {
+          const cleaned = stripUndefined(v[k]);
+          if (cleaned !== undefined) out[k] = cleaned;
+        }
+        return out;
+      };
+      const docRef = await addDoc(collection(db, 'submissions'), stripUndefined(basePayload));
 
       // Upload attachments (if any) and patch the doc with URLs.
       let attachments: Array<{ name: string; url: string; size: number; type: string }> = [];
