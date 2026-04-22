@@ -439,6 +439,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   // pergola footprint, in feet. Beams still span the full pergola,
   // creating a cantilever overhang past the corner post.
   const [cantileverInsets, setCantileverInsets] = useState<Partial<Record<'left'|'right'|'front'|'back', number>>>({});
+  // Per-corner fine-tune — each of the 4 corner posts can be nudged
+  // independently in X and Z. Layered ON TOP of cantileverInsets.
+  // Keys: 'back-left', 'back-right', 'front-left', 'front-right'
+  //   x > 0 = move right (toward +X), x < 0 = move left (toward -X)
+  //   z > 0 = move front (toward +Z), z < 0 = move back (toward -Z)
+  const [cornerPostOffsets, setCornerPostOffsets] = useState<Record<string, { x?: number; z?: number }>>({});
+  const [selectedCorner, setSelectedCorner] = useState<string | null>(null);
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
@@ -474,6 +481,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setRemovedMiddlePosts(new Set());
     setPostMoveMode('together');
     setCantileverInsets({});
+    setCornerPostOffsets({});
+    setSelectedCorner(null);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -1168,6 +1177,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setRemovedMiddlePosts(new Set());
     setPostMoveMode('together');
     setCantileverInsets({});
+    setCornerPostOffsets({});
+    setSelectedCorner(null);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1980,6 +1991,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           postZOnlyOffsets={postZOnlyOffsets}
           removedMiddlePosts={removedMiddlePosts}
           cantileverInsets={cantileverInsets}
+          cornerPostOffsets={cornerPostOffsets}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2233,6 +2245,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setRemovedMiddlePosts(new Set());
     setPostMoveMode('together');
     setCantileverInsets({});
+    setCornerPostOffsets({});
+    setSelectedCorner(null);
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2691,10 +2705,116 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       })}
                     </div>
                     <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                      Positive = post inset inward (beam cantilevers past it). Negative = post pushed outward past the pergola corner. Max ±⅓ of the edge length.
+                      Positive = post inset inward (beam cantilevers past it). Negative = post pushed outward past the pergola corner. Max ±⅓ of the edge length. Both left corners move together, both right corners move together, etc.
                     </p>
                   </div>
                 )}
+
+                {/* Per-Corner Posts — fine-tune each corner independently
+                    in both X and Z. Layers on top of Edge Cantilevers
+                    above. Admin only. */}
+                {adminMode && (() => {
+                  const corners: Array<{ key: string; label: string; gridRow: number; gridCol: number }> = [
+                    { key: 'back-left',   label: 'Back-Left',   gridRow: 1, gridCol: 1 },
+                    { key: 'back-right',  label: 'Back-Right',  gridRow: 1, gridCol: 2 },
+                    { key: 'front-left',  label: 'Front-Left',  gridRow: 2, gridCol: 1 },
+                    { key: 'front-right', label: 'Front-Right', gridRow: 2, gridCol: 2 },
+                  ];
+                  const maxX = Math.floor(width / 3);
+                  const maxZ = Math.floor(depth / 3);
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Corner Posts (Per-Corner)</label>
+                        <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {corners.map(({ key, label }) => {
+                          const off = cornerPostOffsets[key] || {};
+                          const dx = off.x || 0;
+                          const dz = off.z || 0;
+                          const isSelected = selectedCorner === key;
+                          const setOff = (delta: Partial<{ x: number; z: number }>) => {
+                            const next = { ...(cornerPostOffsets[key] || {}) };
+                            if ('x' in delta) {
+                              const nx = Math.max(-maxX, Math.min(maxX, (next.x || 0) + (delta.x || 0)));
+                              if (nx === 0) delete next.x; else next.x = nx;
+                            }
+                            if ('z' in delta) {
+                              const nz = Math.max(-maxZ, Math.min(maxZ, (next.z || 0) + (delta.z || 0)));
+                              if (nz === 0) delete next.z; else next.z = nz;
+                            }
+                            const out = { ...cornerPostOffsets };
+                            if (!next.x && !next.z) delete out[key];
+                            else out[key] = next;
+                            setCornerPostOffsets(out);
+                          };
+                          const reset = () => {
+                            const out = { ...cornerPostOffsets };
+                            delete out[key];
+                            setCornerPostOffsets(out);
+                          };
+                          const readout = (dx === 0 && dz === 0)
+                            ? 'Default'
+                            : `${dx !== 0 ? `X ${dx > 0 ? '+' : ''}${dx}'` : ''}${dx !== 0 && dz !== 0 ? ' · ' : ''}${dz !== 0 ? `Z ${dz > 0 ? '+' : ''}${dz}'` : ''}`;
+                          return (
+                            <div
+                              key={key}
+                              onClick={() => setSelectedCorner(isSelected ? null : key)}
+                              className={`rounded-lg border transition-all px-2.5 py-2 cursor-pointer ${
+                                isSelected
+                                  ? 'border-luxury-gold bg-luxury-gold/10'
+                                  : (isDark ? 'border-white/10 bg-white/[0.02] hover:border-luxury-gold/40' : 'border-slate-200 bg-luxury-paper/40 hover:border-luxury-gold/40')
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>{label}</span>
+                                <span className={`text-[10px] font-serif ${(dx === 0 && dz === 0) ? (isDark ? 'text-white/30' : 'text-luxury-black/30') : 'text-luxury-gold'}`}>{readout}</span>
+                              </div>
+                              {isSelected && (
+                                <div className="pt-1 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {/* X axis — left/right */}
+                                  <div className="flex items-center gap-1">
+                                    <span className={`w-3 text-[9px] font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>X</span>
+                                    <button type="button" onClick={() => setOff({ x: -1 })}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
+                                      ◀ Left 1'
+                                    </button>
+                                    <button type="button" onClick={() => setOff({ x: 1 })}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
+                                      Right 1' ▶
+                                    </button>
+                                  </div>
+                                  {/* Z axis — front/back */}
+                                  <div className="flex items-center gap-1">
+                                    <span className={`w-3 text-[9px] font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>Z</span>
+                                    <button type="button" onClick={() => setOff({ z: -1 })}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
+                                      ◀ Back 1'
+                                    </button>
+                                    <button type="button" onClick={() => setOff({ z: 1 })}
+                                      className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
+                                      Front 1' ▶
+                                    </button>
+                                  </div>
+                                  {(dx !== 0 || dz !== 0) && (
+                                    <button type="button" onClick={reset}
+                                      className="w-full py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold">
+                                      ⟲ Reset Corner
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                        Click a corner to select, then nudge it freely in X (left/right) and Z (back/front). Stacks on top of Edge Cantilevers above.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Dimension inputs — typable + slider + ± buttons.
                     Common renderer so we keep consistent behavior across W/D/H. */}

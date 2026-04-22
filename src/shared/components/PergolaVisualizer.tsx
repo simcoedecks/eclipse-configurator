@@ -135,6 +135,10 @@ interface PergolaVisualizerProps {
   /** Admin-only: cantilever insets per edge (ft). Corner posts move
    *  inward by this amount; beams still extend to the pergola edge. */
   cantileverInsets?: Partial<Record<'left'|'right'|'front'|'back', number>>;
+  /** Admin-only: per-corner XZ offsets for the 4 corner posts. Layered
+   *  on top of cantileverInsets. Keys: 'back-left', 'back-right',
+   *  'front-left', 'front-right'. Positive x = right, positive z = front. */
+  cornerPostOffsets?: Record<string, { x?: number; z?: number }>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -589,7 +593,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -761,10 +765,24 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
     <group position={[0, -height / 2, 0]}>
       {/* Posts — use postRenderCentersX/Z so the physical post can be
           offset independently from the beam (cantilever / decorative
-          post placement). */}
-      {postRenderCentersX.map((x, i) => (
+          post placement). Per-corner offsets layer on top for the
+          four corner posts. */}
+      {postRenderCentersX.map((baseX, i) => (
         <React.Fragment key={`post-row-${i}`}>
-          {postRenderCentersZ.map((z, j) => {
+          {postRenderCentersZ.map((baseZ, j) => {
+            // Per-corner offset lookup (only applies to the 4 corners)
+            let x = baseX, z = baseZ;
+            const isCornerPost = (i === 0 || i === numBaysX) && (j === 0 || j === numBaysZ);
+            if (isCornerPost && cornerPostOffsets) {
+              const xSide = i === 0 ? 'left' : 'right';
+              const zSide = j === 0 ? 'back' : 'front';
+              const key = `${zSide}-${xSide}`;
+              const off = cornerPostOffsets[key];
+              if (off) {
+                if (typeof off.x === 'number') x += off.x;
+                if (typeof off.z === 'number') z += off.z;
+              }
+            }
             // A post is required if it's a corner, a side post if the span exceeds 20' and area > 260 sq ft, or an internal post for very large pergolas.
             const isCorner = (i === 0 || i === numBaysX) && (j === 0 || j === numBaysZ);
             const isSidePostX = (i > 0 && i < numBaysX && (j === 0 || j === numBaysZ));
