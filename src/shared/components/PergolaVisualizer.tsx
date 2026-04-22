@@ -632,20 +632,22 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   // postRenderCentersX / postRenderCentersZ — where the physical post
   // MESH is drawn. Middle posts layer the post-only offset on top of
   // the beam offset. Corner posts (i=0 / i=numBays) honor the
-  // cantilever inset for that edge, moving INWARD while the beams
-  // still extend to the pergola edge.
-  const leftInset  = Math.max(0, cantileverInsets?.left  || 0);
-  const rightInset = Math.max(0, cantileverInsets?.right || 0);
-  const backInset  = Math.max(0, cantileverInsets?.back  || 0);
-  const frontInset = Math.max(0, cantileverInsets?.front || 0);
+  // cantilever inset for that edge. Insets are bidirectional:
+  //   positive → post moves INWARD (beam cantilevers past it)
+  //   negative → post moves OUTWARD past the default pergola corner
+  //              (decorative/brace placement — post extends past beam)
+  const leftInset  = cantileverInsets?.left  || 0;
+  const rightInset = cantileverInsets?.right || 0;
+  const backInset  = cantileverInsets?.back  || 0;
+  const frontInset = cantileverInsets?.front || 0;
   const postRenderCentersX = postCentersX.map((p, i) => {
-    if (i === 0)          return p + leftInset;   // left corners shift right
-    if (i === numBaysX)   return p - rightInset;  // right corners shift left
+    if (i === 0)          return p + leftInset;   // +inset moves left corners right (inward)
+    if (i === numBaysX)   return p - rightInset;  // +inset moves right corners left (inward)
     return p + (postXOnlyOffsets?.[i] || 0);
   });
   const postRenderCentersZ = postCentersZ.map((p, i) => {
-    if (i === 0)          return p + backInset;   // back corners shift toward center
-    if (i === numBaysZ)   return p - frontInset;  // front corners shift toward center
+    if (i === 0)          return p + backInset;   // +inset moves back corners forward
+    if (i === numBaysZ)   return p - frontInset;  // +inset moves front corners backward
     return p + (postZOnlyOffsets?.[i] || 0);
   });
 

@@ -161,7 +161,7 @@ function DimensionNumberInput({
       }}
       onFocus={(e) => e.currentTarget.select()}
       aria-label={`Pergola ${ariaKey} in feet`}
-      className="w-14 text-right text-lg font-serif font-medium text-luxury-gold bg-transparent border-b border-luxury-black/10 dark:border-white/10 focus:border-luxury-gold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      className="w-14 text-right text-lg font-serif font-medium text-luxury-gold bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   );
 }
@@ -2644,39 +2644,44 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {([
-                        { side: 'left',  label: 'Left Edge',  max: Math.floor(width / 3) },
-                        { side: 'right', label: 'Right Edge', max: Math.floor(width / 3) },
-                        { side: 'back',  label: 'Back Edge',  max: Math.floor(depth / 3) },
-                        { side: 'front', label: 'Front Edge', max: Math.floor(depth / 3) },
-                      ] as const).map(({ side, label, max }) => {
+                        { side: 'left',  label: 'Left Edge',  axisMax: Math.floor(width / 3) },
+                        { side: 'right', label: 'Right Edge', axisMax: Math.floor(width / 3) },
+                        { side: 'back',  label: 'Back Edge',  axisMax: Math.floor(depth / 3) },
+                        { side: 'front', label: 'Front Edge', axisMax: Math.floor(depth / 3) },
+                      ] as const).map(({ side, label, axisMax }) => {
                         const val = cantileverInsets[side] || 0;
                         const setVal = (v: number) => {
                           const next = { ...cantileverInsets };
-                          if (v <= 0) delete next[side];
+                          if (v === 0) delete next[side];
                           else next[side] = v;
                           setCantileverInsets(next);
                         };
+                        const readout = val > 0
+                          ? `${val}' inset`
+                          : val < 0
+                            ? `${Math.abs(val)}' out`
+                            : 'Default';
                         return (
                           <div key={side} className={`rounded-lg border px-2.5 py-2 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
                             <div className="flex items-center justify-between mb-1.5">
                               <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>{label}</span>
-                              <span className="text-[11px] font-serif text-luxury-gold">{val}' inset</span>
+                              <span className="text-[11px] font-serif text-luxury-gold">{readout}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => setVal(Math.max(0, val - 1))}
+                              <button type="button" onClick={() => setVal(Math.max(-axisMax, val - 1))}
                                 className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center">
                                 <Minus className="w-3 h-3" />
                               </button>
                               <input
                                 type="range"
-                                min={0}
-                                max={max}
+                                min={-axisMax}
+                                max={axisMax}
                                 step={1}
                                 value={val}
                                 onChange={(e) => setVal(Number(e.target.value))}
                                 className="flex-1 h-[2px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
                               />
-                              <button type="button" onClick={() => setVal(Math.min(max, val + 1))}
+                              <button type="button" onClick={() => setVal(Math.min(axisMax, val + 1))}
                                 className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center">
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -2686,7 +2691,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       })}
                     </div>
                     <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                      Inset the corner posts inward — the beam stays at the pergola edge, creating a cantilever overhang. Max inset is ⅓ of the edge length.
+                      Positive = post inset inward (beam cantilevers past it). Negative = post pushed outward past the pergola corner. Max ±⅓ of the edge length.
                     </p>
                   </div>
                 )}
@@ -2694,9 +2699,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                 {/* Dimension inputs — typable + slider + ± buttons.
                     Common renderer so we keep consistent behavior across W/D/H. */}
                 {([
-                  { label: 'Width',  value: width,  setter: setWidth,  min: 7, max: 100, ariaKey: 'width' },
-                  { label: 'Depth',  value: depth,  setter: setDepth,  min: 8, max: 40,  ariaKey: 'depth' },
-                  { label: 'Height', value: height, setter: setHeight, min: 8, max: 11,  ariaKey: 'height' },
+                  { label: 'Width (Louver Length)', value: width,  setter: setWidth,  min: 7, max: 100, ariaKey: 'width' },
+                  { label: 'Depth',                 value: depth,  setter: setDepth,  min: 8, max: 40,  ariaKey: 'depth' },
+                  { label: 'Height',                value: height, setter: setHeight, min: 8, max: 11,  ariaKey: 'height' },
                 ] as const).map(({ label, value, setter, min, max, ariaKey }) => (
                   <div key={ariaKey} className="space-y-2">
                     <div className="flex justify-between items-end">
