@@ -24,40 +24,78 @@ export default function Proposal() {
   const contentRef = useRef<HTMLDivElement>(null);
 
   /** Capture the proposal content area as a multi-page PDF.
-   *  Uses html-to-image + jsPDF to render exactly what the customer sees. */
+   *  Clones the content into an off-screen container at a fixed
+   *  portrait-A4 width so the output is perfectly centered and
+   *  not affected by the viewer's window size. */
   const handleDownloadPdf = async () => {
     if (!contentRef.current || generatingPdf) return;
     setGeneratingPdf(true);
+    let offscreen: HTMLDivElement | null = null;
     try {
       // Give any async 3D / image rendering a moment to settle
       await new Promise(r => setTimeout(r, 800));
-      const dataUrl = await toPng(contentRef.current, {
+
+      // Portrait A4 is 210mm × 297mm. At 96dpi, that's 794 × 1123 CSS
+      // pixels. We render at 800px wide for a slight margin.
+      const targetWidth = 800;
+      const source = contentRef.current;
+
+      // Clone the content into a fixed-width off-screen container so
+      // the capture isn't affected by the live viewport / zoom.
+      offscreen = document.createElement('div');
+      offscreen.style.position = 'fixed';
+      offscreen.style.top = '0';
+      offscreen.style.left = '-10000px';  // off-screen but still rendered
+      offscreen.style.width = targetWidth + 'px';
+      offscreen.style.background = '#FAF9F6';
+      offscreen.style.padding = '0';
+      offscreen.style.margin = '0';
+      const clone = source.cloneNode(true) as HTMLDivElement;
+      // Force the clone to fill our fixed width (override max-w-5xl etc.)
+      clone.style.maxWidth = 'none';
+      clone.style.width = '100%';
+      clone.style.margin = '0';
+      clone.style.padding = '24px';
+      clone.style.boxSizing = 'border-box';
+      offscreen.appendChild(clone);
+      document.body.appendChild(offscreen);
+
+      // Give cloned images / iframes a tick to render
+      await new Promise(r => setTimeout(r, 300));
+
+      const dataUrl = await toPng(clone, {
         pixelRatio: 2,
         backgroundColor: '#FAF9F6',
         cacheBust: true,
+        width: clone.scrollWidth,
+        height: clone.scrollHeight,
       });
+
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
+      const pdfW = pdf.internal.pageSize.getWidth();   // 210mm
+      const pdfH = pdf.internal.pageSize.getHeight();  // 297mm
       const imgProps = pdf.getImageProperties(dataUrl);
-      const imgRatio = imgProps.width / imgProps.height;
-      // Full-width image, paginated by slicing vertically
-      const renderedW = pdfW;
-      const renderedH = renderedW / imgRatio;
-      let positionY = 0;
-      const overlap = 2; // mm
-      // Render image possibly spanning multiple pages by shifting y offset
-      pdf.addImage(dataUrl, 'PNG', 0, positionY, renderedW, renderedH);
-      // Slice across additional pages
-      if (renderedH > pdfH) {
-        let leftover = renderedH - pdfH;
+      // Scale image to fit portrait width with a small horizontal margin
+      const margin = 8; // mm
+      const targetW = pdfW - margin * 2;
+      const scale = targetW / imgProps.width;
+      const scaledH = imgProps.height * scale;
+
+      // Multi-page: if scaled image is taller than one page, slice by
+      // re-placing the full image with a negative y offset on each page.
+      const pageContentH = pdfH - margin * 2;
+      let placedY = margin;
+      pdf.addImage(dataUrl, 'PNG', margin, placedY, targetW, scaledH);
+      if (scaledH > pageContentH) {
+        let leftover = scaledH - pageContentH;
         while (leftover > 0) {
           pdf.addPage();
-          positionY -= (pdfH - overlap);
-          pdf.addImage(dataUrl, 'PNG', 0, positionY, renderedW, renderedH);
-          leftover -= (pdfH - overlap);
+          placedY -= (pageContentH - 2); // 2mm page overlap
+          pdf.addImage(dataUrl, 'PNG', margin, placedY, targetW, scaledH);
+          leftover -= (pageContentH - 2);
         }
       }
+
       const filename = `Eclipse_Proposal_${(data?.name || 'Customer').replace(/\s+/g, '_')}.pdf`;
       pdf.save(filename);
       toast.success('Proposal PDF downloaded');
@@ -65,6 +103,9 @@ export default function Proposal() {
       console.error('Proposal PDF download failed', err);
       toast.error(`PDF generation failed: ${err?.message || 'unknown error'}`);
     } finally {
+      if (offscreen && offscreen.parentNode) {
+        offscreen.parentNode.removeChild(offscreen);
+      }
       setGeneratingPdf(false);
     }
   };
