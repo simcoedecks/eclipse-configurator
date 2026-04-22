@@ -143,6 +143,11 @@ interface PergolaVisualizerProps {
    *  each entry in the array says what to render for that bay: 'open',
    *  'screen', or 'wall'. Overrides the uniform screen_/wall_ side toggle. */
   sectionChoices?: Partial<Record<'front'|'back'|'left'|'right', Array<'open'|'screen'|'wall'>>>;
+  /** Admin-only: override the structural default max louver span (13')
+   *  and max depth-bay span (20'). Accepted range: 13-15 louver, 20-22
+   *  bay. Used when admin wants to avoid an extra section break. */
+  maxLouverSpanOverride?: number;
+  maxBaySpanOverride?: number;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -597,7 +602,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, maxLouverSpanOverride, maxBaySpanOverride, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -609,16 +614,18 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
   const zOffset = depth / 2 - postSize / 2;
 
   // Structural Rules
-  const maxLouverSpan = 13;
-  const maxDepthSpan = 20;
+  // Structural defaults (13' louver, 20' depth bay) with optional admin
+  // override — clamped to safe engineering range (+2' max over default).
+  const maxLouverSpan = Math.max(13, Math.min(15, maxLouverSpanOverride ?? 13));
+  const maxDepthSpan  = Math.max(20, Math.min(22, maxBaySpanOverride ?? 20));
 
   const numBaysX = Math.ceil(width / maxLouverSpan);
   const numBaysZ = Math.ceil(depth / maxDepthSpan);
   
   // Middle support posts only appear once a beam spans more than 20'.
   // Below that, louver-bay splits are structural only (no extra post).
-  const needsMiddlePostX = width > 20;
-  const needsMiddlePostZ = depth > 20;
+  const needsMiddlePostX = width > maxDepthSpan;
+  const needsMiddlePostZ = depth > maxDepthSpan;
 
   // Default post positions — corners at ends, middle posts evenly distributed.
   const defaultPostCentersX = Array.from({ length: numBaysX + 1 }).map((_, i) => -xOffset + i * ((width - postSize) / numBaysX));

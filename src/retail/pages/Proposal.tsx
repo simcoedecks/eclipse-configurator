@@ -519,6 +519,8 @@ export default function Proposal() {
             houseWallAnchors: cfg.houseWallAnchors || {},
             houseWallExtensions: cfg.houseWallExtensions || {},
             sectionChoices: cfg.sectionChoices || {},
+            maxLouverSpanOverride: cfg.maxLouverSpanOverride,
+            maxBaySpanOverride: cfg.maxBaySpanOverride,
           };
           return (
             <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">

@@ -52,6 +52,8 @@ export default function TwoAngleViews({ submission }: Props) {
       houseWallAnchors: cfg.houseWallAnchors || {},
       houseWallExtensions: cfg.houseWallExtensions || {},
       sectionChoices: cfg.sectionChoices || {},
+      maxLouverSpanOverride: cfg.maxLouverSpanOverride,
+      maxBaySpanOverride: cfg.maxBaySpanOverride,
       staticMode: true,
     };
   }, [submission]);

@@ -456,6 +456,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   //   'screen' → motorized screen bay
   //   'wall'   → privacy wall bay
   const [sectionChoices, setSectionChoices] = useState<Partial<Record<'front'|'back'|'left'|'right', Array<'open'|'screen'|'wall'>>>>({});
+  // Admin-only overrides: allow pushing the per-section max louver / bay
+  // span beyond the structural default (13' louvers, 20' depth bays) by
+  // up to 2 feet. Used when admin accepts the structural trade-off to
+  // avoid an extra section break.
+  //   maxLouverSpanOverride: 13 (default) .. 15
+  //   maxBaySpanOverride:   20 (default) .. 22
+  const [maxLouverSpanOverride, setMaxLouverSpanOverride] = useState<number>(13);
+  const [maxBaySpanOverride, setMaxBaySpanOverride] = useState<number>(20);
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
@@ -494,6 +502,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCornerPostOffsets({});
     setSelectedCorner(null);
     setSectionChoices({});
+    setMaxLouverSpanOverride(13);
+    setMaxBaySpanOverride(20);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setExtraPergolas([]);
@@ -696,14 +706,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const basePrice = useMemo(() => calculateBasePrice(depth, width), [depth, width]);
   
   const hasMiddlePosts = (width * depth > 260);
-  const numBaysX = Math.ceil(width / 13);
-  const numBaysZ = Math.ceil(depth / 20);
-  const numScreenBaysX = (hasMiddlePosts && numBaysX > 1) || width > 20 ? numBaysX : 1;
-  const numScreenBaysZ = (hasMiddlePosts && numBaysZ > 1) || depth > 20 ? numBaysZ : 1;
-  // Which axes have middle posts (matches the visualizer rule — only
-  // shows when a beam actually exceeds 20').
-  const hasMiddleXPost = width > 20;
-  const hasMiddleZPost = depth > 20;
+  const numBaysX = Math.ceil(width / maxLouverSpanOverride);
+  const numBaysZ = Math.ceil(depth / maxBaySpanOverride);
+  const numScreenBaysX = (hasMiddlePosts && numBaysX > 1) || width > maxBaySpanOverride ? numBaysX : 1;
+  const numScreenBaysZ = (hasMiddlePosts && numBaysZ > 1) || depth > maxBaySpanOverride ? numBaysZ : 1;
+  // Which axes have middle posts — depends on override threshold.
+  const hasMiddleXPost = width > maxBaySpanOverride;
+  const hasMiddleZPost = depth > maxBaySpanOverride;
   /** Default X position of middle post at index i (1..numBaysX-1),
    *  relative to the left edge (x=0 at left, x=width at right). */
   const defaultMiddleXPostPosition = (i: number) => (width * i) / numBaysX;
@@ -1078,6 +1087,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         houseWallLengths, houseWallAnchors, houseWallExtensions, sectionChoices,
         postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets,
         removedMiddlePosts, cantileverInsets, cornerPostOffsets,
+        maxLouverSpanOverride, maxBaySpanOverride,
         staticMode: true,
       }
     };
@@ -1286,6 +1296,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCornerPostOffsets({});
     setSelectedCorner(null);
     setSectionChoices({});
+    setMaxLouverSpanOverride(13);
+    setMaxBaySpanOverride(20);
     setSelectedAccessories(new Set());
     setAccessoryQuantities({});
     setWallColor('#0A0A0A');
@@ -1329,6 +1341,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           houseWallAnchors,
           houseWallExtensions,
           sectionChoices,
+          maxLouverSpanOverride,
+          maxBaySpanOverride,
           customerNotes: customerNotes.trim(),
         }
       };
@@ -2297,6 +2311,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           cantileverInsets={cantileverInsets}
           cornerPostOffsets={cornerPostOffsets}
           sectionChoices={sectionChoices}
+          maxLouverSpanOverride={maxLouverSpanOverride}
+          maxBaySpanOverride={maxBaySpanOverride}
         />
 
         {/* Luxury Overlay Elements */}
@@ -2553,6 +2569,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     setCornerPostOffsets({});
     setSelectedCorner(null);
     setSectionChoices({});
+    setMaxLouverSpanOverride(13);
+    setMaxBaySpanOverride(20);
                             } else {
                               const next = new Set(houseWalls);
                               const removing = next.has(opt.value as any);
@@ -2959,6 +2977,60 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     </div>
                   );
                 })()}
+
+                {/* Span Overrides — admin-only. Push the structural max
+                    louver span (default 13') and max depth bay span
+                    (default 20') by up to +2' to avoid an unwanted
+                    section break. Beyond these numbers an extra post
+                    row is structurally required. */}
+                {adminMode && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Span Overrides</label>
+                      <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {([
+                        { key: 'louver', label: 'Max Louver Span', value: maxLouverSpanOverride, setter: setMaxLouverSpanOverride, min: 13, max: 15 },
+                        { key: 'bay',    label: 'Max Bay Span',    value: maxBaySpanOverride,    setter: setMaxBaySpanOverride,    min: 20, max: 22 },
+                      ] as const).map(({ key, label, value, setter, min, max }) => (
+                        <div key={key} className={`rounded-lg border px-2.5 py-2 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>{label}</span>
+                            <span className="text-[11px] font-serif text-luxury-gold">{value}'</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => setter(Math.max(min, value - 1))} disabled={value <= min}
+                              className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed">
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="range"
+                              min={min}
+                              max={max}
+                              step={1}
+                              value={value}
+                              onChange={(e) => setter(Number(e.target.value))}
+                              className="flex-1 h-[2px] bg-luxury-black/10 dark:bg-white/10 appearance-none cursor-pointer accent-luxury-gold"
+                            />
+                            <button type="button" onClick={() => setter(Math.min(max, value + 1))} disabled={value >= max}
+                              className="w-7 h-7 rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed">
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <p className={`text-[9px] mt-1 ${value > min ? 'text-luxury-gold font-bold' : (isDark ? 'text-white/30' : 'text-luxury-black/30')}`}>
+                            {value > min
+                              ? `+${value - min}' over default (${min}')`
+                              : `Default (${min}')`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
+                      Push the max louver length up to 15' (from 13') or the max bay span up to 22' (from 20') to avoid an extra section break. Each +1' moves past the standard engineering default — confirm with the install team before quoting.
+                    </p>
+                  </div>
+                )}
 
                 {/* Edge Cantilevers — hidden. Functionality superseded
                     by the Corner Post Adjustments section below. */}
