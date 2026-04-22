@@ -2375,9 +2375,34 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Middle Post Positions</label>
+                        <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Posts &amp; Louver Sections</label>
                         <span className="text-[9px] text-luxury-black/30 dark:text-white/30 italic">Admin fine-tune</span>
                       </div>
+                      {/* Louver section widths visual — shows current distribution */}
+                      {hasMiddleXPost && (() => {
+                        const widths: number[] = [];
+                        let prev = 0;
+                        for (let i = 1; i < numBaysX; i++) {
+                          const pos = defaultMiddleXPostPosition(i) + (postXOffsets[i] || 0);
+                          widths.push(pos - prev);
+                          prev = pos;
+                        }
+                        widths.push(width - prev);
+                        return (
+                          <div className={`flex items-stretch gap-0.5 rounded overflow-hidden ${isDark ? 'bg-white/5' : 'bg-luxury-cream'}`}>
+                            {widths.map((w, i) => (
+                              <div
+                                key={i}
+                                style={{ flex: w }}
+                                className={`px-1.5 py-1 text-center text-[9px] font-bold ${isDark ? 'bg-luxury-gold/15 text-luxury-gold' : 'bg-luxury-gold/20 text-luxury-black'}`}
+                                title={`Louver section ${i + 1}: ${w.toFixed(1)}'`}
+                              >
+                                {w.toFixed(1)}'
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <div className="space-y-1.5">
                         {middlePosts.map(({ axis, index, axisLabel, defaultPos, total }) => {
                           const offsets = axis === 'x' ? postXOffsets : postZOffsets;
@@ -2477,7 +2502,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         })}
                       </div>
                       <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                        Click a post to select it, then nudge ±6″ or ±1′. Adjacent posts enforce a 4′ minimum gap.
+                        Click a post to select it, then nudge ±6″ or ±1′ to redistribute the louver section widths. Removing a post keeps the beam and louver divider in place — only the vertical support disappears.
                       </p>
                     </div>
                   );

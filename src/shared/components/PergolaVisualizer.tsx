@@ -620,50 +620,46 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
     return p + (postZOffsets?.[i] || 0);
   });
 
-  // Admin: determine which middle posts are removed. The removed posts
-  // are filtered out of rendered arrays (posts + midspan beams) and
-  // adjacent bays merge into one.
+  // Admin: posts that are removed. Only the POST mesh is hidden — the
+  // midspan beam, louver divider, and bay boundaries stay in place.
+  // This lets admin pull a visible support without collapsing the
+  // louver sections into one wider bay.
   const isMiddleXRemoved = (i: number) => i > 0 && i < numBaysX && !!removedMiddlePosts?.has(`x-${i}`);
   const isMiddleZRemoved = (i: number) => i > 0 && i < numBaysZ && !!removedMiddlePosts?.has(`z-${i}`);
 
-  // "Effective" post arrays — exclude removed middles. These drive posts,
-  // beams, bay calculation, and screen rendering so everything merges
-  // cleanly when a middle post is pulled.
-  const effectivePostCentersX = postCentersX.filter((_, i) => !isMiddleXRemoved(i));
-  const effectivePostCentersZ = postCentersZ.filter((_, i) => !isMiddleZRemoved(i));
-
   const louverDepth = 8 / 12; // 8 inches wide
 
-  // Per-bay widths derived from (possibly shifted/merged) post positions,
-  // so louver spans match the actual bay width.
-  const bayPostGapsX = Array.from({ length: effectivePostCentersX.length - 1 }).map((_, i) =>
-    effectivePostCentersX[i + 1] - effectivePostCentersX[i]);
-  const bayCentersX = Array.from({ length: effectivePostCentersX.length - 1 }).map((_, i) =>
-    (effectivePostCentersX[i] + effectivePostCentersX[i + 1]) / 2);
+  // Per-bay widths derived from (possibly shifted) post positions.
+  // Removed posts don't change these — beams and louvers stay put.
+  const bayPostGapsX = Array.from({ length: numBaysX }).map((_, i) =>
+    postCentersX[i + 1] - postCentersX[i]);
+  const bayCentersX = Array.from({ length: numBaysX }).map((_, i) =>
+    (postCentersX[i] + postCentersX[i + 1]) / 2);
   const bayLouverWidthsX = bayPostGapsX.map(g => g - beamWidth - 0.05);
-  // Midspan beams sit at each remaining middle post's X position.
-  const bayBeamCentersX = effectivePostCentersX.slice(1, -1);
+  // Midspan beams sit at each middle post's X position — always rendered
+  // regardless of whether the physical post is removed.
+  const bayBeamCentersX = postCentersX.slice(1, -1);
 
   // Legacy `louverWidth` kept for code that reads it as a scalar — use
   // the per-bay array via index in new call sites.
   const louverWidth = bayLouverWidthsX[0] ?? (((width - postSize) / numBaysX) - beamWidth - 0.05);
 
-  // Screen / Privacy Wall logic — one bay per segment between effective posts
-  const showScreenBaysX = needsMiddlePostX && effectivePostCentersX.length > 2;
-  const showScreenBaysZ = needsMiddlePostZ && effectivePostCentersZ.length > 2;
+  // Screen / Privacy Wall logic — bay count follows post structure.
+  const showScreenBaysX = needsMiddlePostX;
+  const showScreenBaysZ = needsMiddlePostZ;
   const screenCentersX = showScreenBaysX
     ? bayCentersX
     : [-xOffset + (width - postSize) / 2];
   const screenWidthsX = showScreenBaysX
     ? bayPostGapsX.map(g => g - postSize)
     : [width - 2 * postSize];
-  const screenWidthX = screenWidthsX[0]; // first bay — used where callers expect scalar
+  const screenWidthX = screenWidthsX[0];
 
-  const bayPostGapsZ = Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
-    effectivePostCentersZ[i + 1] - effectivePostCentersZ[i]);
+  const bayPostGapsZ = Array.from({ length: numBaysZ }).map((_, i) =>
+    postCentersZ[i + 1] - postCentersZ[i]);
   const screenCentersZ = showScreenBaysZ
-    ? Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
-        (effectivePostCentersZ[i] + effectivePostCentersZ[i + 1]) / 2)
+    ? Array.from({ length: numBaysZ }).map((_, i) =>
+        (postCentersZ[i] + postCentersZ[i + 1]) / 2)
     : [-zOffset + (depth - postSize) / 2];
   const screenWidthsZ = showScreenBaysZ
     ? bayPostGapsZ.map(g => g - postSize)
@@ -712,10 +708,11 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
     return { center: openCenter, width: Math.max(0.5, openSegmentWidth - postSize) };
   };
 
-  // Louver bay logic — now derived from effective post positions so
-  // merged bays (when a middle Z post is removed) render correctly.
-  const louverBayCentersZ = Array.from({ length: effectivePostCentersZ.length - 1 }).map((_, i) =>
-    (effectivePostCentersZ[i] + effectivePostCentersZ[i + 1]) / 2);
+  // Louver bay logic — derived from (possibly shifted) post centers so
+  // nudged posts redistribute louver section widths. Removed posts don't
+  // affect this — bay boundaries stay.
+  const louverBayCentersZ = Array.from({ length: numBaysZ }).map((_, i) =>
+    (postCentersZ[i] + postCentersZ[i + 1]) / 2);
   const louverBayWidthsZ = bayPostGapsZ.map(g => g - postSize);
   const louverBayWidthZ = louverBayWidthsZ[0] ?? (((depth - postSize) / numBaysZ) - postSize);
 
