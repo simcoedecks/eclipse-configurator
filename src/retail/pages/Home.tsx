@@ -408,6 +408,7 @@ Total Price: $${grandTotal.toFixed(2)}`;
   const [addPergolaModalOpen, setAddPergolaModalOpen] = useState(false);
   const [editingPergola, setEditingPergola] = useState<AdditionalPergolaItem | null>(null);
   const [showCustomRequestModal, setShowCustomRequestModal] = useState(false);
+  const [expandedPergolaIds, setExpandedPergolaIds] = useState<Set<string>>(new Set());
   // Capture lead source from URL params (e.g. ?source=contractor&ref=john).
   // When loaded inside /dealer/:slug, the dealer props override.
   const [leadSource] = useState<string>(() => {
@@ -1825,15 +1826,6 @@ Total Price: $${grandTotal.toFixed(2)}`;
       <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
         {/* Step Indicator */}
         <div className={`px-3 py-3 lg:px-5 lg:py-5 border-b shrink-0 flex items-center gap-3 ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-luxury-paper dark:bg-[#111]/50'}`}>
-          {/* Reset Button */}
-          <button
-            onClick={() => setShowResetModal(true)}
-            className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${isDark ? 'text-white/50 hover:text-luxury-gold hover:bg-white/5' : 'text-luxury-black/40 dark:text-white/40 hover:text-luxury-gold hover:bg-luxury-cream'}`}
-            aria-label="Start over"
-            title="Start over"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-luxury-gold uppercase tracking-[0.3em]">
@@ -2330,77 +2322,104 @@ Total Price: $${grandTotal.toFixed(2)}`;
             >
               <div>
                 <div className="space-y-4">
-                  {/* Previously-saved pergolas render FIRST, in save order */}
+                  {/* Previously-saved pergolas render FIRST, in save order — collapsed by default */}
                   {extraPergolas.map((p, idx) => {
                     const price = typeof p.price === 'number' ? p.price : 0;
                     const items = p.lineItems || [];
                     const itemsTotal = items.reduce((s, i) => s + (i.cost || 0), 0);
+                    const isOpen = expandedPergolaIds.has(p.id);
+                    const toggle = () => {
+                      const next = new Set(expandedPergolaIds);
+                      if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                      setExpandedPergolaIds(next);
+                    };
                     return (
-                      <div key={p.id} className="border border-luxury-cream p-4 space-y-4">
-                        <div className="flex items-center gap-2 -mt-1 mb-1">
-                          <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
+                      <div key={p.id} className="border border-luxury-cream">
+                        {/* Accordion header — always visible */}
+                        <button
+                          type="button"
+                          onClick={toggle}
+                          aria-expanded={isOpen}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-luxury-paper/50'}`}
+                        >
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black shrink-0">
                             Pergola {idx + 1}
                           </span>
-                          <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">{p.label}</span>
-                          <div className="flex-1" />
-                          <button
-                            type="button"
-                            onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
-                            className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
-                          >
-                            Edit
-                          </button>
-                          <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
-                          <button
-                            type="button"
-                            onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
-                            className="text-[9px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-600"
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        <div className="flex flex-col border-b border-luxury-cream pb-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
-                              <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
-                                {p.width}' × {p.depth}' × {p.height}' <br />
-                                {p.frameColor} Frame <br />
-                                {p.louverColor} Louvers
-                                {p.notes && <><br /><span className="normal-case italic">{p.notes}</span></>}
-                              </p>
-                              <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
-                                Includes motorized louver system &amp; LED perimeter lighting
-                              </p>
-                            </div>
-                            <span className="text-lg font-serif text-luxury-gold">{formatCurrency(price - itemsTotal)}</span>
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className={`text-sm font-serif font-medium truncate ${isDark ? 'text-white' : 'text-luxury-black'}`}>{p.label}</p>
+                            <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
+                              {p.width}' × {p.depth}' × {p.height}'{items.length > 0 && ` · ${items.length} option${items.length === 1 ? '' : 's'}`}
+                            </p>
                           </div>
-                        </div>
+                          <span className="text-base font-serif text-luxury-gold font-medium whitespace-nowrap">{formatCurrency(price)}</span>
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`} />
+                        </button>
 
-                        {items.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 pb-1">
-                              <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Options &amp; Add-Ons</span>
-                              <div className="flex-1 h-px bg-luxury-gold/20" />
+                        {/* Accordion body — full spec only when expanded */}
+                        {isOpen && (
+                          <div className="px-4 pb-4 pt-1 space-y-4 border-t border-luxury-cream">
+                            <div className="flex items-center gap-2 pt-3">
+                              <div className="flex-1" />
+                              <button
+                                type="button"
+                                onClick={() => { setEditingPergola(p); setAddPergolaModalOpen(true); }}
+                                className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-white/60 hover:text-luxury-gold' : 'text-luxury-black/60 hover:text-luxury-gold'}`}
+                              >
+                                Edit
+                              </button>
+                              <span className={isDark ? 'text-white/20' : 'text-luxury-black/20'}>·</span>
+                              <button
+                                type="button"
+                                onClick={() => { if (confirm(`Remove "${p.label}" from your project?`)) setExtraPergolas(extraPergolas.filter(x => x.id !== p.id)); }}
+                                className="text-[9px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-600"
+                              >
+                                Remove
+                              </button>
                             </div>
-                            <div className="space-y-1.5">
-                              {items.map((it, i) => (
-                                <div key={`${p.id}-${it.id || i}`} className="flex justify-between items-center text-[11px]">
-                                  <span className="font-serif text-luxury-black/60 dark:text-white/60">
-                                    {it.name}{(it.quantity && it.quantity > 1) ? ` × ${it.quantity}` : ''}
-                                  </span>
-                                  <span className="font-serif text-luxury-black/80 dark:text-white/80">{formatCurrency(it.cost || 0)}</span>
+
+                            <div className="flex flex-col border-b border-luxury-cream pb-4">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
+                                  <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
+                                    {p.width}' × {p.depth}' × {p.height}' <br />
+                                    {p.frameColor} Frame <br />
+                                    {p.louverColor} Louvers
+                                    {p.notes && <><br /><span className="normal-case italic">{p.notes}</span></>}
+                                  </p>
+                                  <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
+                                    Includes motorized louver system &amp; LED perimeter lighting
+                                  </p>
                                 </div>
-                              ))}
+                                <span className="text-lg font-serif text-luxury-gold">{formatCurrency(price - itemsTotal)}</span>
+                              </div>
+                            </div>
+
+                            {items.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 pb-1">
+                                  <span className="text-[9px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Options &amp; Add-Ons</span>
+                                  <div className="flex-1 h-px bg-luxury-gold/20" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  {items.map((it, i) => (
+                                    <div key={`${p.id}-${it.id || i}`} className="flex justify-between items-center text-[11px]">
+                                      <span className="font-serif text-luxury-black/60 dark:text-white/60">
+                                        {it.name}{(it.quantity && it.quantity > 1) ? ` × ${it.quantity}` : ''}
+                                      </span>
+                                      <span className="font-serif text-luxury-black/80 dark:text-white/80">{formatCurrency(it.cost || 0)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-center pt-2 border-t border-luxury-black/10 dark:border-white/10">
+                              <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Pergola {idx + 1} Subtotal</span>
+                              <span className="text-base font-serif text-luxury-gold">{formatCurrency(price)}</span>
                             </div>
                           </div>
                         )}
-
-                        <div className="flex justify-between items-center pt-2 border-t border-luxury-black/10 dark:border-white/10">
-                          <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Pergola {idx + 1} Subtotal</span>
-                          <span className="text-base font-serif text-luxury-gold">{formatCurrency(price)}</span>
-                        </div>
                       </div>
                     );
                   })}
@@ -2663,6 +2682,28 @@ Total Price: $${grandTotal.toFixed(2)}`;
 
         {/* Footer Navigation */}
         <div className={`px-4 py-3 lg:px-6 lg:py-4 border-t shrink-0 relative ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-white'}`}>
+          {/* Utility Row — Reset + Custom-Pergola Escape Hatch */}
+          <div className={`flex items-center justify-between gap-2 pb-2 mb-2 border-b ${isDark ? 'border-white/5' : 'border-luxury-cream/40'}`}>
+            <button
+              onClick={() => setShowResetModal(true)}
+              className={`inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold transition-colors ${isDark ? 'text-white/35 hover:text-luxury-gold' : 'text-luxury-black/35 hover:text-luxury-gold'}`}
+              title="Start over"
+            >
+              <RotateCcw className="w-2.5 h-2.5" />
+              Reset
+            </button>
+            {currentStep < 5 && (
+              <button
+                onClick={() => setShowCustomRequestModal(true)}
+                className={`inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold transition-colors ${isDark ? 'text-white/35 hover:text-luxury-gold' : 'text-luxury-black/35 hover:text-luxury-gold'}`}
+                title="Design a custom pergola"
+              >
+                <Sparkles className="w-2.5 h-2.5" />
+                Need something custom?
+              </button>
+            )}
+          </div>
+
           {/* Sticky Running Total */}
           <div className={`flex items-center justify-between mb-2 pb-2 border-b ${isDark ? 'border-white/10' : 'border-luxury-cream/50'}`}>
             <div className="flex items-center gap-2">
