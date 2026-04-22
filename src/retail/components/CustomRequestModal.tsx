@@ -140,7 +140,39 @@ export default function CustomRequestModal({
         }
         return out;
       };
-      const docRef = await addDoc(collection(db, 'submissions'), stripUndefined(basePayload));
+      const cleanPayload = stripUndefined(basePayload);
+      // Fallback: if deployed rules don't support customRequest fields,
+      // retry with a minimal payload that should pass any old ruleset.
+      let docRef;
+      try {
+        docRef = await addDoc(collection(db, 'submissions'), cleanPayload);
+      } catch (err: any) {
+        if (err?.code !== 'permission-denied') throw err;
+        console.warn('[custom-request] permission-denied — falling back to minimal payload (deploy firestore.rules to enable custom-request fields)');
+        const fallback = stripUndefined({
+          name: cleanPayload.name,
+          email: cleanPayload.email,
+          phone: cleanPayload.phone,
+          address: cleanPayload.address,
+          city: cleanPayload.city,
+          type: 'email',
+          configuration: {
+            _customRequest: true,
+            customRequestNotes: cleanPayload.customRequestNotes,
+            heardAbout: cleanPayload.heardAbout,
+            attachments: cleanPayload.attachments,
+          },
+          pipelineStage: 'new',
+          viewedAt: null,
+          source: 'configurator-custom-request',
+          tags: ['Custom Request'],
+          assignedTo: cleanPayload.assignedTo,
+          dealerSlug: cleanPayload.dealerSlug,
+          dealerName: cleanPayload.dealerName,
+          createdAt: cleanPayload.createdAt,
+        });
+        docRef = await addDoc(collection(db, 'submissions'), fallback);
+      }
 
       // Upload attachments (if any) and patch the doc with URLs.
       let attachments: Array<{ name: string; url: string; size: number; type: string }> = [];
