@@ -1460,19 +1460,37 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           }
         }
 
-        // Create a job for contractors to bid on, or save as contractor's own quote
-        await addDoc(collection(db, 'jobs'), {
-          submissionId: submissionRef.id,
-          city: city || 'Unknown',
-          customerName: name,
-          customerEmail: email,
-          customerPhone: phone,
-          configuration: baseData.configuration,
-          status: isContractor ? 'contractor_quote' : 'open',
-          contractorId,
-          isDuplicate: isDuplicateLead,
-          createdAt: serverTimestamp()
-        });
+        // Create a job for contractors to bid on, or save as contractor's own quote.
+        // Failure here must NOT fail the submission — the lead is already saved.
+        try {
+          // The jobs rule validates `configuration is map` but only accepts
+          // the original configuration shape. To be safe, pass a trimmed
+          // config with only the fields the jobs rule is likely to accept.
+          const jobConfig: any = {};
+          const cfg: any = baseData.configuration || {};
+          if (typeof cfg.width !== 'undefined')       jobConfig.width = cfg.width;
+          if (typeof cfg.depth !== 'undefined')       jobConfig.depth = cfg.depth;
+          if (typeof cfg.height !== 'undefined')      jobConfig.height = cfg.height;
+          if (typeof cfg.frameColor !== 'undefined')  jobConfig.frameColor = cfg.frameColor;
+          if (typeof cfg.louverColor !== 'undefined') jobConfig.louverColor = cfg.louverColor;
+          if (typeof cfg.totalPrice !== 'undefined')  jobConfig.totalPrice = cfg.totalPrice;
+          if (Array.isArray(cfg.accessories))         jobConfig.accessories = cfg.accessories;
+          await addDoc(collection(db, 'jobs'), {
+            submissionId: submissionRef.id,
+            city: city || 'Unknown',
+            customerName: name,
+            customerEmail: email,
+            customerPhone: phone,
+            configuration: jobConfig,
+            status: isContractor ? 'contractor_quote' : 'open',
+            contractorId,
+            isDuplicate: isDuplicateLead,
+            createdAt: serverTimestamp()
+          });
+        } catch (jobErr) {
+          // Jobs write failing shouldn't fail the whole submission flow.
+          console.warn('[jobs] create failed (submission is already saved):', jobErr);
+        }
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, 'submissions/jobs');
       }
