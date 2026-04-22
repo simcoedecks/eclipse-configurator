@@ -450,25 +450,47 @@ export default function Proposal() {
                   <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
                     <PergolaVisualizer {...visProps} view="top" />
                   </Suspense>
-                  {/* Dimension annotations layered on top */}
+                  {/* Architectural-style dimension lines layered over the
+                      top view — full-span lines with slash tick marks at
+                      each end (like a blueprint). The labels sit over
+                      the dimension line center. */}
                   <div className="absolute inset-0 pointer-events-none">
-                    {/* Width annotation — top edge */}
-                    <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
-                      <span className="inline-block w-12 h-px bg-luxury-black/40" />
-                      <span className="px-3 py-1 bg-white/90 border border-luxury-black/10 rounded text-[11px] font-bold text-luxury-black shadow-sm">
-                        {visProps.width}' wide
-                      </span>
-                      <span className="inline-block w-12 h-px bg-luxury-black/40" />
+                    {/* Width dimension — horizontal line spanning top of pergola,
+                        tight to the actual footprint (left 10% → right 90%) */}
+                    <div className="absolute left-[10%] right-[10%] top-5">
+                      {/* the line */}
+                      <div className="relative h-px bg-luxury-black/60 w-full">
+                        {/* Left slash tick */}
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-3 bg-luxury-black/60" style={{ transform: 'translateY(-50%) rotate(20deg)' }} />
+                        {/* Right slash tick */}
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-3 bg-luxury-black/60" style={{ transform: 'translateY(-50%) rotate(20deg)' }} />
+                        {/* Width label sits over the line */}
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                          <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
+                            {visProps.width}'
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    {/* Depth annotation — left edge, rotated */}
-                    <div className="absolute top-1/2 left-3 -translate-y-1/2 flex flex-col items-center gap-2">
-                      <span className="inline-block h-12 w-px bg-luxury-black/40" />
-                      <span className="px-3 py-1 bg-white/90 border border-luxury-black/10 rounded text-[11px] font-bold text-luxury-black shadow-sm whitespace-nowrap">
-                        {visProps.depth}' deep
-                      </span>
-                      <span className="inline-block h-12 w-px bg-luxury-black/40" />
+
+                    {/* Depth dimension — vertical line spanning left of pergola,
+                        tight to the footprint (top 10% → bottom 90%) */}
+                    <div className="absolute top-[10%] bottom-[10%] left-5">
+                      <div className="relative w-px bg-luxury-black/60 h-full">
+                        {/* Top slash tick */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-3 bg-luxury-black/60" style={{ transform: 'translateX(-50%) rotate(20deg)' }} />
+                        {/* Bottom slash tick */}
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px w-3 bg-luxury-black/60" style={{ transform: 'translateX(-50%) rotate(20deg)' }} />
+                        {/* Depth label */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                          <span className="px-2 py-0.5 bg-[#f1f5f9] text-[11px] font-bold text-luxury-black whitespace-nowrap">
+                            {visProps.depth}'
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    {/* Height callout — bottom-right corner */}
+
+                    {/* Height callout — bottom-right corner, separate (top view doesn't show height) */}
                     <div className="absolute bottom-3 right-3">
                       <span className="px-3 py-1 bg-white/90 border border-luxury-gold/40 rounded text-[11px] font-bold text-luxury-black shadow-sm">
                         Height {visProps.height}'
