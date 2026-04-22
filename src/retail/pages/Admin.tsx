@@ -237,7 +237,25 @@ export default function Admin() {
   }, [submissions]);
 
   // Actions
-  const markAsViewed = async (id: string) => { try { await setDoc(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true }); } catch (e) { console.error(e); } };
+  const markAsViewed = async (id: string) => {
+    try {
+      await setDoc(doc(db, 'submissions', id), { viewedAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+      console.error('markAsViewed failed', e);
+    }
+  };
+  /** Auto-advance a fresh "New Lead" to "Contacted" on first open.
+   *  Admin explicitly marking Cool/Accept/Decline later overrides this. */
+  const autoAdvanceStageOnView = async (sub: any) => {
+    const currentStage = sub.pipelineStage || defaultStageFor(sub);
+    if (currentStage === 'new') {
+      try {
+        await setDoc(doc(db, 'submissions', sub.id), { pipelineStage: 'contacted' }, { merge: true });
+      } catch (e) {
+        console.error('autoAdvanceStageOnView failed', e);
+      }
+    }
+  };
   const markAsUnread = async (id: string) => { try { await setDoc(doc(db, 'submissions', id), { viewedAt: null }, { merge: true }); } catch (e) { console.error(e); } };
   const markAllAsRead = async () => {
     if (unreadCount === 0) return;
@@ -251,6 +269,7 @@ export default function Admin() {
     setDetailSub(sub);
     if (!sub.viewedAt) {
       markAsViewed(sub.id);
+      autoAdvanceStageOnView(sub);
       logActivity(sub.id, 'viewed_by_admin', `Viewed by ${auth.currentUser?.email || 'admin'}`);
     }
   };
