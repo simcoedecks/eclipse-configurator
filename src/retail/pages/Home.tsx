@@ -2120,31 +2120,6 @@ Total Price: $${grandTotal.toFixed(2)}`;
                   </p>
                 </div>
 
-                {/* Custom pergola escape hatch — for customers whose needs don't fit the configurator */}
-                <button
-                  type="button"
-                  onClick={() => setShowCustomRequestModal(true)}
-                  className={`mt-4 w-full text-left group rounded-lg border border-dashed transition-all px-4 py-3 flex items-center gap-3 ${
-                    isDark
-                      ? 'border-luxury-gold/30 bg-luxury-gold/[0.03] hover:bg-luxury-gold/[0.08] hover:border-luxury-gold/50'
-                      : 'border-luxury-gold/40 bg-luxury-gold/[0.04] hover:bg-luxury-gold/[0.08] hover:border-luxury-gold'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-luxury-gold/15 flex items-center justify-center shrink-0 group-hover:bg-luxury-gold/25 transition-colors">
-                    <Sparkles className="w-4 h-4 text-luxury-gold" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[11px] font-serif font-medium leading-tight ${isDark ? 'text-white' : 'text-luxury-black'}`}>
-                      Can't configure what you're envisioning?
-                    </p>
-                    <p className={`text-[10px] mt-0.5 leading-snug ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
-                      Let's design a fully custom pergola — beyond the standard range.
-                    </p>
-                  </div>
-                  <span className="text-[9px] uppercase tracking-widest font-bold text-luxury-gold whitespace-nowrap">
-                    Start →
-                  </span>
-                </button>
               </div>
             </motion.div>
           )}

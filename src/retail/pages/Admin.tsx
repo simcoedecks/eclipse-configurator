@@ -5,7 +5,7 @@ import {
   LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, Plus, Building2, Send,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
-  Bookmark, Save, Copy,
+  Bookmark, Save, Copy, Sparkles, Paperclip,
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -32,7 +32,7 @@ import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
-type TabKey = 'dashboard' | 'submissions' | 'kanban' | 'map' | 'jobs' | 'contractors';
+type TabKey = 'dashboard' | 'submissions' | 'custom-requests' | 'kanban' | 'map' | 'jobs' | 'contractors';
 
 export default function Admin() {
   const { toggleTheme, isDark } = useTheme();
@@ -141,13 +141,23 @@ export default function Admin() {
   const parsePrice = (s: any): number => typeof s === 'number' ? s : parseFloat(String(s || '').replace(/[^0-9.-]+/g, '')) || 0;
   const formatCurrency = (n: number | undefined | null): string => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
 
+  // Split custom-pergola requests out of the main submissions stream.
+  const customRequests = useMemo(
+    () => submissions.filter(s => s.customRequest === true || s.type === 'custom-request'),
+    [submissions],
+  );
+  const standardSubmissions = useMemo(
+    () => submissions.filter(s => !(s.customRequest === true || s.type === 'custom-request')),
+    [submissions],
+  );
+
   // Filtered + sorted submissions
   const filteredSubmissions = useMemo(() => {
     const nowMs = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const q = searchQuery.trim().toLowerCase();
 
-    let list = submissions.filter(sub => {
+    let list = standardSubmissions.filter(sub => {
       if (q) {
         const hay = [sub.name, sub.email, sub.phone, sub.city, sub.address, ...(sub.tags || [])].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
@@ -203,7 +213,7 @@ export default function Admin() {
       });
     }
     return list;
-  }, [submissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, columnSort]);
+  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
@@ -212,7 +222,8 @@ export default function Admin() {
   };
   const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all';
 
-  const unreadCount = useMemo(() => submissions.filter(s => !s.viewedAt).length, [submissions]);
+  const unreadCustomCount = useMemo(() => customRequests.filter(s => !s.viewedAt).length, [customRequests]);
+  const unreadCount = useMemo(() => standardSubmissions.filter(s => !s.viewedAt).length, [standardSubmissions]);
   const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
   const acceptedCount = useMemo(() => submissions.filter(s => !!s.acceptance?.signedAt).length, [submissions]);
   const uniqueTags = useMemo(() => {
@@ -365,7 +376,8 @@ export default function Admin() {
 
   const navItems: Array<{ key: TabKey; label: string; icon: any; badge?: number | string; sub?: string }> = [
     { key: 'dashboard',   label: 'Dashboard',   icon: Home,     sub: 'Overview' },
-    { key: 'submissions', label: 'Leads',       icon: List,     badge: unreadCount > 0 ? unreadCount : undefined, sub: `${submissions.length} total` },
+    { key: 'submissions', label: 'Leads',       icon: List,     badge: unreadCount > 0 ? unreadCount : undefined, sub: `${standardSubmissions.length} total` },
+    { key: 'custom-requests', label: 'Custom Requests', icon: Sparkles, badge: unreadCustomCount > 0 ? unreadCustomCount : undefined, sub: `${customRequests.length} to quote` },
     { key: 'kanban',      label: 'Pipeline',    icon: Kanban,   sub: `${pendingCount} active` },
     { key: 'map',         label: 'Map',         icon: MapIcon,  sub: 'Geography' },
     { key: 'jobs',        label: 'Jobs',        icon: Building2, badge: jobs.length || undefined, sub: 'Contractor board' },
@@ -461,7 +473,8 @@ export default function Admin() {
               </h1>
               <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>
                 {activeTab === 'dashboard' && "Here's what's happening today."}
-                {activeTab === 'submissions' && `Manage and filter all ${submissions.length} quote submissions.`}
+                {activeTab === 'submissions' && `Manage and filter all ${standardSubmissions.length} configurator quotes.`}
+                {activeTab === 'custom-requests' && `${customRequests.length} bespoke pergola request${customRequests.length === 1 ? '' : 's'} awaiting a custom quote.`}
                 {activeTab === 'kanban' && 'Drag leads between stages.'}
                 {activeTab === 'map' && 'Geographic distribution of all leads.'}
                 {activeTab === 'jobs' && 'Contractor job board and bids.'}
@@ -506,6 +519,93 @@ export default function Admin() {
 
           {/* Map */}
           {activeTab === 'map' && <LeadMap submissions={submissions} />}
+
+          {/* Custom Pergola Requests */}
+          {activeTab === 'custom-requests' && (
+            <div className="space-y-4">
+              {customRequests.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+                  <div className="w-14 h-14 rounded-full bg-luxury-gold/10 flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-7 h-7 text-luxury-gold" />
+                  </div>
+                  <h3 className="text-lg font-serif text-luxury-black mb-1">No custom requests yet</h3>
+                  <p className="text-sm text-slate-500 max-w-md mx-auto">
+                    When a customer uses the "Need something custom?" escape hatch in the configurator, their bespoke request will land here for your team to quote.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {customRequests.map(req => {
+                    const dateStr = req.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) || '';
+                    const attachments = Array.isArray(req.attachments) ? req.attachments : [];
+                    const imageAttachments = attachments.filter((a: any) => (a.type || '').startsWith('image/'));
+                    const unread = !req.viewedAt;
+                    return (
+                      <button
+                        key={req.id}
+                        onClick={() => openDetail(req)}
+                        className={`group text-left bg-white border rounded-xl p-5 shadow-sm hover:shadow-md hover:border-luxury-gold/40 transition-all ${unread ? 'border-luxury-gold/40 ring-1 ring-luxury-gold/20' : 'border-slate-200'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-luxury-gold/10 flex items-center justify-center shrink-0">
+                              <Sparkles className="w-4 h-4 text-luxury-gold" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-luxury-black truncate">{req.name}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{req.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {unread && (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">New</span>
+                            )}
+                            <span className="text-[10px] text-slate-400">{dateStr}</span>
+                          </div>
+                        </div>
+
+                        {req.customRequestNotes && (
+                          <p className="text-xs text-slate-700 leading-relaxed line-clamp-4 mb-3 whitespace-pre-wrap">
+                            {req.customRequestNotes}
+                          </p>
+                        )}
+
+                        {attachments.length > 0 && (
+                          <div className="flex items-center gap-2 mb-3">
+                            {imageAttachments.slice(0, 3).map((a: any, i: number) => (
+                              <img
+                                key={i}
+                                src={a.url}
+                                alt={a.name}
+                                loading="lazy"
+                                className="w-12 h-12 rounded object-cover border border-slate-200"
+                              />
+                            ))}
+                            {attachments.length > imageAttachments.slice(0, 3).length && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                <Paperclip className="w-3 h-3" />
+                                +{attachments.length - Math.min(3, imageAttachments.length)} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                            {req.phone && <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{req.phone}</span>}
+                            {req.city && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{req.city}</span>}
+                          </div>
+                          <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold group-hover:underline">
+                            Open →
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Submissions */}
           {activeTab === 'submissions' && (
@@ -978,15 +1078,63 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Tags</h3>
                   <TagManager submission={sub} />
                 </section>
-                <section>
-                  <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Configuration</h3>
-                  <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-sm">
-                    <div><span className="text-gray-500">Size:</span> <span className="font-semibold">{cfg.width}' × {cfg.depth}' × {cfg.height}'</span></div>
-                    <div><span className="text-gray-500">Frame:</span> <span className="font-semibold">{cfg.frameColor}</span></div>
-                    <div><span className="text-gray-500">Louvers:</span> <span className="font-semibold">{cfg.louverColor}</span></div>
-                    <div><span className="text-gray-500">Source:</span> <span className="font-semibold">{sourceLabel}</span></div>
-                  </div>
-                </section>
+                {(sub.customRequest === true || sub.type === 'custom-request') && (
+                  <section className="bg-luxury-gold/5 border border-luxury-gold/30 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-luxury-gold" />
+                      <h3 className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold">Custom Pergola Request</h3>
+                    </div>
+                    {sub.customRequestNotes && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1">Customer's Vision</p>
+                        <p className="text-sm text-luxury-black whitespace-pre-wrap leading-relaxed">{sub.customRequestNotes}</p>
+                      </div>
+                    )}
+                    {Array.isArray(sub.attachments) && sub.attachments.length > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Attachments ({sub.attachments.length})</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {sub.attachments.map((a: any, i: number) => {
+                            const isImage = (a.type || '').startsWith('image/');
+                            return (
+                              <a
+                                key={i}
+                                href={a.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-luxury-gold bg-slate-50 flex items-center justify-center"
+                                title={a.name}
+                              >
+                                {isImage ? (
+                                  <img src={a.url} alt={a.name} loading="lazy" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="flex flex-col items-center gap-1 p-2 text-center">
+                                    <FileText className="w-5 h-5 text-luxury-gold" />
+                                    <span className="text-[9px] text-slate-600 truncate max-w-full">{a.name}</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-luxury-black/0 group-hover:bg-luxury-black/30 transition-colors flex items-center justify-center">
+                                  <span className="opacity-0 group-hover:opacity-100 text-white text-[9px] font-bold uppercase tracking-widest">View</span>
+                                </div>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+                {!(sub.customRequest === true || sub.type === 'custom-request') && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Configuration</h3>
+                    <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-sm">
+                      <div><span className="text-gray-500">Size:</span> <span className="font-semibold">{cfg.width}' × {cfg.depth}' × {cfg.height}'</span></div>
+                      <div><span className="text-gray-500">Frame:</span> <span className="font-semibold">{cfg.frameColor}</span></div>
+                      <div><span className="text-gray-500">Louvers:</span> <span className="font-semibold">{cfg.louverColor}</span></div>
+                      <div><span className="text-gray-500">Source:</span> <span className="font-semibold">{sourceLabel}</span></div>
+                    </div>
+                  </section>
+                )}
                 <section>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Pricing Breakdown</h3>
