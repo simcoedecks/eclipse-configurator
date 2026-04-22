@@ -129,9 +129,13 @@ interface HomeProps {
   dealerSlug?: string;
   dealerEmail?: string;
   dealerName?: string;
+  /** Admin-only build — exposes advanced controls (partial structure walls,
+   *  per-end flush toggles, Phase 5 customer notes textarea). Only set by
+   *  the /admin/configurator route after auth. */
+  adminMode?: boolean;
 }
 
-export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName }: HomeProps) {
+export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName, adminMode = false }: HomeProps) {
   const { theme, toggleTheme, isDark } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
@@ -1962,6 +1966,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     Pergola {extraPergolas.length + 1}
                   </span>
                 )}
+                {adminMode && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded-full text-[9px] tracking-wider bg-rose-500/15 text-rose-500 border border-rose-500/30">
+                    Admin
+                  </span>
+                )}
               </span>
               <span className={`text-xs font-serif font-medium truncate ml-2 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
                 {currentStep === 1 && <span className="text-base sm:text-lg">Define your space</span>}
@@ -2155,8 +2164,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     })}
                   </div>
 
-                  {/* Partial structure-wall controls — one expandable panel per selected side */}
-                  {Array.from(houseWalls).map((side) => {
+                  {/* Partial structure-wall controls — admin-only feature, one
+                      expandable panel per selected side */}
+                  {adminMode && Array.from(houseWalls).map((side) => {
                     const sideLabel = side.charAt(0).toUpperCase() + side.slice(1);
                     const total = getSideTotalLength(side);
                     const currentLen = houseWallLengths[side] ?? total;
@@ -2932,31 +2942,33 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     </p>
                   </div>
 
-                  {/* Customer Notes — change requests, context, special instructions */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Notes &amp; Change Requests</h4>
-                      <span className={`text-[9px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>Optional</span>
+                  {/* Customer Notes — admin-only, change requests, context, special instructions */}
+                  {adminMode && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Notes &amp; Change Requests</h4>
+                        <span className={`text-[9px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>Optional</span>
+                      </div>
+                      <textarea
+                        value={customerNotes}
+                        onChange={(e) => setCustomerNotes(e.target.value)}
+                        rows={4}
+                        maxLength={2000}
+                        placeholder="Site-specific details, design tweaks, colour-match requests, or anything else we should know…"
+                        className={`w-full px-3 py-2.5 rounded-lg border text-sm leading-relaxed focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${
+                          isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 placeholder:text-slate-400'
+                        }`}
+                      />
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className={isDark ? 'text-white/40' : 'text-luxury-black/40'}>
+                          Your sales rep will review these notes alongside the quote.
+                        </span>
+                        <span className={isDark ? 'text-white/30' : 'text-luxury-black/30'}>
+                          {customerNotes.length}/2000
+                        </span>
+                      </div>
                     </div>
-                    <textarea
-                      value={customerNotes}
-                      onChange={(e) => setCustomerNotes(e.target.value)}
-                      rows={4}
-                      maxLength={2000}
-                      placeholder="Site-specific details, design tweaks, colour-match requests, or anything else we should know…"
-                      className={`w-full px-3 py-2.5 rounded-lg border text-sm leading-relaxed focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none transition-all ${
-                        isDark ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30' : 'border-slate-300 placeholder:text-slate-400'
-                      }`}
-                    />
-                    <div className="flex items-center justify-between text-[9px]">
-                      <span className={isDark ? 'text-white/40' : 'text-luxury-black/40'}>
-                        Your sales rep will review these notes alongside the quote.
-                      </span>
-                      <span className={isDark ? 'text-white/30' : 'text-luxury-black/30'}>
-                        {customerNotes.length}/2000
-                      </span>
-                    </div>
-                  </div>
+                  )}
 
                   <div className="space-y-4">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Contact Information</h4>
