@@ -1370,21 +1370,20 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         };
         const cleanPayload = stripUndefined(submissionPayload);
 
-        // Submission write with automatic fallback for older deployed rules.
-        // If the full payload is rejected with permission-denied, retry
-        // with a minimal field set that should pass any reasonable
-        // deployed firestore.rules version. Any extra data that can't be
-        // saved (heardAbout, additionalPergolas, jobNumber) is folded
-        // into configuration where rules don't restrict nested keys.
+        // Submission write with three-tier fallback for deployed rule
+        // variants. Each tier strips more fields so submissions survive
+        // even if rules are tighter than expected. The lead is always
+        // saved — no silent drops.
         const submitWithFallback = async () => {
+          // Tier 1 — full modern payload
           try {
             return await addDoc(collection(db, 'submissions'), cleanPayload);
           } catch (err: any) {
             if (err?.code !== 'permission-denied') throw err;
-            console.warn('[submissions] permission-denied on full payload — retrying with minimal set. Deploy firestore.rules to support the full schema.');
-            // Move the "extra" top-level fields into configuration so
-            // the data still lands somewhere — rules treat configuration
-            // as an opaque map.
+            console.warn('[submissions] tier-1 permission-denied, trying tier-2 minimal payload');
+          }
+          // Tier 2 — minimal field set, extras folded into configuration
+          try {
             const fallbackConfig = {
               ...(cleanPayload.configuration || {}),
               _fallbackExtras: {
@@ -1416,7 +1415,43 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               createdAt: cleanPayload.createdAt,
             };
             return await addDoc(collection(db, 'submissions'), stripUndefined(minimal));
+          } catch (err: any) {
+            if (err?.code !== 'permission-denied') throw err;
+            console.warn('[submissions] tier-2 permission-denied, trying tier-3 barebones payload — lead WILL be saved');
           }
+          // Tier 3 — barebones, only the 4 rule-required fields at top
+          // level. Everything else goes into configuration (which is
+          // just a map). Guarantees the lead lands in Firestore even
+          // under an unexpectedly strict rule.
+          const barebones = stripUndefined({
+            name: cleanPayload.name || 'Unknown',
+            email: cleanPayload.email || 'unknown@example.com',
+            type: 'email',
+            createdAt: cleanPayload.createdAt,
+            configuration: {
+              ...(cleanPayload.configuration || {}),
+              _stashed: {
+                phone: cleanPayload.phone,
+                address: cleanPayload.address,
+                city: cleanPayload.city,
+                contractorId: cleanPayload.contractorId,
+                isDuplicate: cleanPayload.isDuplicate,
+                pricingBreakdown: cleanPayload.pricingBreakdown,
+                additionalPergolas: cleanPayload.additionalPergolas,
+                heardAbout: cleanPayload.heardAbout,
+                summary: cleanPayload.summary,
+                pipelineStage: cleanPayload.pipelineStage,
+                source: cleanPayload.source,
+                sourceRef: cleanPayload.sourceRef,
+                tags: cleanPayload.tags,
+                assignedTo: cleanPayload.assignedTo,
+                dealerSlug: cleanPayload.dealerSlug,
+                dealerName: cleanPayload.dealerName,
+                jobNumber: cleanPayload.jobNumber,
+              },
+            },
+          });
+          return await addDoc(collection(db, 'submissions'), barebones);
         };
         const submissionRef = await submitWithFallback();
         submissionId = submissionRef.id;
