@@ -79,8 +79,15 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
   return (
     <div
       id="proposal-capture"
-      className={previewMode ? "bg-white" : "fixed top-0 left-0 z-[-50] pointer-events-none bg-white"}
-      style={{ width: '210mm', minHeight: '297mm', transform: 'none' }}
+      className={previewMode ? "bg-white" : "fixed top-0 pointer-events-none bg-white"}
+      // Position fully off-screen when NOT in preview mode so the 210mm
+      // wide document never bleeds into the live configurator view.
+      // html-to-image can still query + capture the .pdf-page elements
+      // because they remain in the DOM and fully rendered.
+      style={previewMode
+        ? { width: '210mm', minHeight: '297mm', transform: 'none' }
+        : { width: '210mm', minHeight: '297mm', left: '-20000px', transform: 'none' }
+      }
     >
       {/* ═══════════════════════ PAGE 1: COVER ═══════════════════════ */}
       <div className="pdf-page w-[210mm] h-[297mm] bg-[#ffffff] text-[#1A1A1A] p-[15mm] flex flex-col relative box-border">
