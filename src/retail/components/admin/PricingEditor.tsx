@@ -185,9 +185,9 @@ export default function PricingEditor({ submission }: Props) {
               {items.map(item => {
                 const isEditing = editingId === item.id;
                 const signed = item.kind === 'discount' ? -1 : 1;
-                const rowTotal = signed * item.amount * (item.quantity || 1);
+                const rowTotal = item.tbd ? null : signed * item.amount * (item.quantity || 1);
                 return (
-                  <div key={item.id} className={`grid grid-cols-[1fr_100px_60px_100px_40px] gap-2 px-3 py-2 items-center ${item.kind === 'discount' ? 'bg-emerald-50/30' : ''}`}>
+                  <div key={item.id} className={`grid grid-cols-[1fr_100px_60px_100px_40px] gap-2 px-3 py-2 items-center ${item.tbd ? 'bg-amber-50/40' : (item.kind === 'discount' ? 'bg-emerald-50/30' : '')}`}>
                     {isEditing ? (
                       <>
                         <div className="space-y-1">
@@ -204,7 +204,7 @@ export default function PricingEditor({ submission }: Props) {
                             placeholder="Optional description (shown on proposal)"
                             className="w-full px-2 py-1 border border-slate-200 rounded text-xs"
                           />
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-3 mt-1">
                             <label className="inline-flex items-center gap-1 text-xs cursor-pointer">
                               <input type="radio" name={`kind-${item.id}`} checked={item.kind !== 'discount'} onChange={() => updateItem(item.id, { kind: 'add' })} />
                               <span>Charge</span>
@@ -213,11 +213,22 @@ export default function PricingEditor({ submission }: Props) {
                               <input type="radio" name={`kind-${item.id}`} checked={item.kind === 'discount'} onChange={() => updateItem(item.id, { kind: 'discount' })} />
                               <span className="text-emerald-700 font-semibold">Discount</span>
                             </label>
+                            <span className="text-slate-300">|</span>
+                            <label className="inline-flex items-center gap-1 text-xs cursor-pointer">
+                              <input type="checkbox" checked={!!item.tbd} onChange={(e) => updateItem(item.id, { tbd: e.target.checked })} />
+                              <span className="text-amber-700 font-semibold">TBD (price set after site visit)</span>
+                            </label>
                           </div>
                         </div>
-                        <input type="number" value={item.amount} onChange={(e) => updateItem(item.id, { amount: Math.max(0, Number(e.target.value) || 0) })} className="px-2 py-1 border border-slate-300 rounded text-sm text-center" />
-                        <input type="number" value={item.quantity || 1} onChange={(e) => updateItem(item.id, { quantity: Math.max(1, Number(e.target.value) || 1) })} className="px-2 py-1 border border-slate-300 rounded text-sm text-center" />
-                        <div className={`text-right font-bold text-sm ${item.kind === 'discount' ? 'text-emerald-700' : 'text-luxury-black'}`}>{formatCurrencyUSD(rowTotal)}</div>
+                        {item.tbd ? (
+                          <div className="px-2 py-1 text-sm text-center font-bold text-amber-700 bg-amber-100 border border-amber-300 rounded">TBD</div>
+                        ) : (
+                          <input type="number" value={item.amount} onChange={(e) => updateItem(item.id, { amount: Math.max(0, Number(e.target.value) || 0) })} className="px-2 py-1 border border-slate-300 rounded text-sm text-center" />
+                        )}
+                        <input type="number" value={item.quantity || 1} onChange={(e) => updateItem(item.id, { quantity: Math.max(1, Number(e.target.value) || 1) })} className="px-2 py-1 border border-slate-300 rounded text-sm text-center" disabled={!!item.tbd} />
+                        <div className={`text-right font-bold text-sm ${item.tbd ? 'text-amber-700' : (item.kind === 'discount' ? 'text-emerald-700' : 'text-luxury-black')}`}>
+                          {item.tbd ? 'TBD' : formatCurrencyUSD(rowTotal ?? 0)}
+                        </div>
                         <button onClick={() => setEditingId(null)} className="text-luxury-gold hover:bg-luxury-gold/10 rounded p-1" title="Done">
                           <Check className="w-4 h-4" />
                         </button>
@@ -225,15 +236,20 @@ export default function PricingEditor({ submission }: Props) {
                     ) : (
                       <>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.tbd && <span className="inline-flex items-center text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wider">TBD</span>}
                             {item.kind === 'discount' && <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-wider"><Percent className="w-2.5 h-2.5" />Disc</span>}
                             <p className="text-sm font-semibold text-luxury-black truncate">{item.name || <em className="text-gray-400">Untitled</em>}</p>
                           </div>
                           {item.description && <p className="text-[11px] text-gray-500 truncate">{item.description}</p>}
                         </div>
-                        <div className="text-center text-sm text-gray-700">{formatCurrencyUSD(item.amount)}</div>
-                        <div className="text-center text-sm text-gray-500">{item.quantity || 1}</div>
-                        <div className={`text-right font-bold text-sm ${item.kind === 'discount' ? 'text-emerald-700' : 'text-luxury-black'}`}>{formatCurrencyUSD(rowTotal)}</div>
+                        <div className={`text-center text-sm ${item.tbd ? 'text-amber-700 font-bold' : 'text-gray-700'}`}>
+                          {item.tbd ? 'TBD' : formatCurrencyUSD(item.amount)}
+                        </div>
+                        <div className="text-center text-sm text-gray-500">{item.tbd ? '—' : (item.quantity || 1)}</div>
+                        <div className={`text-right font-bold text-sm ${item.tbd ? 'text-amber-700' : (item.kind === 'discount' ? 'text-emerald-700' : 'text-luxury-black')}`}>
+                          {item.tbd ? 'TBD' : formatCurrencyUSD(rowTotal ?? 0)}
+                        </div>
                         <div className="flex gap-1 justify-end">
                           <button onClick={() => setEditingId(item.id)} className="text-slate-500 hover:text-luxury-gold hover:bg-slate-100 rounded p-1" title="Edit">
                             <Edit3 className="w-3.5 h-3.5" />

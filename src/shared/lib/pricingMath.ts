@@ -14,6 +14,10 @@ export interface CustomLineItem {
   quantity?: number;
   /** "add" (default) adds to subtotal. "discount" subtracts. */
   kind?: 'add' | 'discount';
+  /** When true, the line item is shown as "TBD" in the proposal and
+   *  excluded from subtotal math. Admin uses this to flag items whose
+   *  price will be finalized after a site visit. */
+  tbd?: boolean;
 }
 
 export interface AdditionalPergolaItem {
@@ -68,6 +72,10 @@ export function computeFinalPricing(
   const basePrice = pb?.basePrice || 0;
   const accessoriesTotal = (pb?.itemizedAccessories || []).reduce((s, a) => s + (a.cost || 0), 0);
   const customTotal = (customLineItems || []).reduce((s, item) => {
+    // TBD items don't contribute a number to the subtotal — they're
+    // listed informationally on the proposal and priced after site
+    // visit. Skip them here.
+    if (item.tbd) return s;
     const qty = item.quantity || 1;
     const unit = item.amount;
     const signed = item.kind === 'discount' ? -Math.abs(unit) : unit;

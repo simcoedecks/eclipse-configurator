@@ -19,9 +19,11 @@ export interface PipelineStage {
 export const PIPELINE_STAGES: PipelineStage[] = [
   { id: 'new',             label: 'New Lead',            color: 'bg-slate-100 text-slate-800 border-slate-300',    accent: '#64748b', description: 'Fresh submission, not yet contacted.' },
   { id: 'contacted',       label: 'Contacted',           color: 'bg-sky-100 text-sky-800 border-sky-300',          accent: '#0284c7', description: 'Initial outreach made — waiting for response.' },
+  { id: 'cool-lead',       label: 'Cool Lead',           color: 'bg-cyan-100 text-cyan-800 border-cyan-300',       accent: '#0891b2', description: 'De-prioritized — follow up later.' },
   { id: 'site-visit',      label: 'Site Visit',          color: 'bg-indigo-100 text-indigo-800 border-indigo-300', accent: '#4f46e5', description: 'Site visit scheduled or completed.' },
   { id: 'proposal-sent',   label: 'Proposal Sent',       color: 'bg-amber-100 text-amber-800 border-amber-300',    accent: '#d97706', description: 'Final proposal delivered — awaiting signature.' },
   { id: 'accepted',        label: 'Accepted',            color: 'bg-emerald-100 text-emerald-800 border-emerald-300', accent: '#059669', description: 'Customer signed the proposal.' },
+  { id: 'declined',        label: 'Declined',            color: 'bg-rose-100 text-rose-800 border-rose-300',       accent: '#e11d48', description: 'Customer passed on the proposal.', terminal: true },
   { id: 'in-production',   label: 'In Production',       color: 'bg-violet-100 text-violet-800 border-violet-300', accent: '#7c3aed', description: 'Deposit cleared, build in progress.' },
   { id: 'installed',       label: 'Installed',           color: 'bg-teal-100 text-teal-800 border-teal-300',       accent: '#0d9488', description: 'Pergola installed and commissioned.', countsAsWon: true, terminal: true },
   { id: 'lost',            label: 'Lost',                color: 'bg-rose-100 text-rose-800 border-rose-300',       accent: '#e11d48', description: 'Did not close — note reason.', terminal: true },
