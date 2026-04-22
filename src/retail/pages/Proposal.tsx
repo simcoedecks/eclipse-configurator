@@ -109,10 +109,17 @@ function TopViewWithDimensions({ visProps }: { visProps: any }) {
               </div>
             </div>
 
-            {/* Height callout — top-down view can't show height, so it's a separate badge */}
-            <div className="absolute bottom-3 right-3">
-              <span className="px-3 py-1 bg-white/90 border border-luxury-gold/40 rounded text-[11px] font-bold text-luxury-black shadow-sm">
-                Height {visProps.height}'
+            {/* Height callout — anchored to the pergola's top-right corner
+                with a leader line so it reads as part of the dimension stack */}
+            <div
+              className="absolute"
+              style={{
+                left: rightPx + 4,
+                top: Math.max(4, topPx - outerOffset - 2),
+              }}
+            >
+              <span className="px-2 py-0.5 bg-white border border-luxury-gold/60 rounded text-[11px] font-bold text-luxury-black shadow-sm whitespace-nowrap">
+                H · {visProps.height}'
               </span>
             </div>
           </div>
@@ -154,23 +161,28 @@ function PopularAddOns({ submission }: { submission: any }) {
   const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
   // Only show accessories actually surfaced on Phase 3 / Phase 4 of
   // the configurator — skip "extras" like LED, audio, in-lite scope/halo
-  // which don't appear in the primary flow.
+  // and guillotine windows which aren't in the primary add-on list.
   const PHASE_3_4_IDS = new Set([
     // Phase 3 — Privacy & Protection
     'screen_front', 'screen_back', 'screen_left', 'screen_right',
     'wall_front', 'wall_back', 'wall_left', 'wall_right',
-    'guillotine_front',
     // Phase 4 — Optional Features
     'sensor', 'app_control', 'fan', 'heater',
   ]);
+  // Screens only split into multiple bays when there's a physical
+  // middle post — matches the live configurator logic. Without this
+  // a 20' side would incorrectly price as two 10' screens.
+  const maxBay = Number(cfg.maxBaySpanOverride) || 20;
+  const screenBaysX = width > maxBay ? Math.ceil(width / 13) : 1;
+  const screenBaysZ = depth > maxBay ? Math.ceil(depth / 20) : 1;
   const unused = ACCESSORIES
     .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id))
     .map(a => {
       let price = 0;
       if (a.type === 'flat') price = a.price;
       else if (a.type === 'sqft') price = a.price * (width * depth);
-      else if (a.type === 'screen_width') price = calculateScreenPrice(width, height, Math.ceil(width / 13));
-      else if (a.type === 'screen_depth') price = calculateScreenPrice(depth, height, Math.ceil(depth / 20));
+      else if (a.type === 'screen_width') price = calculateScreenPrice(width, height, screenBaysX);
+      else if (a.type === 'screen_depth') price = calculateScreenPrice(depth, height, screenBaysZ);
       else if (a.type === 'wall_width') price = width * height * wallUnitPrice;
       else if (a.type === 'wall_depth') price = depth * height * wallUnitPrice;
       return { id: a.id, name: a.name, description: a.description, price, imageUrl: a.imageUrl };
@@ -614,11 +626,55 @@ export default function Proposal() {
             </div>
           </div>
 
-          <p className="text-sm text-gray-600 leading-relaxed max-w-2xl">
-            Thank you for choosing Eclipse Pergola. Below is your personalized proposal,
-            based on the configuration you designed. Every pergola is built to order —
-            motorized, engineered, and installed for all-season Canadian weather.
-          </p>
+          <div className="text-[11px] text-gray-600 leading-relaxed max-w-3xl space-y-2">
+            <p>
+              Each custom pergola proposal/quote is prepared based on the information provided
+              to Eclipse Pergola Inc. gathered by the professional service provider listed above.
+            </p>
+            <p>It is the responsibility of the professional estimating to verify accurate site data.</p>
+            <p>
+              Any pricing details below were generated based on your size selection into the
+              Eclipse Pergola 3D Configurator / Order Builder, or using information provided to
+              us by phone, email or web quote request.
+            </p>
+            <p>
+              It is the responsibility of the professional to review all measurement details in
+              this agreement before approving any orders for production. Once deposit is verified,
+              you will automatically receive proof of payment and proof of production timeline
+              commencement. This places your bespoke aluminum pergola into manufacturing queue.
+              Length and width measurements cannot be changed after this point without change
+              order fees.
+            </p>
+            <p>All pergola RAL colours or Woodgrain Selections must be approved.</p>
+            <p>Motorized screen Opacity and Colour Selection must be approved.</p>
+            <p>
+              Eclipse Pergola provides a two week grace period for design selections to be
+              finalized. If colour selection, or fabric selection is not yet verified by the
+              customer at time the time of placing your order, an addendum must be approved
+              within 2 weeks of approval to maintain delivery schedule. Custom Pergola orders
+              are estimated at 6-8 weeks.
+            </p>
+            <p>
+              Payment terms are non-negotiable. All orders must be paid in full before goods
+              are released for pickup/ delivery. Delivery Fees vary across North America.
+            </p>
+            <p>
+              Price includes supply only unless otherwise noted. All installation to be completed
+              by the Eclipse Authorized professional contractor/service provider listed above.
+              On-site assistance provided by Eclipse Pergola for initial installation. Eclipse
+              Pergola offers full support on our Pergola System, Enclosure Options, Comfort
+              Options, Programing etc. Professionals have access to Training Documents/Instructions,
+              Virtual Assembly Configurator, and Installation Videos. It is the responsibility of
+              the authorized service provider to uphold manufacturers installation specifications
+              on all installations.
+            </p>
+            <p>
+              Pergola Foundations are not included or available through Eclipse Pergola.
+              Contractors are responsible to ensure foundations are suitable for mounting in
+              accordance with local building department code, and manufacturers mounting
+              guidelines. Acceptable Foundations vary Province to Province / State to State.
+            </p>
+          </div>
 
           {/* Customer Information block — mirrors what the admin CRM sees */}
           {(data.name || data.email || data.phone || data.address || data.city) && (

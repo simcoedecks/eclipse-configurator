@@ -43,9 +43,16 @@ export default function UnusedUpgrades({ submission }: Props) {
   const PHASE_3_4_IDS = new Set([
     'screen_front', 'screen_back', 'screen_left', 'screen_right',
     'wall_front', 'wall_back', 'wall_left', 'wall_right',
-    'guillotine_front',
     'sensor', 'app_control', 'fan', 'heater',
   ]);
+
+  // Match configurator logic: a side only splits into multiple screen bays
+  // if there's an actual middle post (i.e. the side is longer than the
+  // max bay span override). Otherwise it's a single bay regardless of
+  // louver bay count.
+  const maxBay = Number(cfg.maxBaySpanOverride) || 20;
+  const screenBaysX = width > maxBay ? Math.ceil(width / 13) : 1;
+  const screenBaysZ = depth > maxBay ? Math.ceil(depth / 20) : 1;
 
   // Calculate each unused accessory's price at this configuration
   const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
@@ -56,12 +63,10 @@ export default function UnusedUpgrades({ submission }: Props) {
       if (a.type === 'flat') price = a.price;
       else if (a.type === 'sqft') price = a.price * (width * depth);
       else if (a.type === 'screen_width') {
-        const bays = Math.ceil(width / 13);
-        price = calculateScreenPrice(width, height, bays);
+        price = calculateScreenPrice(width, height, screenBaysX);
       }
       else if (a.type === 'screen_depth') {
-        const bays = Math.ceil(depth / 20);
-        price = calculateScreenPrice(depth, height, bays);
+        price = calculateScreenPrice(depth, height, screenBaysZ);
       }
       else if (a.type === 'wall_width') price = width * height * wallUnitPrice;
       else if (a.type === 'wall_depth') price = depth * height * wallUnitPrice;
