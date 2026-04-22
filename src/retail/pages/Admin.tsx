@@ -552,7 +552,14 @@ export default function Admin() {
                               <Sparkles className="w-4 h-4 text-luxury-gold" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-luxury-black truncate">{req.name}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {typeof req.jobNumber === 'number' && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-luxury-gold/15 text-luxury-black border border-luxury-gold/30 whitespace-nowrap">
+                                    #{req.jobNumber}
+                                  </span>
+                                )}
+                                <p className="text-sm font-semibold text-luxury-black truncate">{req.name}</p>
+                              </div>
                               <p className="text-[11px] text-slate-500 truncate">{req.email}</p>
                             </div>
                           </div>
@@ -802,7 +809,14 @@ export default function Admin() {
                               </div>
                             </td>
                             <td className="p-3 align-top">
-                              <p className="font-semibold text-luxury-black">{sub.name}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {typeof sub.jobNumber === 'number' && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-luxury-gold/15 text-luxury-black border border-luxury-gold/30 whitespace-nowrap">
+                                    #{sub.jobNumber}
+                                  </span>
+                                )}
+                                <p className="font-semibold text-luxury-black">{sub.name}</p>
+                              </div>
                               <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
                             </td>
                             <td className="p-3 align-top">
@@ -998,6 +1012,11 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-2">
+                {typeof sub.jobNumber === 'number' && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-luxury-gold/15 text-luxury-black border border-luxury-gold/40">
+                    Job #{sub.jobNumber}
+                  </span>
+                )}
                 <h2 className="text-2xl font-serif text-luxury-black">{sub.name}</h2>
                 <PipelineStageSelector submission={sub} />
                 {sub.acceptance?.signedAt && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">✓ Signed</span>}

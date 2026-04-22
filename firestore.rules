@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber']) &&
              data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -188,6 +188,17 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidBid(request.resource.data);
       allow update, delete: if isAdmin();
+    }
+
+    // Counters — used to allocate sequential human-readable job numbers.
+    // Anyone can read/increment; only admins can reset/delete.
+    match /counters/{counterId} {
+      allow read: if true;
+      allow write: if request.resource.data.count is number
+                   && request.resource.data.count > 0
+                   && request.resource.data.count < 10000000
+                   && (!('count' in resource.data) || request.resource.data.count > resource.data.count - 2);
+      allow delete: if isAdmin();
     }
 
     match /contractors/{contractorId} {

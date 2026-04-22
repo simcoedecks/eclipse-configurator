@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, X, Loader2, Paperclip, Image as ImageIcon, FileText, Trash2 } from 'lucide-react';
 import { db, addDoc, collection, serverTimestamp, storage, storageRef, uploadBytes, getDownloadURL } from '../../shared/firebase';
+import { nextJobNumber } from '../../shared/lib/jobNumber';
 import { toast } from 'sonner';
 
 const MAX_FILE_MB = 15;
@@ -101,6 +102,8 @@ export default function CustomRequestModal({
       const heardAboutValue = heardAbout === 'Other' && heardAboutOther.trim()
         ? `Other: ${heardAboutOther.trim()}`
         : heardAbout || null;
+      let jobNumber: number | null = null;
+      try { jobNumber = await nextJobNumber(); } catch (e) { console.warn('Job number allocation failed', e); }
       // Create the doc first so we have an ID to scope uploads under.
       const docRef = await addDoc(collection(db, 'submissions'), {
         name: name.trim(),
@@ -112,6 +115,7 @@ export default function CustomRequestModal({
         customRequest: true,
         customRequestNotes: description.trim(),
         heardAbout: heardAboutValue,
+        jobNumber,
         attachments: [],
         pipelineStage: 'new',
         viewedAt: null,

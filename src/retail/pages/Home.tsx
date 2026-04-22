@@ -42,6 +42,7 @@ import { useTheme } from '../../shared/hooks/useTheme';
 import AddPergolaModal from '../components/AddPergolaModal';
 import CustomRequestModal from '../components/CustomRequestModal';
 import type { AdditionalPergolaItem } from '../../shared/lib/pricingMath';
+import { nextJobNumber } from '../../shared/lib/jobNumber';
 
 enum OperationType {
   CREATE = 'create',
@@ -1247,6 +1248,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         const heardAboutValue = heardAbout === 'Other' && heardAboutOther.trim()
           ? `Other: ${heardAboutOther.trim()}`
           : heardAbout || null;
+        // Allocate a human-readable sequential job number.
+        // If the counter transaction fails, fall back gracefully — the
+        // submission still gets saved without a job number.
+        let jobNumber: number | null = null;
+        try { jobNumber = await nextJobNumber(); } catch (e) { console.warn('Job number allocation failed', e); }
         const submissionRef = await addDoc(collection(db, 'submissions'), {
           ...baseData,
           contractorId,
@@ -1254,6 +1260,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           pricingBreakdown,
           additionalPergolas: extraPergolas,
           heardAbout: heardAboutValue,
+          jobNumber,
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
