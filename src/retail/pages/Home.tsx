@@ -1881,48 +1881,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           submissionId = submissionRef.id;
         }
 
-        // Create or update Pipedrive lead
-        let currentLeadId = leadId;
-        let currentIsDuplicate = isDuplicateLead;
-        if (!currentLeadId) {
-          // Standalone /configurator route — no lead yet, create one now
-          try {
-            const createRes = await fetch('/api/create-lead', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name, email, phone, address, city })
-            });
-            const createData = await createRes.json();
-            if (createData.success && createData.leadId) {
-              currentLeadId = createData.leadId;
-              currentIsDuplicate = createData.isDuplicate || false;
-              finalLeadId = createData.leadId;
-              setLeadId(createData.leadId);
-              setIsDuplicateLead(currentIsDuplicate);
-            }
-            // Save the submitter IP back to the submission doc for map geolocation
-            if (submissionId && createData.submitterIp) {
-              try {
-                await setDoc(doc(db, 'submissions', submissionId), {
-                  submitterIp: createData.submitterIp,
-                }, { merge: true });
-              } catch (e) { console.warn('Failed to save submitter IP', e); }
-            }
-          } catch (error) {
-            console.error("Failed to create Pipedrive lead:", error);
-          }
-        }
-        if (currentLeadId) {
-          try {
-            await fetch('/api/update-lead', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ leadId: currentLeadId, configuration: baseData.configuration, isDuplicate: currentIsDuplicate })
-            });
-          } catch (error) {
-            console.error("Failed to update Pipedrive lead:", error);
-          }
-        }
+        // Pipedrive integration removed — the CRM lives in Firestore only.
 
         // Create a job for contractors to bid on, or save as contractor's own quote.
         // Failure here must NOT fail the submission — the lead is already saved.
@@ -2348,35 +2307,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       }
                     }
                   }
-
-                  // Fire Pipedrive lead creation + screenshot upload in
-                  // the background — we don't block the customer's
-                  // transition into the configurator waiting for these.
-                  (async () => {
-                    try {
-                      const response = await fetch('/api/create-lead', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, email, phone, address, city })
-                      });
-                      const data = await response.json();
-                      if (data.success) {
-                        setLeadId(data.leadId);
-                        setIsDuplicateLead(data.isDuplicate || false);
-                        const images = await captureImages();
-                        const summary = getQuoteSummary();
-                        await fetch('/api/update-pipedrive-lead', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ leadId: data.leadId, images, summary, price: totalPrice, isDuplicate: data.isDuplicate || false })
-                        });
-                      } else {
-                        console.error('Pipedrive lead create failed:', data.error);
-                      }
-                    } catch (err) {
-                      console.error('Pipedrive flow failed:', err);
-                    }
-                  })();
 
                   setHasStarted(true);
                 }}
