@@ -293,6 +293,24 @@ export interface MessageTemplate {
 
 export const EMAIL_TEMPLATES: MessageTemplate[] = [
   {
+    id: 'send-proposal',
+    label: 'Send proposal',
+    icon: '📨',
+    subject: 'Your Eclipse Pergola proposal — {{total}}',
+    body: `Hi {{firstName}},
+
+Thanks for designing your Eclipse Pergola with us. Your interactive proposal is ready to review — you can explore every angle of the 3D design, see the full pricing breakdown, and sign electronically right from the link below:
+
+{{proposalUrl}}
+
+Have a question or want to tweak something before you sign? Just reply to this email or give me a call — happy to adjust anything.
+
+Best,
+Michael
+Eclipse Pergola
+289-855-2977`,
+  },
+  {
     id: 'site-visit',
     label: 'Schedule site visit',
     icon: '📅',
@@ -410,6 +428,7 @@ Eclipse Pergola`,
 ];
 
 export const SMS_TEMPLATES: MessageTemplate[] = [
+  { id: 'sms-send-proposal', label: 'Send proposal SMS', icon: '📨', body: "Hi {{firstName}}, Michael from Eclipse Pergola. Your interactive pergola proposal ({{total}}) is ready — view and sign here: {{proposalUrl}}. Any questions, just reply." },
   { id: 'sms-site-visit', label: 'Quick site visit SMS', icon: '📅', body: "Hi {{firstName}}, Michael from Eclipse Pergola. Can we set up a quick site visit this week to confirm your design? Reply with a day/time that works. Thanks!" },
   { id: 'sms-follow-up',  label: 'Quick check-in SMS',  icon: '👋', body: "Hi {{firstName}}, just checking in on the pergola quote. Your proposal is still live: {{proposalUrl}} — Any questions?" },
   { id: 'sms-install',    label: 'Install reminder SMS', icon: '🔧', body: "Hi {{firstName}}, just a reminder your Eclipse Pergola install is scheduled for [DATE]. Crew arrives ~8am. Questions? 289-855-2977." },
