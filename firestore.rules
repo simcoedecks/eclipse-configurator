@@ -75,7 +75,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber', 'isDraft', 'updatedAt', 'submittedAt', 'currentStep', 'lastStepAt']) &&
              data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -132,6 +132,27 @@ service cloud.firestore {
       return affectedKeys.hasOnly(allowedFields);
     }
 
+    // Draft/in-progress submissions (created when the customer first fills
+    // in the welcome form) can be updated by anyone as long as the doc
+    // was flagged isDraft=true at creation time. This powers the live
+    // "follow along" updates as the customer moves through the wizard.
+    // Once the customer clicks Submit, isDraft flips to false in the same
+    // update and future updates go through the admin-only path.
+    function isValidDraftUpdate(data, prevData) {
+      let allowedFields = [
+        'name', 'email', 'phone', 'address', 'city', 'heardAbout',
+        'configuration', 'pricingBreakdown', 'summary',
+        'customLineItems', 'additionalPergolas',
+        'currentStep', 'lastStepAt', 'updatedAt', 'submittedAt',
+        'pipelineStage', 'isDraft', 'contractorId', 'jobNumber',
+        'pipedriveLeadId', 'isDuplicate', 'tags',
+      ];
+      let affectedKeys = data.diff(prevData).affectedKeys();
+      return prevData.get('isDraft', false) == true
+             && affectedKeys.hasOnly(allowedFields)
+             && data.pipelineStage in ['in-progress', 'new'];
+    }
+
     function isValidSignatureWrite(data, prevData) {
       // Customer signs a proposal client-side (when server admin SDK is unavailable).
       // Only allowed if no prior signature exists and only specified fields are touched.
@@ -156,6 +177,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow update: if isAdmin()
                     || isValidSubmissionUpdate(request.resource.data, resource.data)
+                    || isValidDraftUpdate(request.resource.data, resource.data)
                     || isValidSignatureWrite(request.resource.data, resource.data);
       allow delete: if isAdmin();
 

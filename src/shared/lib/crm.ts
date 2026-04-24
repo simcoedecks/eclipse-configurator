@@ -17,6 +17,7 @@ export interface PipelineStage {
 }
 
 export const PIPELINE_STAGES: PipelineStage[] = [
+  { id: 'in-progress',     label: 'In Progress',         color: 'bg-orange-100 text-orange-800 border-orange-300', accent: '#ea580c', description: 'Customer started the configurator but hasn’t clicked Submit yet — may be abandoned.' },
   { id: 'new',             label: 'New Lead',            color: 'bg-slate-100 text-slate-800 border-slate-300',    accent: '#64748b', description: 'Fresh submission, not yet contacted.' },
   { id: 'contacted',       label: 'Contacted',           color: 'bg-sky-100 text-sky-800 border-sky-300',          accent: '#0284c7', description: 'Initial outreach made — waiting for response.' },
   { id: 'cool-lead',       label: 'Cool Lead',           color: 'bg-cyan-100 text-cyan-800 border-cyan-300',       accent: '#0891b2', description: 'De-prioritized — follow up later.' },

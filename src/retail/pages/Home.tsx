@@ -198,6 +198,10 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
   // existing submission instead of creating a new one.
   const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(editSubmissionId || null);
   const [editingHydrated, setEditingHydrated] = useState<boolean>(!editSubmissionId);
+  // Draft / "In Progress" submission id — created as soon as the welcome
+  // form is filled in so the CRM sees the lead in real time and knows
+  // if they never clicked the final Submit button.
+  const [draftSubmissionId, setDraftSubmissionId] = useState<string | null>(null);
   const getQuoteSummary = () => {
     let accessoriesText = 'None';
     if (selectedAccessories.size > 0) {
@@ -606,6 +610,46 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     });
     return () => unsubscribe();
   }, []);
+
+  // Draft auto-save — whenever the customer advances a step or their
+  // configuration changes in a meaningful way, patch the in-progress
+  // submission in Firestore so the CRM mirrors their progress in real
+  // time. Debounced to avoid write storms on slider drags.
+  useEffect(() => {
+    if (!draftSubmissionId) return;
+    if (editingSubmissionId) return; // edit flow uses its own update path
+    const handle = setTimeout(async () => {
+      try {
+        const cfg: any = {
+          width, depth, height,
+          frameColor: COLORS.find(c => c.hex === frameColor)?.name || frameColor,
+          louverColor: COLORS.find(c => c.hex === louverColor)?.name || louverColor,
+          accessoryIds: Array.from(selectedAccessories),
+          accessoryQuantities,
+          houseWalls: Array.from(houseWalls),
+          houseWallLengths,
+          sectionChoices,
+          heaterControl,
+        };
+        await setDoc(doc(db, 'submissions', draftSubmissionId), {
+          name, email, phone, address, city,
+          configuration: cfg,
+          currentStep,
+          updatedAt: serverTimestamp(),
+          lastStepAt: serverTimestamp(),
+          pipelineStage: 'in-progress',
+          isDraft: true,
+          summary: getQuoteSummary(),
+        }, { merge: true });
+      } catch (err) {
+        console.warn('[draft] update failed', err);
+      }
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [draftSubmissionId, editingSubmissionId, currentStep, width, depth, height,
+      frameColor, louverColor, selectedAccessories, accessoryQuantities,
+      houseWalls, houseWallLengths, sectionChoices, heaterControl,
+      name, email, phone, address, city]);
 
   // Hydrate state from an existing submission when /admin/configurator
   // is opened with ?submissionId=... Every editable state field round-
@@ -1638,6 +1682,33 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         // even if rules are tighter than expected. The lead is always
         // saved — no silent drops.
         console.log('[submissions] starting write. Payload keys:', Object.keys(cleanPayload));
+        // DRAFT → SUBMITTED — the customer started the configurator and
+        // we already have an in-progress Firestore doc. Flip it to a
+        // real submission in place: isDraft=false, pipelineStage='new',
+        // submittedAt timestamp. Preserves the createdAt and any CRM
+        // activity attached while the draft sat there.
+        if (!editingSubmissionId && draftSubmissionId) {
+          try {
+            const rest: any = { ...cleanPayload };
+            delete rest.createdAt; // preserve original createdAt
+            const flipPayload = stripUndefined({
+              ...rest,
+              isDraft: false,
+              pipelineStage: 'new',
+              submittedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            await setDoc(doc(db, 'submissions', draftSubmissionId), flipPayload, { merge: true });
+            submissionId = draftSubmissionId;
+            console.log('[submissions] draft flipped to submitted', draftSubmissionId);
+            // Leave the rest of the original flow to run — Pipedrive
+            // update, jobs collection write, PDF generation all happen
+            // with submissionId pointing at the (now-submitted) draft.
+          } catch (err: any) {
+            console.error('[submissions] draft flip failed, falling back to addDoc', err);
+            // Fall through to the normal submitWithFallback path below.
+          }
+        }
         // EDIT MODE — update the existing doc in place instead of
         // creating a new one. Preserves createdAt, jobNumber, pipeline
         // stage, Pipedrive lead id, and any fields the CRM has added.
@@ -1772,8 +1843,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             throw err;
           }
         };
-        const submissionRef = await submitWithFallback();
-        submissionId = submissionRef.id;
+        // Skip addDoc path if we already flipped an existing draft
+        // successfully above — submissionId will already be set.
+        if (!submissionId) {
+          const submissionRef = await submitWithFallback();
+          submissionId = submissionRef.id;
+        }
 
         // Create or update Pipedrive lead
         let currentLeadId = leadId;
@@ -1834,7 +1909,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           if (typeof cfg.totalPrice !== 'undefined')  jobConfig.totalPrice = cfg.totalPrice;
           if (Array.isArray(cfg.accessories))         jobConfig.accessories = cfg.accessories;
           await addDoc(collection(db, 'jobs'), {
-            submissionId: submissionRef.id,
+            submissionId: submissionId,
             city: city || 'Unknown',
             customerName: name,
             customerEmail: email,
@@ -2193,7 +2268,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   )}
                 </div>
               </div>
-              <form 
+              <form
                 onSubmit={async (e) => {
                   e.preventDefault();
                   try {
@@ -2206,11 +2281,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     if (data.success) {
                       setLeadId(data.leadId);
                       setIsDuplicateLead(data.isDuplicate || false);
-                      
+
                       // Capture images and send to Pipedrive
                       const images = await captureImages();
                       const summary = getQuoteSummary();
-                      
+
                       await fetch('/api/update-pipedrive-lead', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2224,6 +2299,52 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     console.error("Failed to create lead:", error);
                     toast.error("Failed to create lead.");
                   }
+
+                  // Create a DRAFT submission in Firestore so the CRM sees
+                  // the lead immediately. If they don't click the final
+                  // Submit, it stays in the 'in-progress' stage so the
+                  // team can spot abandoned leads.
+                  if (!editingSubmissionId && !draftSubmissionId) {
+                    try {
+                      const draftPayload: any = {
+                        name,
+                        email,
+                        phone,
+                        address,
+                        city,
+                        type: 'email',
+                        isDraft: true,
+                        pipelineStage: 'in-progress',
+                        currentStep: 1,
+                        source: leadSource,
+                        sourceRef: leadSourceRef,
+                        tags: dealerSlug ? ['Dealer Lead'] : [],
+                        assignedTo: dealerEmail || null,
+                        dealerSlug: dealerSlug || null,
+                        dealerName: dealerName || null,
+                        contractorId: auth.currentUser?.uid || null,
+                        isDuplicate: false,
+                        configuration: { width, depth, height },
+                        createdAt: serverTimestamp(),
+                        lastStepAt: serverTimestamp(),
+                      };
+                      const cleanDraft: any = {};
+                      for (const k of Object.keys(draftPayload)) {
+                        if (draftPayload[k] !== undefined && draftPayload[k] !== null) cleanDraft[k] = draftPayload[k];
+                      }
+                      // Preserve null for fields the rule tolerates
+                      cleanDraft.assignedTo = draftPayload.assignedTo;
+                      cleanDraft.dealerSlug = draftPayload.dealerSlug;
+                      cleanDraft.dealerName = draftPayload.dealerName;
+                      cleanDraft.contractorId = draftPayload.contractorId;
+                      const ref = await addDoc(collection(db, 'submissions'), cleanDraft);
+                      setDraftSubmissionId(ref.id);
+                      console.log('[draft] created', ref.id);
+                    } catch (err) {
+                      console.warn('[draft] failed to create', err);
+                    }
+                  }
+
                   setHasStarted(true);
                 }}
                 className="space-y-4"
