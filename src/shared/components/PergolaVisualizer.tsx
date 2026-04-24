@@ -1285,7 +1285,18 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
                     : [props.width * 1.0, props.height * 2.0, props.depth * 1.5]
               }
               fov={50}
-              onUpdate={c => c.lookAt(0, 0, 0)}
+              onUpdate={c => {
+                // Aim slightly below the pergola's geometric center so
+                // the structure sits visually centered in the frame.
+                // Without this the camera (placed above the roof) looks
+                // at origin and the pergola drifts toward the bottom of
+                // the window because the sky above takes more visual
+                // weight than the ground below.
+                const aimY = (view === 'perspective-front')
+                  ? props.height * 0.15
+                  : -props.height * 0.25;
+                c.lookAt(0, aimY, 0);
+              }}
             />
           ) : (
             <OrthographicCamera
