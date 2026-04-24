@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import { PIPELINE_STAGES, defaultStageFor, stageById, teamMemberByEmail } from '../../../shared/lib/crm';
+import { PIPELINE_STAGES, defaultStageFor, stageById, teamMemberByEmail, stepLabel } from '../../../shared/lib/crm';
 import { changeStage } from '../../lib/crmHelpers';
 import { MapPin } from 'lucide-react';
 import { Avatar } from './AssignedToSelector';
@@ -48,22 +48,24 @@ function LeadCard({ sub, onOpen, onDragStart }: { sub: any; onOpen: () => void; 
         </div>
       </div>
       {isDraft && (
-        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-          {abandoned ? (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full"
-                  title={`Customer hasn't touched the configurator in ${idleMinutes}m`}>
-              ⚠ Abandoned · {idleMinutes}m idle
-            </span>
-          ) : (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full animate-pulse">
-              ● Live · configuring
-            </span>
-          )}
-          {currentStep && (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-full">
-              Step {currentStep}/5
-            </span>
-          )}
+        <div className="space-y-1 mb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {abandoned ? (
+              <span className="text-[9px] font-bold uppercase tracking-widest bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full"
+                    title={`Customer hasn't touched the configurator in ${idleMinutes}m`}>
+                ⚠ Abandoned · {idleMinutes}m idle
+              </span>
+            ) : (
+              <span className="text-[9px] font-bold uppercase tracking-widest bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full animate-pulse">
+                ● Live · configuring
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+            <span className="font-mono font-bold text-slate-800">Step {currentStep || '?'}/5</span>
+            <span className="text-slate-400">·</span>
+            <span className="truncate">{stepLabel(currentStep)}</span>
+          </div>
         </div>
       )}
       <div className="flex items-center gap-1 text-[11px] text-gray-500 mb-2">

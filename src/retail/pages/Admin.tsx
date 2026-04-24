@@ -33,7 +33,7 @@ import UnusedUpgrades from '../components/admin/UnusedUpgrades';
 import TwoAngleViews from '../components/admin/TwoAngleViews';
 import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { calculateBasePrice } from '../../shared/lib/pricing';
-import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail } from '../../shared/lib/crm';
+import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail, stepLabel } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
 type TabKey = 'dashboard' | 'submissions' | 'custom-requests' | 'kanban' | 'map' | 'jobs' | 'contractors';
@@ -1062,6 +1062,29 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               <p className="text-xs text-gray-500">
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
+              {sub.isDraft && (() => {
+                const last = sub.lastStepAt?.toDate?.() || sub.updatedAt?.toDate?.() || sub.createdAt?.toDate?.();
+                const idleMin = last ? Math.round((Date.now() - last.getTime()) / 60000) : 0;
+                const abandoned = idleMin >= 20;
+                return (
+                  <div className={`mt-3 p-3 rounded-lg border ${abandoned ? 'bg-rose-50 border-rose-200' : 'bg-orange-50 border-orange-200'}`}>
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${abandoned ? 'text-rose-700' : 'text-orange-700'}`}>
+                          {abandoned ? '⚠ Abandoned — Never Clicked Submit' : '● Live — Still Configuring'}
+                        </p>
+                        <p className="text-sm font-semibold text-luxury-black mt-0.5">
+                          Stopped on Step {sub.currentStep || '?'} of 5 · {stepLabel(sub.currentStep)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">Last Activity</p>
+                        <p className="text-sm font-medium text-luxury-black">{idleMin}m ago</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
               {/* Quick stage actions — one-click Accept / Decline / Cool Lead */}

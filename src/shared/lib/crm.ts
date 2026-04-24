@@ -37,8 +37,26 @@ export function stageById(id: string | undefined | null): PipelineStage | undefi
 
 /** Infer the default pipeline stage for a submission if not explicitly set. */
 export function defaultStageFor(sub: any): string {
+  // Drafts always belong in the In Progress column, regardless of what
+  // pipelineStage the client wrote (defensive — if the client ever
+  // forgets to set the stage or a rule rejects the field).
+  if (sub.isDraft) return 'in-progress';
   if (sub.acceptance?.signedAt) return 'accepted';
   return 'new';
+}
+
+/** Human-readable label for the configurator step the customer was on. */
+export const CONFIGURATOR_STEP_LABELS: Record<number, string> = {
+  1: 'Dimensions & Frame',
+  2: 'Colors & Louvers',
+  3: 'Privacy & Protection',
+  4: 'Optional Features',
+  5: 'Review & Submit',
+};
+
+export function stepLabel(step: any): string {
+  const n = typeof step === 'number' ? step : parseInt(step);
+  return CONFIGURATOR_STEP_LABELS[n] || (n ? `Step ${n}` : 'Not started');
 }
 
 // ─── Activity Types ────────────────────────────────────────────────────────

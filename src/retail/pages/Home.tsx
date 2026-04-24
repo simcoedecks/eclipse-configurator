@@ -614,11 +614,42 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   // Draft auto-save — whenever the customer advances a step or their
   // configuration changes in a meaningful way, patch the in-progress
   // submission in Firestore so the CRM mirrors their progress in real
-  // time. Debounced to avoid write storms on slider drags.
+  // time. Debounced to avoid write storms on slider drags. If the
+  // initial create on the welcome form failed, try to create one here
+  // once the customer has enough identifying info.
   useEffect(() => {
-    if (!draftSubmissionId) return;
     if (editingSubmissionId) return; // edit flow uses its own update path
+    if (!hasStarted) return;
+    if (!name || !email) return;
     const handle = setTimeout(async () => {
+      // Late-create: welcome-form create didn't succeed — try again now
+      // that the customer is actively configuring.
+      if (!draftSubmissionId) {
+        try {
+          const draftPayload: Record<string, any> = {
+            name,
+            email,
+            type: 'email',
+            isDraft: true,
+            pipelineStage: 'in-progress',
+            currentStep,
+            isDuplicate: false,
+            configuration: { width, depth, height },
+            createdAt: serverTimestamp(),
+            lastStepAt: serverTimestamp(),
+          };
+          if (phone)   draftPayload.phone = phone;
+          if (address) draftPayload.address = address;
+          if (city)    draftPayload.city = city;
+          if (leadSource) draftPayload.source = leadSource;
+          const ref = await addDoc(collection(db, 'submissions'), draftPayload);
+          setDraftSubmissionId(ref.id);
+          console.log('[draft] late-created', ref.id);
+        } catch (err: any) {
+          console.error('[draft] late-create failed', { code: err?.code, message: err?.message });
+        }
+        return;
+      }
       try {
         const cfg: any = {
           width, depth, height,
@@ -646,7 +677,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       }
     }, 1500);
     return () => clearTimeout(handle);
-  }, [draftSubmissionId, editingSubmissionId, currentStep, width, depth, height,
+  }, [draftSubmissionId, editingSubmissionId, hasStarted, currentStep, width, depth, height,
       frameColor, louverColor, selectedAccessories, accessoryQuantities,
       houseWalls, houseWallLengths, sectionChoices, heaterControl,
       name, email, phone, address, city]);
@@ -2305,43 +2336,42 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   // Submit, it stays in the 'in-progress' stage so the
                   // team can spot abandoned leads.
                   if (!editingSubmissionId && !draftSubmissionId) {
+                    // Build payload. Only include fields that have real
+                    // values — Firestore security rules use hasOnly, so
+                    // every key must match the allowlist exactly. null
+                    // fields and undefined fields are dropped.
+                    const draftPayload: Record<string, any> = {
+                      name: name || '',
+                      email: email || '',
+                      type: 'email',
+                      isDraft: true,
+                      pipelineStage: 'in-progress',
+                      currentStep: 1,
+                      isDuplicate: false,
+                      configuration: { width, depth, height },
+                      createdAt: serverTimestamp(),
+                      lastStepAt: serverTimestamp(),
+                    };
+                    if (phone)        draftPayload.phone   = phone;
+                    if (address)      draftPayload.address = address;
+                    if (city)         draftPayload.city    = city;
+                    if (leadSource)   draftPayload.source  = leadSource;
+                    if (leadSourceRef) draftPayload.sourceRef = leadSourceRef;
+                    if (dealerSlug)   draftPayload.dealerSlug = dealerSlug;
+                    if (dealerEmail)  draftPayload.assignedTo = dealerEmail;
+                    if (dealerName)   draftPayload.dealerName = dealerName;
+                    if (dealerSlug)   draftPayload.tags = ['Dealer Lead'];
+                    if (auth.currentUser?.uid) draftPayload.contractorId = auth.currentUser.uid;
                     try {
-                      const draftPayload: any = {
-                        name,
-                        email,
-                        phone,
-                        address,
-                        city,
-                        type: 'email',
-                        isDraft: true,
-                        pipelineStage: 'in-progress',
-                        currentStep: 1,
-                        source: leadSource,
-                        sourceRef: leadSourceRef,
-                        tags: dealerSlug ? ['Dealer Lead'] : [],
-                        assignedTo: dealerEmail || null,
-                        dealerSlug: dealerSlug || null,
-                        dealerName: dealerName || null,
-                        contractorId: auth.currentUser?.uid || null,
-                        isDuplicate: false,
-                        configuration: { width, depth, height },
-                        createdAt: serverTimestamp(),
-                        lastStepAt: serverTimestamp(),
-                      };
-                      const cleanDraft: any = {};
-                      for (const k of Object.keys(draftPayload)) {
-                        if (draftPayload[k] !== undefined && draftPayload[k] !== null) cleanDraft[k] = draftPayload[k];
-                      }
-                      // Preserve null for fields the rule tolerates
-                      cleanDraft.assignedTo = draftPayload.assignedTo;
-                      cleanDraft.dealerSlug = draftPayload.dealerSlug;
-                      cleanDraft.dealerName = draftPayload.dealerName;
-                      cleanDraft.contractorId = draftPayload.contractorId;
-                      const ref = await addDoc(collection(db, 'submissions'), cleanDraft);
+                      const ref = await addDoc(collection(db, 'submissions'), draftPayload);
                       setDraftSubmissionId(ref.id);
-                      console.log('[draft] created', ref.id);
-                    } catch (err) {
-                      console.warn('[draft] failed to create', err);
+                      console.log('[draft] created', ref.id, 'for', name, email);
+                    } catch (err: any) {
+                      console.error('[draft] failed to create', { code: err?.code, message: err?.message, err });
+                      // Don't block the customer — they can still proceed
+                      // and we'll try again on step transitions via the
+                      // auto-save effect (which addDocs a fresh draft if
+                      // draftSubmissionId is still null).
                     }
                   }
 
