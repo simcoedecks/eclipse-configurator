@@ -1343,6 +1343,26 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       setTimeout(() => {
         heaterCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 150);
+      // Upsell the Smart App Control — the Bromic heater is a natural
+      // pairing with the Wi-Fi app controller. Only prompt if it's not
+      // already in the cart.
+      if (!next.has('app_control')) {
+        toast.info('Add Smart App Control to your Bromic heater?', {
+          description: 'Wi-Fi controller lets you power the heater on/off from your phone — +$550.',
+          duration: 12000,
+          action: {
+            label: 'Add Smart Control',
+            onClick: () => {
+              setSelectedAccessories(prev => {
+                const s = new Set(prev);
+                s.add('app_control');
+                return s;
+              });
+              toast.success('Smart App Control added.');
+            },
+          },
+        });
+      }
     }
   };
 
