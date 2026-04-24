@@ -2302,39 +2302,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  try {
-                    const response = await fetch('/api/create-lead', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ name, email, phone, address, city })
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                      setLeadId(data.leadId);
-                      setIsDuplicateLead(data.isDuplicate || false);
 
-                      // Capture images and send to Pipedrive
-                      const images = await captureImages();
-                      const summary = getQuoteSummary();
-
-                      await fetch('/api/update-pipedrive-lead', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ leadId: data.leadId, images, summary, price: totalPrice, isDuplicate: data.isDuplicate || false })
-                      });
-                    } else {
-                      console.error("Failed to create lead:", data.error);
-                      toast.error(`Failed to create lead: ${data.error}`);
-                    }
-                  } catch (error) {
-                    console.error("Failed to create lead:", error);
-                    toast.error("Failed to create lead.");
-                  }
-
-                  // Create a DRAFT submission in Firestore so the CRM sees
-                  // the lead immediately. If they don't click the final
-                  // Submit, it stays in the 'in-progress' stage so the
-                  // team can spot abandoned leads.
+                  // Create a DRAFT submission in Firestore FIRST — before
+                  // any API calls — so the CRM sees the lead the instant
+                  // Start Designing is clicked. Nothing upstream can delay
+                  // or block this write.
                   if (!editingSubmissionId && !draftSubmissionId) {
                     // Build payload. Only include fields that have real
                     // values — Firestore security rules use hasOnly, so
@@ -2366,17 +2338,45 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       const ref = await addDoc(collection(db, 'submissions'), draftPayload);
                       setDraftSubmissionId(ref.id);
                       console.log('[draft] created', ref.id, 'for', name, email);
+                      toast.success('Design saved — we\'ve got your info.');
                     } catch (err: any) {
                       console.error('[draft] failed to create', { code: err?.code, message: err?.message, err });
-                      // Surface rule/permission errors on-screen so the
-                      // issue is debuggable without opening DevTools.
                       if (err?.code === 'permission-denied') {
-                        toast.error('Could not save lead to CRM: permission denied. Rules may not be deployed to the right DB.');
+                        toast.error('Could not save lead to CRM: permission denied.');
                       } else if (err?.message) {
                         toast.error(`Could not save lead to CRM: ${err.message}`);
                       }
                     }
                   }
+
+                  // Fire Pipedrive lead creation + screenshot upload in
+                  // the background — we don't block the customer's
+                  // transition into the configurator waiting for these.
+                  (async () => {
+                    try {
+                      const response = await fetch('/api/create-lead', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, email, phone, address, city })
+                      });
+                      const data = await response.json();
+                      if (data.success) {
+                        setLeadId(data.leadId);
+                        setIsDuplicateLead(data.isDuplicate || false);
+                        const images = await captureImages();
+                        const summary = getQuoteSummary();
+                        await fetch('/api/update-pipedrive-lead', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ leadId: data.leadId, images, summary, price: totalPrice, isDuplicate: data.isDuplicate || false })
+                        });
+                      } else {
+                        console.error('Pipedrive lead create failed:', data.error);
+                      }
+                    } catch (err) {
+                      console.error('Pipedrive flow failed:', err);
+                    }
+                  })();
 
                   setHasStarted(true);
                 }}
