@@ -1132,15 +1132,28 @@ export default function Proposal() {
             <div className="text-center">
               <h2 className="text-2xl lg:text-3xl font-serif mb-3">Ready to move forward?</h2>
               <p className="text-sm text-white/70 mb-8 max-w-xl mx-auto">
-                Accept this proposal to reserve your place in our production queue. We'll reach out to schedule your site visit within 2 business days.
+                Accept this proposal to reserve your place in our production queue, or book a consultation if you'd like to walk through the design together before signing. Either way, we'll reach out within 2 business days.
               </p>
-              <button
-                onClick={() => setShowSignModal(true)}
-                className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90 mb-4"
-              >
-                <PenLine className="w-4 h-4" />
-                Accept &amp; Sign Proposal
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center max-w-xl mx-auto mb-4">
+                <button
+                  onClick={() => setShowSignModal(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90 flex-1"
+                >
+                  <PenLine className="w-4 h-4" />
+                  Accept &amp; Sign Proposal
+                </button>
+                <a
+                  href={`mailto:info@eclipsepergola.ca?subject=${encodeURIComponent(
+                    `Consultation request — ${data?.name || 'Eclipse Pergola'}`
+                  )}&body=${encodeURIComponent(
+                    `Hi,\n\nI'd like to schedule a consultation before accepting my pergola proposal.\n\nSome times that work for me:\n  • \n  • \n  • \n\nReference: ${typeof window !== 'undefined' ? window.location.href : ''}\n\nThanks!`
+                  )}`}
+                  className="inline-flex items-center justify-center gap-2 bg-transparent text-white border border-white/40 hover:border-luxury-gold hover:text-luxury-gold px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest transition-colors flex-1"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Schedule a Consultation
+                </a>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center mt-2">
                 <a href="mailto:info@eclipsepergola.ca" className="inline-flex items-center justify-center gap-2 bg-white/10 text-white px-5 py-2.5 rounded-lg text-xs font-medium hover:bg-white/20 border border-white/10">
                   <Mail className="w-3.5 h-3.5" />
