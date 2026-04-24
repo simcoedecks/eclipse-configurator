@@ -702,7 +702,7 @@ export async function createExpressApp() {
                 .map((a: string) => `<li>${a}</li>`).join("")}
             </ul>
             <p style="color:#666;font-size:12px;margin-top:32px;border-top:1px solid #e5e7eb;padding-top:12px;">
-              Full proposal with all rendering views, specifications, and pricing is attached as a PDF.
+              Click the link above to view the full interactive proposal with all rendering views, specifications, and pricing.
             </p>
           </div>`,
         attachments: [
