@@ -2368,10 +2368,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       console.log('[draft] created', ref.id, 'for', name, email);
                     } catch (err: any) {
                       console.error('[draft] failed to create', { code: err?.code, message: err?.message, err });
-                      // Don't block the customer — they can still proceed
-                      // and we'll try again on step transitions via the
-                      // auto-save effect (which addDocs a fresh draft if
-                      // draftSubmissionId is still null).
+                      // Surface rule/permission errors on-screen so the
+                      // issue is debuggable without opening DevTools.
+                      if (err?.code === 'permission-denied') {
+                        toast.error('Could not save lead to CRM: permission denied. Rules may not be deployed to the right DB.');
+                      } else if (err?.message) {
+                        toast.error(`Could not save lead to CRM: ${err.message}`);
+                      }
                     }
                   }
 
