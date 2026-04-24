@@ -28,7 +28,7 @@ import {
 import { Toaster, toast } from 'sonner';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import html2canvas from 'html2canvas';
-import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, query, where, getDocs, onSnapshot, deleteDoc, storage, storageRef, uploadBytes, getDownloadURL } from '../../shared/firebase';
+import { db, collection, addDoc, serverTimestamp, auth, doc, setDoc, getDoc, query, where, getDocs, onSnapshot, deleteDoc, storage, storageRef, uploadBytes, getDownloadURL } from '../../shared/firebase';
 import { QRCodeSVG } from 'qrcode.react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
@@ -178,9 +178,13 @@ interface HomeProps {
    *  per-end flush toggles, Phase 5 customer notes textarea). Only set by
    *  the /admin/configurator route after auth. */
   adminMode?: boolean;
+  /** When set, the configurator hydrates state from the given submission
+   *  doc and "Submit for Quote" updates that doc in place instead of
+   *  creating a new one. Passed by AdminConfigurator via ?submissionId=… */
+  editSubmissionId?: string;
 }
 
-export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName, adminMode = false }: HomeProps) {
+export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName, adminMode = false, editSubmissionId }: HomeProps) {
   const { theme, toggleTheme, isDark } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
@@ -190,6 +194,10 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [leadId, setLeadId] = useState<string | null>(null);
   const [isDuplicateLead, setIsDuplicateLead] = useState(false);
+  // Editing mode — when set, the "Submit for Quote" flow updates this
+  // existing submission instead of creating a new one.
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(editSubmissionId || null);
+  const [editingHydrated, setEditingHydrated] = useState<boolean>(!editSubmissionId);
   const getQuoteSummary = () => {
     let accessoriesText = 'None';
     if (selectedAccessories.size > 0) {
@@ -598,6 +606,75 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     });
     return () => unsubscribe();
   }, []);
+
+  // Hydrate state from an existing submission when /admin/configurator
+  // is opened with ?submissionId=... Every editable state field round-
+  // trips via the `configuration` object stored at submit time.
+  useEffect(() => {
+    if (!editSubmissionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'submissions', editSubmissionId));
+        if (!snap.exists() || cancelled) { setEditingHydrated(true); return; }
+        const data: any = snap.data();
+        const cfg: any = data.configuration || {};
+        if (data.name) setName(data.name);
+        if (data.email) setEmail(data.email);
+        if (data.phone) setPhone(data.phone);
+        if (data.address) setAddress(data.address);
+        if (data.city) setCity(data.city);
+        if (typeof cfg.width === 'number') setWidth(cfg.width);
+        if (typeof cfg.depth === 'number') setDepth(cfg.depth);
+        if (typeof cfg.height === 'number') setHeight(cfg.height);
+        const hexFor = (v: any): string | null => {
+          if (!v || typeof v !== 'string') return null;
+          if (v.startsWith('#')) return v;
+          const hit = COLORS.find(c => c.name === v);
+          return hit?.hex || null;
+        };
+        const fc = hexFor(cfg.frameColor); if (fc) setFrameColor(fc);
+        const lc = hexFor(cfg.louverColor); if (lc) setLouverColor(lc);
+        if (cfg.wallColor) setWallColor(cfg.wallColor);
+        if (cfg.houseWallColor) setHouseWallColor(cfg.houseWallColor);
+        if (Array.isArray(cfg.accessoryIds)) setSelectedAccessories(new Set(cfg.accessoryIds));
+        if (cfg.accessoryQuantities && typeof cfg.accessoryQuantities === 'object') setAccessoryQuantities(cfg.accessoryQuantities);
+        if (Array.isArray(cfg.houseWalls)) setHouseWalls(new Set(cfg.houseWalls));
+        if (cfg.houseWallLengths) setHouseWallLengths(cfg.houseWallLengths);
+        if (cfg.houseWallAnchors) setHouseWallAnchors(cfg.houseWallAnchors);
+        if (cfg.houseWallExtensions) setHouseWallExtensions(cfg.houseWallExtensions);
+        if (cfg.sectionChoices) setSectionChoices(cfg.sectionChoices);
+        if (typeof cfg.maxLouverSpanOverride === 'number') setMaxLouverSpanOverride(cfg.maxLouverSpanOverride);
+        if (typeof cfg.maxBaySpanOverride === 'number') setMaxBaySpanOverride(cfg.maxBaySpanOverride);
+        if (typeof cfg.forceMiddleXPost === 'boolean') setForceMiddleXPost(cfg.forceMiddleXPost);
+        if (typeof cfg.forceMiddleZPost === 'boolean') setForceMiddleZPost(cfg.forceMiddleZPost);
+        if (cfg.postXOffsets) setPostXOffsets(cfg.postXOffsets);
+        if (cfg.postZOffsets) setPostZOffsets(cfg.postZOffsets);
+        if (cfg.postXOnlyOffsets) setPostXOnlyOffsets(cfg.postXOnlyOffsets);
+        if (cfg.postZOnlyOffsets) setPostZOnlyOffsets(cfg.postZOnlyOffsets);
+        if (Array.isArray(cfg.removedMiddlePosts)) setRemovedMiddlePosts(new Set(cfg.removedMiddlePosts));
+        if (cfg.cantileverInsets) setCantileverInsets(cfg.cantileverInsets);
+        if (cfg.cornerPostOffsets) setCornerPostOffsets(cfg.cornerPostOffsets);
+        if (typeof cfg.louverAngle === 'number') setLouverAngle(cfg.louverAngle);
+        if (typeof cfg.screenDrop === 'number') setScreenDrop(cfg.screenDrop);
+        if (typeof cfg.guillotineOpen === 'number') setGuillotineOpen(cfg.guillotineOpen);
+        if (cfg.heaterControl) setHeaterControl(cfg.heaterControl);
+        if (cfg.customerNotes) setCustomerNotes(cfg.customerNotes);
+        if (Array.isArray(data.customLineItems)) setAdjustmentLines(data.customLineItems);
+        if (Array.isArray(data.additionalPergolas)) setExtraPergolas(data.additionalPergolas);
+        setEditingSubmissionId(editSubmissionId);
+        setHasStarted(true);
+        setCurrentStep(5);
+        setEditingHydrated(true);
+        toast.success(`Editing existing quote${typeof data.jobNumber === 'number' ? ` · Job #${data.jobNumber}` : ''}`);
+      } catch (e) {
+        console.error('[editConfigurator] failed to hydrate submission', e);
+        toast.error('Could not load that quote for editing.');
+        setEditingHydrated(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editSubmissionId]);
 
   // Listen for kiosk QR code scan submissions — auto-fill form when mobile user submits
   useEffect(() => {
@@ -1422,6 +1499,21 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           forceMiddleXPost,
           forceMiddleZPost,
           customerNotes: customerNotes.trim(),
+          // Extra state needed to round-trip an edit session
+          postXOffsets,
+          postZOffsets,
+          postXOnlyOffsets,
+          postZOnlyOffsets,
+          removedMiddlePosts: Array.from(removedMiddlePosts),
+          cantileverInsets,
+          cornerPostOffsets,
+          wallColor,
+          houseWallColor,
+          heaterControl,
+          accessoryQuantities,
+          louverAngle,
+          screenDrop,
+          guillotineOpen,
         }
       };
 
@@ -1510,6 +1602,29 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         // even if rules are tighter than expected. The lead is always
         // saved — no silent drops.
         console.log('[submissions] starting write. Payload keys:', Object.keys(cleanPayload));
+        // EDIT MODE — update the existing doc in place instead of
+        // creating a new one. Preserves createdAt, jobNumber, pipeline
+        // stage, Pipedrive lead id, and any fields the CRM has added.
+        if (editingSubmissionId) {
+          try {
+            const rest: any = { ...cleanPayload };
+            delete rest.createdAt;      // preserve original
+            delete rest.pipelineStage;  // preserve CRM stage
+            const updatePayload = stripUndefined({ ...rest, updatedAt: serverTimestamp() });
+            await setDoc(doc(db, 'submissions', editingSubmissionId), updatePayload, { merge: true });
+            submissionId = editingSubmissionId;
+            toast.success('Quote updated.');
+            setSubmitSuccess(true);
+            setTimeout(() => setSubmitSuccess(false), 5000);
+            setIsSubmitting(false);
+            return;
+          } catch (err: any) {
+            console.error('[submissions] edit update failed:', err);
+            toast.error('Failed to update quote. See console for details.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
         const submitWithFallback = async () => {
           // Tier 1 — full modern payload
           try {
@@ -4376,7 +4491,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       disabled={isSubmitting || isGeneratingPDF}
                       className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Submit for Quote'}
+                      {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : (editingSubmissionId ? 'Update Quote' : 'Submit for Quote')}
                     </button>
                   ) : (
                     <button

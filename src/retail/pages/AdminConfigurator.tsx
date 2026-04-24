@@ -62,9 +62,15 @@ class AdminErrorBoundary extends Component<{ children: React.ReactNode }, Bounda
  * URL: /admin/configurator
  */
 export default function AdminConfigurator() {
+  // Read ?submissionId=... so the admin can re-open an existing quote
+  // in the configurator for editing. Home's hydration effect takes
+  // over from there.
+  const submissionId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('submissionId') || undefined
+    : undefined;
   return (
     <AdminErrorBoundary>
-      <Home skipIntro adminMode />
+      <Home skipIntro adminMode editSubmissionId={submissionId} />
     </AdminErrorBoundary>
   );
 }

@@ -5,7 +5,7 @@ import {
   LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, Plus, Building2, Send,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
-  Bookmark, Save, Copy, Sparkles, Paperclip,
+  Bookmark, Save, Copy, Sparkles, Paperclip, PenLine,
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1105,6 +1105,13 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   </div>
                 );
               })()}
+              <button
+                onClick={() => window.open(`/admin/configurator?submissionId=${sub.id}`, '_blank')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-lg text-xs font-bold hover:bg-luxury-gold/90"
+                title="Open this quote in the admin configurator to edit dimensions, accessories, etc."
+              >
+                <PenLine className="w-3.5 h-3.5" />Edit Configuration
+              </button>
               <AdminPdfDownload submission={sub} label="PDF" />
               <button onClick={() => onCompose('email')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-black text-white rounded-lg text-xs font-bold hover:bg-luxury-black/90">
                 <Mail className="w-3.5 h-3.5" />Email
