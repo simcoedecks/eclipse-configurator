@@ -1343,22 +1343,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       setTimeout(() => {
         heaterCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 150);
-      // Upsell the Smart App Control — the Bromic heater is a natural
-      // pairing with the Wi-Fi app controller. Only prompt if it's not
-      // already in the cart.
-      if (!next.has('app_control')) {
-        toast.info('Add Smart App Control to your Bromic heater?', {
-          description: 'Wi-Fi controller lets you power the heater on/off from your phone — +$550.',
+      // Upsell the Bromic Infinity Smart Home Dimmer — the heater ships
+      // with a basic on/off switch by default. The dimmer gives the
+      // customer variable output + smart home integration. Only prompt
+      // if the dimmer isn't already selected.
+      if (heaterControl !== 'dimmer') {
+        toast.info('Upgrade to the Bromic Infinity Smart Home Dimmer?', {
+          description: 'Variable heat output + smart home control — +$1,031 (one controller covers all heaters).',
           duration: 12000,
           action: {
-            label: 'Add Smart Control',
+            label: 'Add Dimmer',
             onClick: () => {
-              setSelectedAccessories(prev => {
-                const s = new Set(prev);
-                s.add('app_control');
-                return s;
-              });
-              toast.success('Smart App Control added.');
+              setHeaterControl('dimmer');
+              toast.success('Bromic Infinity Smart Home Dimmer added.');
             },
           },
         });
