@@ -1957,26 +1957,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           for (let i = 0; i < pages.length; i++) {
             if (i > 0) pdf.addPage();
             const pageElement = pages[i] as HTMLElement;
-            
-            let imgData;
-            let format: 'PNG' | 'JPEG' = 'PNG';
-            
-            // Use very high quality JPEG for the 3D views page
-            // Now the 5th page (index 4)
-            if (i === 4) { 
-              imgData = await toJpeg(pageElement, {
-                pixelRatio: 3,
-                quality: 0.92,
-                backgroundColor: '#ffffff'
-              });
-              format = 'JPEG';
-            } else {
-              // Use high pixel ratio for text pages
-              imgData = await toPng(pageElement, { 
-                pixelRatio: 3,
-              });
-              format = 'PNG';
-            }
+
+            // Use JPEG everywhere at pixelRatio 2 — dramatically smaller output
+            // (PNG at pixelRatio 3 was producing ~100 MB PDFs with no visible
+            // quality gain at print/screen sizes). JPEG quality 0.9 is visually
+            // indistinguishable from PNG for this content.
+            const imgData = await toJpeg(pageElement, {
+              pixelRatio: 2,
+              // Slightly higher quality for the 3D views page (index 4), where
+              // compression artifacts in gradients/renders are most visible.
+              quality: i === 4 ? 0.92 : 0.9,
+              backgroundColor: '#ffffff',
+            });
+            const format: 'JPEG' = 'JPEG';
             
             const imgProps = pdf.getImageProperties(imgData);
             const pdfWidth = pdf.internal.pageSize.getWidth();
