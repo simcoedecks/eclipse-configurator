@@ -22,12 +22,21 @@ function LeadCard({ sub, onOpen, onDragStart }: { sub: any; onOpen: () => void; 
   const createdAt = sub.createdAt?.toDate?.() || null;
   const price = sub.pricingBreakdown?.total || sub.configuration?.totalPrice;
   const assignee = teamMemberByEmail(sub.assignedTo);
+  // Draft-lead indicators — show "Step X/5" and an "Abandoned" pill
+  // if the customer hasn't touched it in 20+ minutes. This is the
+  // only signal the sales team gets that someone started the
+  // configurator but never clicked Submit.
+  const isDraft = !!sub.isDraft;
+  const currentStep: number | undefined = typeof sub.currentStep === 'number' ? sub.currentStep : undefined;
+  const lastStepAt = sub.lastStepAt?.toDate?.() || sub.updatedAt?.toDate?.() || createdAt;
+  const idleMinutes = lastStepAt ? Math.round((Date.now() - lastStepAt.getTime()) / 60000) : 0;
+  const abandoned = isDraft && idleMinutes >= 20;
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onClick={onOpen}
-      className="bg-white border border-gray-200 rounded-xl p-3 mb-2 shadow-sm hover:shadow-md hover:border-luxury-gold/60 transition-all cursor-pointer active:scale-[0.98]"
+      className={`bg-white rounded-xl p-3 mb-2 shadow-sm hover:shadow-md hover:border-luxury-gold/60 transition-all cursor-pointer active:scale-[0.98] border ${abandoned ? 'border-rose-300 ring-1 ring-rose-200' : 'border-gray-200'}`}
     >
       <div className="flex items-start justify-between mb-1.5 gap-2">
         <p className="font-semibold text-sm text-luxury-black truncate flex-1">{sub.name}</p>
@@ -38,6 +47,25 @@ function LeadCard({ sub, onOpen, onDragStart }: { sub: any; onOpen: () => void; 
           {assignee && <Avatar name={assignee.name} email={assignee.email} color={assignee.color} size="sm" />}
         </div>
       </div>
+      {isDraft && (
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          {abandoned ? (
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full"
+                  title={`Customer hasn't touched the configurator in ${idleMinutes}m`}>
+              ⚠ Abandoned · {idleMinutes}m idle
+            </span>
+          ) : (
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full animate-pulse">
+              ● Live · configuring
+            </span>
+          )}
+          {currentStep && (
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-full">
+              Step {currentStep}/5
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-1 text-[11px] text-gray-500 mb-2">
         <MapPin className="w-3 h-3" />
         <span className="truncate">{sub.city || 'No city'}</span>

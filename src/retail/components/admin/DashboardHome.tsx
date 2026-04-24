@@ -169,8 +169,70 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
 
   const maxStageValue = Math.max(...pipelineByStage.map(p => p.value), 1);
 
+  // Draft / in-progress leads — shown as a banner so the team sees them
+  // the moment they walk into the CRM. "Live" means still actively moving
+  // through the configurator; "Abandoned" means idle 20+ minutes so
+  // almost certainly dropped off without clicking Submit.
+  const draftBuckets = useMemo(() => {
+    const now = Date.now();
+    const live: any[] = [];
+    const abandoned: any[] = [];
+    submissions.forEach(s => {
+      if (!s.isDraft) return;
+      const last = s.lastStepAt?.toDate?.() || s.updatedAt?.toDate?.() || s.createdAt?.toDate?.();
+      const idleMin = last ? (now - last.getTime()) / 60000 : 0;
+      if (idleMin >= 20) abandoned.push(s); else live.push(s);
+    });
+    return { live, abandoned };
+  }, [submissions]);
+
   return (
     <div className="space-y-8">
+      {/* Live + abandoned draft banner */}
+      {(draftBuckets.live.length > 0 || draftBuckets.abandoned.length > 0) && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {draftBuckets.live.length > 0 && (
+            <button
+              onClick={onGoToKanban}
+              className="text-left bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 hover:border-orange-400 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center animate-pulse">●</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-orange-700">Live Now · Configuring</p>
+                  <p className="text-lg font-serif text-luxury-black mt-0.5">
+                    {draftBuckets.live.length} {draftBuckets.live.length === 1 ? 'customer is' : 'customers are'} designing right now
+                  </p>
+                  <p className="text-[11px] text-orange-900/70 mt-1">
+                    {draftBuckets.live.slice(0, 3).map(s => s.name).join(' · ')}
+                    {draftBuckets.live.length > 3 && ` · +${draftBuckets.live.length - 3} more`}
+                  </p>
+                </div>
+              </div>
+            </button>
+          )}
+          {draftBuckets.abandoned.length > 0 && (
+            <button
+              onClick={onGoToKanban}
+              className="text-left bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-2xl p-4 hover:border-rose-400 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center">⚠</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-700">Abandoned · Didn't Submit</p>
+                  <p className="text-lg font-serif text-luxury-black mt-0.5">
+                    {draftBuckets.abandoned.length} {draftBuckets.abandoned.length === 1 ? 'lead' : 'leads'} left without clicking Submit
+                  </p>
+                  <p className="text-[11px] text-rose-900/70 mt-1">
+                    Follow up — these are warm leads that got interrupted. Click to review.
+                  </p>
+                </div>
+              </div>
+            </button>
+          )}
+        </section>
+      )}
+
       {/* Hero stats */}
       <section>
         <h2 className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold mb-3">Overview</h2>
