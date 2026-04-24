@@ -1279,10 +1279,10 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
               makeDefault
               position={
                 view === 'perspective-2'
-                  ? [-props.width * 0.7, props.height * 1.3, -props.depth * 1.05]
+                  ? [-props.width * 0.85, props.height * 1.55, -props.depth * 1.25]
                   : view === 'perspective-front'
-                    ? [0, props.height * 0.8, Math.max(props.depth * 1.15, 18)]
-                    : [props.width * 0.7, props.height * 1.3, props.depth * 1.05]
+                    ? [0, props.height * 0.9, Math.max(props.depth * 1.35, 22)]
+                    : [props.width * 0.85, props.height * 1.55, props.depth * 1.25]
               }
               fov={50}
               onUpdate={c => {
