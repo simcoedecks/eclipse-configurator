@@ -793,31 +793,33 @@ export default function Proposal() {
                   {cfg.width}' × {cfg.depth}' × {cfg.height}' • {cfg.frameColor} frame • {cfg.louverColor} louvers
                 </p>
               </div>
-              {/* Two 3/4 perspective angles — front-right and back-left */}
+              {/* Top row — top-down plan (with dimensions) + front elevation */}
               <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-luxury-cream border-b border-luxury-cream">
                 <div>
-                  <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Front-Right Perspective
-                  </div>
-                  <div className="h-[320px] bg-[#f1f5f9]">
-                    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="perspective" />
-                    </Suspense>
-                  </div>
+                  <TopViewWithDimensions visProps={visProps} />
                 </div>
                 <div>
                   <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Back-Left Perspective
+                    Front Elevation
                   </div>
-                  <div className="h-[320px] bg-[#f1f5f9]">
+                  <div className="h-[360px] bg-[#f1f5f9]">
                     <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="perspective-2" />
+                      <PergolaVisualizer {...visProps} view="front" />
                     </Suspense>
                   </div>
                 </div>
               </div>
-              {/* Top-down plan with overlaid dimensions */}
-              <TopViewWithDimensions visProps={visProps} />
+              {/* Bottom — 3D perspective */}
+              <div>
+                <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                  3D Perspective
+                </div>
+                <div className="h-[420px] bg-[#f1f5f9]">
+                  <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                    <PergolaVisualizer {...visProps} view="perspective" />
+                  </Suspense>
+                </div>
+              </div>
             </section>
           );
         })()}
