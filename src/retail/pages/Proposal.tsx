@@ -633,7 +633,7 @@ export default function Proposal() {
               is hidden in print/PDF) so it appears on downloaded PDFs and
               anywhere the proposal is embedded. */}
           <div className="flex justify-center mb-6 pb-6 border-b border-luxury-cream">
-            <img src="/logo.png" alt="Eclipse Pergola" className="h-12 object-contain" crossOrigin="anonymous" />
+            <img src="/logo.png" alt="Eclipse Pergola" className="h-24 object-contain" crossOrigin="anonymous" />
           </div>
           <div className="flex items-start justify-between flex-wrap gap-4 mb-8 pb-6 border-b-2 border-luxury-gold">
             <div>
