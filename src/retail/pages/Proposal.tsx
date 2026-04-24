@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../shared/firebase';
+import { doc, getDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { db, auth } from '../../shared/firebase';
 import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser, User } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
@@ -557,6 +557,73 @@ export default function Proposal() {
       }
     })();
   }, [id]);
+
+  // Customer view tracking. Heartbeats every HEARTBEAT_SECONDS while the tab
+  // is visible and increments customerTotalViewSeconds by that same amount,
+  // so the stored total reflects actual reading time (not elapsed wall clock).
+  // Skipped entirely for admin users (no auth = public customer view).
+  useEffect(() => {
+    if (!id || loading || error || !data) return;
+    // Don't pollute customer stats when admin previews the page.
+    if (auth.currentUser) return;
+
+    const HEARTBEAT_SECONDS = 15;
+    const submissionRef = doc(db, 'submissions', id);
+
+    // First-view stamp (runs once per page load — increments view count
+    // every time the customer opens the proposal link).
+    setDoc(
+      submissionRef,
+      {
+        ...(data.customerFirstViewedAt
+          ? {}
+          : { customerFirstViewedAt: serverTimestamp() }),
+        customerLastViewedAt: serverTimestamp(),
+        customerViewCount: increment(1),
+      },
+      { merge: true }
+    ).catch(e => console.warn('view-tracking: first-view write failed', e));
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const heartbeat = () => {
+      setDoc(
+        submissionRef,
+        {
+          customerLastViewedAt: serverTimestamp(),
+          customerTotalViewSeconds: increment(HEARTBEAT_SECONDS),
+        },
+        { merge: true }
+      ).catch(e => console.warn('view-tracking: heartbeat failed', e));
+    };
+
+    const start = () => {
+      if (intervalId) return;
+      intervalId = setInterval(heartbeat, HEARTBEAT_SECONDS * 1000);
+    };
+    const stop = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stop();
+    };
+    // Only depend on id + the loaded state. We intentionally do NOT depend on
+    // `data` to avoid restarting the timer every time the doc updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, loading, error, !!data]);
 
   if (loading) {
     return (

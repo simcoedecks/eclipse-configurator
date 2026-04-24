@@ -127,7 +127,14 @@ service cloud.firestore {
 
     function isValidSubmissionUpdate(data, prevData) {
       // Client-side update fields (non-admin). Admin can do anything.
-      let allowedFields = ['adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt', 'pdfUrl', 'pdfFilename', 'viewedAt', 'submitterIp', 'geo'];
+      // customerFirstViewedAt / customerLastViewedAt / customerTotalViewSeconds /
+      // customerViewCount power the customer-side view tracker on /proposal/:id.
+      let allowedFields = [
+        'adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt',
+        'pdfUrl', 'pdfFilename', 'viewedAt', 'submitterIp', 'geo',
+        'customerFirstViewedAt', 'customerLastViewedAt',
+        'customerTotalViewSeconds', 'customerViewCount',
+      ];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return affectedKeys.hasOnly(allowedFields);
     }

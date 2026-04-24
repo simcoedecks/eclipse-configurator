@@ -1062,6 +1062,31 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               <p className="text-xs text-gray-500">
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
+              {sub.customerViewCount > 0 && (() => {
+                const totalSec = sub.customerTotalViewSeconds || 0;
+                const mins = Math.floor(totalSec / 60);
+                const secs = totalSec % 60;
+                const durationLabel = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                const last = sub.customerLastViewedAt?.toDate?.();
+                const minsAgo = last ? Math.round((Date.now() - last.getTime()) / 60000) : null;
+                let lastLabel = '';
+                if (minsAgo !== null) {
+                  if (minsAgo < 1) lastLabel = 'seen just now';
+                  else if (minsAgo < 60) lastLabel = `seen ${minsAgo}m ago`;
+                  else if (minsAgo < 1440) lastLabel = `seen ${Math.round(minsAgo / 60)}h ago`;
+                  else lastLabel = `seen ${Math.round(minsAgo / 1440)}d ago`;
+                }
+                const engaged = totalSec >= 60;
+                return (
+                  <div className={`mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${engaged ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                    <Eye className="w-3 h-3" />
+                    <span>
+                      Viewed {sub.customerViewCount}× · {durationLabel} total
+                      {lastLabel && <span className="text-slate-500"> · {lastLabel}</span>}
+                    </span>
+                  </div>
+                );
+              })()}
               {sub.isDraft && (() => {
                 const last = sub.lastStepAt?.toDate?.() || sub.updatedAt?.toDate?.() || sub.createdAt?.toDate?.();
                 const idleMin = last ? Math.round((Date.now() - last.getTime()) / 60000) : 0;
