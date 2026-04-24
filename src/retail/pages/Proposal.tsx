@@ -61,7 +61,7 @@ function TopViewWithDimensions({ visProps }: { visProps: any }) {
       </div>
       <div ref={wrapperRef} className="relative h-[360px] bg-[#f1f5f9]">
         <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-          <PergolaVisualizer {...visProps} view="top" />
+          <PergolaVisualizer {...visProps} view="top" staticMode />
         </Suspense>
         {ready && (
           <div className="absolute inset-0 pointer-events-none">
@@ -804,7 +804,7 @@ export default function Proposal() {
                   </div>
                   <div className="h-[360px] bg-[#f1f5f9]">
                     <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="perspective-front" />
+                      <PergolaVisualizer {...visProps} view="perspective-front" staticMode />
                     </Suspense>
                   </div>
                 </div>
