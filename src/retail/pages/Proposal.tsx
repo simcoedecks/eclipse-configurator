@@ -629,6 +629,12 @@ export default function Proposal() {
       <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-10 space-y-10">
         {/* Cover */}
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
+          {/* Brand mark — always rendered (unlike the sticky header which
+              is hidden in print/PDF) so it appears on downloaded PDFs and
+              anywhere the proposal is embedded. */}
+          <div className="flex justify-center mb-6 pb-6 border-b border-luxury-cream">
+            <img src="/logo.png" alt="Eclipse Pergola" className="h-12 object-contain" crossOrigin="anonymous" />
+          </div>
           <div className="flex items-start justify-between flex-wrap gap-4 mb-8 pb-6 border-b-2 border-luxury-gold">
             <div>
               <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Your Bespoke Proposal</p>
