@@ -800,11 +800,11 @@ export default function Proposal() {
                 </div>
                 <div>
                   <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Front Elevation
+                    Front View
                   </div>
                   <div className="h-[360px] bg-[#f1f5f9]">
                     <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="front" />
+                      <PergolaVisualizer {...visProps} view="perspective-front" />
                     </Suspense>
                   </div>
                 </div>

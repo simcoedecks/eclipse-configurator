@@ -1274,12 +1274,16 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
 
       <ErrorBoundary>
         <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true, powerPreference: 'high-performance' }} dpr={[1, 2]} onCreated={() => setIsCanvasReady(true)}>
-          {(view === 'perspective' || view === 'perspective-2') ? (
+          {(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? (
             <PerspectiveCamera
               makeDefault
-              position={view === 'perspective-2'
-                ? [-props.width * 1.0, props.height * 2.0, -props.depth * 1.5]
-                : [props.width * 1.0, props.height * 2.0, props.depth * 1.5]}
+              position={
+                view === 'perspective-2'
+                  ? [-props.width * 1.0, props.height * 2.0, -props.depth * 1.5]
+                  : view === 'perspective-front'
+                    ? [0, props.height * 1.2, Math.max(props.depth * 1.8, 28)]
+                    : [props.width * 1.0, props.height * 2.0, props.depth * 1.5]
+              }
               fov={50}
               onUpdate={c => c.lookAt(0, 0, 0)}
             />
@@ -1295,11 +1299,11 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
               onUpdate={c => c.lookAt(0, 0, 0)}
             />
           )}
-          {(view === 'perspective' || view === 'perspective-2') && <Sky sunPosition={[10, 20, 10]} turbidity={0.3} rayleigh={0.5} />}
-          <ambientLight intensity={(view === 'perspective' || view === 'perspective-2') ? 0.4 : 0.8} />
+          {(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') && <Sky sunPosition={[10, 20, 10]} turbidity={0.3} rayleigh={0.5} />}
+          <ambientLight intensity={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? 0.4 : 0.8} />
           <directionalLight
             position={[10, 20, 10]}
-            intensity={(view === 'perspective' || view === 'perspective-2') ? 2 : 1}
+            intensity={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? 2 : 1}
             castShadow={view === 'perspective' || view === 'perspective-2'}
             shadow-mapSize={[2048, 2048]} 
             shadow-camera-near={0.5}
@@ -1316,7 +1320,7 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
             <ambientLight intensity={0.5} />
           )}
           <PergolaModel {...props} />
-          {(view === 'perspective' || view === 'perspective-2') && (
+          {(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') && (
             <ContactShadows position={[0, -props.height / 2, 0]} opacity={0.6} scale={40} blur={2.5} far={10} resolution={512} color="#1e293b" />
           )}
           
@@ -1330,10 +1334,10 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
             <CameraControls 
               ref={controlsRef}
               makeDefault
-              minPolarAngle={view === 'perspective' ? 0 : (view === 'top' ? 0 : Math.PI / 2)}
-              maxPolarAngle={view === 'perspective' ? Math.PI / 2 - 0.05 : (view === 'top' ? 0 : Math.PI / 2)}
-              minAzimuthAngle={view === 'perspective' ? -Infinity : (view === 'side' ? Math.PI / 2 : 0)}
-              maxAzimuthAngle={view === 'perspective' ? Infinity : (view === 'side' ? Math.PI / 2 : 0)}
+              minPolarAngle={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? 0 : (view === 'top' ? 0 : Math.PI / 2)}
+              maxPolarAngle={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? Math.PI / 2 - 0.05 : (view === 'top' ? 0 : Math.PI / 2)}
+              minAzimuthAngle={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? -Infinity : (view === 'side' ? Math.PI / 2 : 0)}
+              maxAzimuthAngle={(view === 'perspective' || view === 'perspective-2' || view === 'perspective-front') ? Infinity : (view === 'side' ? Math.PI / 2 : 0)}
               minDistance={10}
               maxDistance={Math.max(150, props.width * 2, props.depth * 2)}
             />
