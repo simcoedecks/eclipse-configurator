@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db, auth } from '../../shared/firebase';
-import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser, User } from 'lucide-react';
+import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser, User, Edit3, Send } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
@@ -355,6 +355,7 @@ export default function Proposal() {
   const [data, setData] = useState<any | null>(null);
   const [error, setError] = useState<string>('');
   const [showSignModal, setShowSignModal] = useState(false);
+  const [showChangeModal, setShowChangeModal] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -1132,15 +1133,22 @@ export default function Proposal() {
             <div className="text-center">
               <h2 className="text-2xl lg:text-3xl font-serif mb-3">Ready to move forward?</h2>
               <p className="text-sm text-white/70 mb-8 max-w-xl mx-auto">
-                Accept this proposal to reserve your place in our production queue, or book a consultation if you'd like to walk through the design together before signing. Either way, we'll reach out within 2 business days.
+                Ready to sign, want to book a consultation first, or need us to tweak something? Pick whichever is right for you — we'll follow up within 2 business days.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center max-w-xl mx-auto mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto mb-4">
                 <button
                   onClick={() => setShowSignModal(true)}
-                  className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90 flex-1"
+                  className="inline-flex items-center justify-center gap-2 bg-luxury-gold text-luxury-black px-6 py-4 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-luxury-gold/90"
                 >
                   <PenLine className="w-4 h-4" />
-                  Accept &amp; Sign Proposal
+                  Accept &amp; Sign
+                </button>
+                <button
+                  onClick={() => setShowChangeModal(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-transparent text-white border border-white/40 hover:border-luxury-gold hover:text-luxury-gold px-6 py-4 rounded-lg font-bold text-sm uppercase tracking-widest transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Request Changes
                 </button>
                 <a
                   href={`mailto:info@eclipsepergola.ca?subject=${encodeURIComponent(
@@ -1148,10 +1156,10 @@ export default function Proposal() {
                   )}&body=${encodeURIComponent(
                     `Hi,\n\nI'd like to schedule a consultation before accepting my pergola proposal.\n\nSome times that work for me:\n  • \n  • \n  • \n\nReference: ${typeof window !== 'undefined' ? window.location.href : ''}\n\nThanks!`
                   )}`}
-                  className="inline-flex items-center justify-center gap-2 bg-transparent text-white border border-white/40 hover:border-luxury-gold hover:text-luxury-gold px-8 py-4 rounded-lg font-bold text-sm uppercase tracking-widest transition-colors flex-1"
+                  className="inline-flex items-center justify-center gap-2 bg-transparent text-white border border-white/40 hover:border-luxury-gold hover:text-luxury-gold px-6 py-4 rounded-lg font-bold text-sm uppercase tracking-widest transition-colors"
                 >
                   <Calendar className="w-4 h-4" />
-                  Schedule a Consultation
+                  Schedule Call
                 </a>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center mt-2">
@@ -1186,6 +1194,113 @@ export default function Proposal() {
           }}
         />
       )}
+
+      {showChangeModal && (
+        <ChangeRequestModal
+          customerName={data.name}
+          submissionId={data.id}
+          onClose={() => setShowChangeModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Change Request Modal ───────────────────────────────────────────────────
+// Lets the customer describe what they want changed about their quote.
+// Writes an activity to the submission and emails the admin.
+function ChangeRequestModal({
+  customerName,
+  submissionId,
+  onClose,
+}: {
+  customerName: string;
+  submissionId: string;
+  onClose: () => void;
+}) {
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!message.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/request-changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId, message: message.trim() }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || 'Submit failed');
+      setSuccess(true);
+      setTimeout(onClose, 2200);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not submit your changes — please email us instead');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {success ? (
+          <div className="p-10 text-center">
+            <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h3 className="text-xl font-serif text-luxury-black mb-2">Got it, {customerName.split(' ')[0]}</h3>
+            <p className="text-sm text-gray-600">
+              We'll review your request and get back to you within 2 business days with an updated proposal.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-serif text-luxury-black">Request Changes</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Tell us what you'd like adjusted and we'll send a revised quote.</p>
+              </div>
+              <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <label className="block text-[10px] uppercase tracking-widest font-bold text-gray-500">
+                What would you like to change?
+              </label>
+              <textarea
+                autoFocus
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={`e.g. "Make it 2 feet wider, add bronze privacy screens, and change the frame color to matte black"`}
+                rows={6}
+                maxLength={2000}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent resize-none"
+              />
+              <p className="text-[10px] text-gray-400 text-right">{message.length} / 2000</p>
+            </div>
+            <div className="flex justify-end gap-2 px-6 pb-5">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || !message.trim()}
+                className="inline-flex items-center gap-2 px-5 py-2 bg-luxury-gold text-luxury-black rounded-lg text-sm font-bold hover:bg-luxury-gold/90 disabled:opacity-40"
+              >
+                {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send to Eclipse</>}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
