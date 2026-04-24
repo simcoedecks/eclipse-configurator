@@ -55,7 +55,9 @@ export default function Admin() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'email' | 'consultation'>('all');
   const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'unique'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d' | '90d' | 'mtd' | 'qtd' | 'ytd' | 'custom'>('all');
+  const [customDateFrom, setCustomDateFrom] = useState<string>(''); // YYYY-MM-DD
+  const [customDateTo, setCustomDateTo]     = useState<string>(''); // YYYY-MM-DD
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'price-desc' | 'price-asc' | 'name'>('date-desc');
   const [columnSort, setColumnSort] = useState<{ key: 'date' | 'type' | 'name' | 'email' | 'city' | 'price' | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'desc' });
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
@@ -181,9 +183,31 @@ export default function Admin() {
       }
       if (sourceFilter !== 'all' && (sub.source || 'organic') !== sourceFilter) return false;
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
-        const created = sub.createdAt.toDate().getTime();
-        const cutoff = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
-        if (nowMs - created > cutoff * dayMs) return false;
+        const created = sub.createdAt.toDate();
+        const createdMs = created.getTime();
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).getTime();
+        const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+        let keep = true;
+        switch (dateFilter) {
+          case 'today': keep = createdMs >= startOfToday;                   break;
+          case '7d':    keep = nowMs - createdMs <= 7  * dayMs;              break;
+          case '30d':   keep = nowMs - createdMs <= 30 * dayMs;              break;
+          case '90d':   keep = nowMs - createdMs <= 90 * dayMs;              break;
+          case 'mtd':   keep = createdMs >= startOfMonth;                   break;
+          case 'qtd':   keep = createdMs >= startOfQuarter;                 break;
+          case 'ytd':   keep = createdMs >= startOfYear;                    break;
+          case 'custom': {
+            // YYYY-MM-DD strings → local-time midnight boundaries, inclusive.
+            const from = customDateFrom ? new Date(customDateFrom + 'T00:00:00').getTime() : -Infinity;
+            const to   = customDateTo   ? new Date(customDateTo   + 'T23:59:59.999').getTime() : Infinity;
+            keep = createdMs >= from && createdMs <= to;
+            break;
+          }
+        }
+        if (!keep) return false;
       }
       return true;
     });
@@ -217,10 +241,11 @@ export default function Admin() {
       });
     }
     return list;
-  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, columnSort]);
+  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
+    setCustomDateFrom(''); setCustomDateTo('');
     setSortBy('date-desc'); setReadFilter('all'); setSignedFilter('all'); setStageFilter('all'); setTagFilter('all');
     setAssignedFilter('all'); setSourceFilter('all');
   };
@@ -709,10 +734,36 @@ export default function Admin() {
                   </select>
                   <select value={dateFilter} onChange={e => setDateFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
                     <option value="all">Any Time</option>
-                    <option value="7d">7 Days</option>
-                    <option value="30d">30 Days</option>
-                    <option value="90d">90 Days</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="mtd">This Month</option>
+                    <option value="qtd">This Quarter</option>
+                    <option value="ytd">Year to Date</option>
+                    <option value="custom">Custom Range…</option>
                   </select>
+                  {dateFilter === 'custom' && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 border border-slate-200 rounded-lg bg-white">
+                      <input
+                        type="date"
+                        value={customDateFrom}
+                        max={customDateTo || undefined}
+                        onChange={e => setCustomDateFrom(e.target.value)}
+                        className="text-sm border-0 focus:outline-none focus:ring-0 p-1 bg-transparent"
+                        aria-label="From date"
+                      />
+                      <span className="text-gray-400 text-xs">→</span>
+                      <input
+                        type="date"
+                        value={customDateTo}
+                        min={customDateFrom || undefined}
+                        onChange={e => setCustomDateTo(e.target.value)}
+                        className="text-sm border-0 focus:outline-none focus:ring-0 p-1 bg-transparent"
+                        aria-label="To date"
+                      />
+                    </div>
+                  )}
                   {hasActiveFilters && (
                     <button onClick={clearFilters} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg border border-slate-200">
                       <X className="w-3.5 h-3.5" />Clear
