@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../../shared/firebase';
-import { FileText, Mail, MessageSquare, Flag, PlusCircle, CheckCircle2, Tag, Upload, Trash2, Eye, UserCheck, Edit3, MailCheck, MailOpen, MousePointerClick, MailX, AlertTriangle, Pencil } from 'lucide-react';
+import { FileText, Mail, MessageSquare, Flag, PlusCircle, CheckCircle2, Tag, Upload, Trash2, Eye, UserCheck, Edit3, MailCheck, MailOpen, MousePointerClick, MailX, AlertTriangle } from 'lucide-react';
 
 interface Props { submissionId: string }
 
@@ -15,7 +15,6 @@ function iconFor(type: string) {
     case 'email_bounced':      return <MailX className="w-3.5 h-3.5" />;
     case 'email_complained':   return <AlertTriangle className="w-3.5 h-3.5" />;
     case 'sms_sent':           return <MessageSquare className="w-3.5 h-3.5" />;
-    case 'change_request':     return <Pencil className="w-3.5 h-3.5" />;
     case 'stage_changed':      return <Flag className="w-3.5 h-3.5" />;
     case 'note_added':         return <Edit3 className="w-3.5 h-3.5" />;
     case 'task_created':       return <PlusCircle className="w-3.5 h-3.5" />;
@@ -37,7 +36,6 @@ function colorFor(type: string) {
   if (type === 'task_completed')   return 'bg-emerald-500 text-white';
   if (type === 'stage_changed')    return 'bg-luxury-gold text-white';
   if (type === 'email_sent' || type === 'sms_sent') return 'bg-indigo-500 text-white';
-  if (type === 'change_request')   return 'bg-amber-500 text-white';
   if (type === 'email_delivered')  return 'bg-slate-400 text-white';
   if (type === 'email_opened')     return 'bg-emerald-500 text-white';
   if (type === 'email_clicked')    return 'bg-emerald-600 text-white';

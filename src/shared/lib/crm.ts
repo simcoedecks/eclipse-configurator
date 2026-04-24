@@ -80,7 +80,6 @@ export type ActivityType =
   | 'file_uploaded'
   | 'file_deleted'
   | 'proposal_opened'         // customer opened /proposal/:id
-  | 'change_request'          // customer submitted a change request
   | 'manual';                 // free-form admin action
 
 export interface Activity {
