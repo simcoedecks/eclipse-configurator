@@ -1131,8 +1131,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       const qty = acc.quantifiable ? (accessoryQuantities[id] || 1) : 1;
       let cost = acc.price * qty;
       if (acc.type === 'sqft') cost = acc.price * (width * depth) * qty;
+      // Dimmer upgrade is a distinct sold item — emit it as its own
+      // line so the CRM / customer proposal clearly shows it.
       if (id === 'heater' && heaterControl === 'dimmer') {
-        cost += 1031; // dimmer is one controller regardless of heater count
+        return [
+          { ...acc, cost, quantity: qty },
+          {
+            id: 'heater_dimmer',
+            name: 'Bromic Infinity Smart Home Dimmer',
+            description: 'Variable heat output + smart home control (one controller covers all heaters)',
+            cost: 1031,
+            quantity: 1,
+          },
+        ];
       }
       return [{ ...acc, cost, quantity: qty }];
     }) as any[];
