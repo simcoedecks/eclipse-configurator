@@ -235,7 +235,14 @@ export async function createExpressApp() {
   });
   app.options("*", (_req: Request, res: Response) => res.sendStatus(204));
 
-  app.use(express.json({ limit: "50mb" }));
+  // Capture the raw JSON body on req.rawBody — required for Svix/Resend
+  // webhook signature verification which HMACs the exact byte string.
+  app.use(express.json({
+    limit: "50mb",
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf.toString("utf8");
+    },
+  }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   if (!process.env.NETLIFY) {
@@ -673,9 +680,20 @@ export async function createExpressApp() {
            </div>`
         : "";
 
+      // Extract submissionId from the proposalUrl so we can tag the email
+      // for the Resend webhook to route events back to the right submission.
+      const submissionId =
+        typeof proposalUrl === "string"
+          ? proposalUrl.match(/\/proposal\/([^/?#]+)/)?.[1]
+          : undefined;
+      const resendTags = submissionId
+        ? [{ name: "submissionId", value: submissionId }]
+        : undefined;
+
       const makePayload = (to: string | string[]) => ({
         from: FROM_EMAIL,
         to,
+        ...(resendTags ? { tags: resendTags } : {}),
         subject: `${isDuplicate ? "[DUPLICATE] " : ""}New Pergola Quote: ${name}`,
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
@@ -870,6 +888,9 @@ export async function createExpressApp() {
         subject,
         html: htmlBody,
         text: String(body),
+        ...(submissionId
+          ? { tags: [{ name: "submissionId", value: String(submissionId) }] }
+          : {}),
       });
       if (r.error) {
         return res.status(500).json({ success: false, error: r.error.message });
@@ -878,6 +899,127 @@ export async function createExpressApp() {
     } catch (e: any) {
       console.error("admin send-email error:", e);
       return res.status(500).json({ success: false, error: e?.message || "Internal error" });
+    }
+  });
+
+  // ── Resend Webhook: email delivery/open/click tracking ─────────────────────
+  // Configure at https://resend.com/webhooks with URL:
+  //   https://<domain>/api/webhooks/resend
+  // The signing secret (starts with whsec_) goes in RESEND_WEBHOOK_SECRET.
+  // Events from Resend include `tags` we set at send time — we read the
+  // submissionId tag to route events back to the correct submission's
+  // activities timeline.
+  app.post("/api/webhooks/resend", async (req: Request, res: Response) => {
+    const log = (m: string) => console.log(`[resend-webhook] ${m}`);
+    try {
+      if (!process.env.RESEND_WEBHOOK_SECRET) {
+        log("RESEND_WEBHOOK_SECRET missing — rejecting");
+        return res.status(500).json({ error: "Webhook not configured" });
+      }
+      if (!adminDb) {
+        log("Firebase Admin SDK unavailable — rejecting");
+        return res.status(500).json({ error: "Database unavailable" });
+      }
+
+      // Svix signature verification — uses the RAW body string we captured
+      // in the express.json verify callback above.
+      const rawBody = (req as any).rawBody;
+      if (!rawBody) {
+        log("no raw body on request");
+        return res.status(400).json({ error: "Missing body" });
+      }
+
+      const { Webhook } = await import("svix");
+      const wh = new Webhook(process.env.RESEND_WEBHOOK_SECRET);
+      let event: any;
+      try {
+        event = wh.verify(rawBody, {
+          "svix-id":        req.header("svix-id") || "",
+          "svix-timestamp": req.header("svix-timestamp") || "",
+          "svix-signature": req.header("svix-signature") || "",
+        });
+      } catch (err: any) {
+        log(`signature verification failed: ${err?.message || err}`);
+        return res.status(401).json({ error: "Invalid signature" });
+      }
+
+      const type: string = event?.type || "";
+      const data = event?.data || {};
+      const emailId: string | undefined = data.email_id || data.id;
+      const tags = Array.isArray(data.tags) ? data.tags : [];
+      const submissionIdTag = tags.find(
+        (t: any) => t?.name === "submissionId"
+      );
+      const submissionId: string | undefined = submissionIdTag?.value;
+
+      log(`type=${type} emailId=${emailId} submissionId=${submissionId || "(none)"}`);
+
+      if (!submissionId) {
+        // Email wasn't tagged (probably sent before tags were added, or a
+        // transactional email we didn't tag). Acknowledge the webhook so
+        // Resend stops retrying, but skip the activity write.
+        return res.status(200).json({ received: true, skipped: "no submissionId tag" });
+      }
+
+      // Map Resend event type → our ActivityType + friendly message.
+      const subject = data.subject || "(no subject)";
+      const toField = Array.isArray(data.to) ? data.to.join(", ") : (data.to || "");
+      let activityType: string | null = null;
+      let message = "";
+      switch (type) {
+        case "email.delivered":
+          activityType = "email_delivered";
+          message = `Email delivered to ${toField}: "${subject}"`;
+          break;
+        case "email.opened":
+          activityType = "email_opened";
+          message = `Customer opened: "${subject}"`;
+          break;
+        case "email.clicked": {
+          activityType = "email_clicked";
+          const link = data.click?.link || data.link || "";
+          message = link
+            ? `Customer clicked link in "${subject}": ${link}`
+            : `Customer clicked a link in: "${subject}"`;
+          break;
+        }
+        case "email.bounced":
+          activityType = "email_bounced";
+          message = `Email bounced to ${toField}: "${subject}"`;
+          break;
+        case "email.complained":
+          activityType = "email_complained";
+          message = `Recipient marked as spam: "${subject}"`;
+          break;
+        default:
+          // Ignore email.sent (we already log it ourselves) and any other
+          // event types.
+          return res.status(200).json({ received: true, ignored: type });
+      }
+
+      await adminDb
+        .collection("submissions")
+        .doc(submissionId)
+        .collection("activities")
+        .add({
+          type: activityType,
+          message,
+          actor: "system",
+          createdAt: FieldValue.serverTimestamp(),
+          meta: {
+            source: "resend",
+            emailId,
+            eventType: type,
+            to: toField,
+            subject,
+            userAgent: data.click?.ipAddress ? data.click : undefined,
+          },
+        });
+
+      return res.status(200).json({ received: true });
+    } catch (e: any) {
+      console.error("[resend-webhook] error:", e);
+      return res.status(500).json({ error: e?.message || "Internal error" });
     }
   });
 

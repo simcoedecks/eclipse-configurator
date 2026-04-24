@@ -65,6 +65,11 @@ export type ActivityType =
   | 'viewed_by_admin'         // admin opened the submission
   | 'viewed_by_customer'      // customer opened the proposal URL
   | 'email_sent'              // admin or system sent email
+  | 'email_delivered'         // Resend webhook: recipient's server accepted
+  | 'email_opened'            // Resend webhook: recipient opened the email
+  | 'email_clicked'           // Resend webhook: recipient clicked a link
+  | 'email_bounced'           // Resend webhook: message bounced
+  | 'email_complained'        // Resend webhook: marked as spam
   | 'sms_sent'                // SMS was sent
   | 'stage_changed'           // pipeline stage changed
   | 'note_added'              // internal note

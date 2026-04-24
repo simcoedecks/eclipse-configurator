@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../../shared/firebase';
-import { FileText, Mail, MessageSquare, Flag, PlusCircle, CheckCircle2, Tag, Upload, Trash2, Eye, UserCheck, Edit3 } from 'lucide-react';
+import { FileText, Mail, MessageSquare, Flag, PlusCircle, CheckCircle2, Tag, Upload, Trash2, Eye, UserCheck, Edit3, MailCheck, MailOpen, MousePointerClick, MailX, AlertTriangle } from 'lucide-react';
 
 interface Props { submissionId: string }
 
@@ -9,6 +9,11 @@ function iconFor(type: string) {
   switch (type) {
     case 'submission_created': return <FileText className="w-3.5 h-3.5" />;
     case 'email_sent':         return <Mail className="w-3.5 h-3.5" />;
+    case 'email_delivered':    return <MailCheck className="w-3.5 h-3.5" />;
+    case 'email_opened':       return <MailOpen className="w-3.5 h-3.5" />;
+    case 'email_clicked':      return <MousePointerClick className="w-3.5 h-3.5" />;
+    case 'email_bounced':      return <MailX className="w-3.5 h-3.5" />;
+    case 'email_complained':   return <AlertTriangle className="w-3.5 h-3.5" />;
     case 'sms_sent':           return <MessageSquare className="w-3.5 h-3.5" />;
     case 'stage_changed':      return <Flag className="w-3.5 h-3.5" />;
     case 'note_added':         return <Edit3 className="w-3.5 h-3.5" />;
@@ -31,6 +36,10 @@ function colorFor(type: string) {
   if (type === 'task_completed')   return 'bg-emerald-500 text-white';
   if (type === 'stage_changed')    return 'bg-luxury-gold text-white';
   if (type === 'email_sent' || type === 'sms_sent') return 'bg-indigo-500 text-white';
+  if (type === 'email_delivered')  return 'bg-slate-400 text-white';
+  if (type === 'email_opened')     return 'bg-emerald-500 text-white';
+  if (type === 'email_clicked')    return 'bg-emerald-600 text-white';
+  if (type === 'email_bounced' || type === 'email_complained') return 'bg-rose-500 text-white';
   if (type === 'file_uploaded')    return 'bg-sky-500 text-white';
   if (type === 'file_deleted')     return 'bg-rose-500 text-white';
   return 'bg-slate-200 text-slate-700';
