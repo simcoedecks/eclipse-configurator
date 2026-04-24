@@ -2045,6 +2045,25 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           const proposalUrl = submissionId
             ? `${window.location.origin}/proposal/${submissionId}`
             : null;
+
+          // Netlify sync functions reject request bodies >6 MB with an empty 400.
+          // Decoded PDF size (base64 length × 0.75) gives the real byte count.
+          // Keep ~1.5 MB headroom for the rest of the JSON payload and encoding overhead.
+          const MAX_PDF_BYTES = 4.5 * 1024 * 1024;
+          let pdfAttachmentToSend: string | null = pdfBase64;
+          if (pdfBase64) {
+            const pdfBytes = Math.ceil(
+              ((pdfBase64.split(',')[1] || pdfBase64).length * 3) / 4
+            );
+            if (pdfBytes > MAX_PDF_BYTES) {
+              console.warn(
+                `PDF too large for email attachment (${(pdfBytes / (1024 * 1024)).toFixed(2)} MB). ` +
+                `Sending email with proposal link only.`
+              );
+              pdfAttachmentToSend = null;
+            }
+          }
+
           const response = await fetch('/api/submit', {
             method: 'POST',
             headers: {
@@ -2052,7 +2071,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             },
             body: JSON.stringify({
               ...baseData,
-              pdfAttachment: pdfBase64,
+              pdfAttachment: pdfAttachmentToSend,
               previewImage,
               proposalUrl,
               isDuplicate: isDuplicateLead,
