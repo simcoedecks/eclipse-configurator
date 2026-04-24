@@ -955,11 +955,15 @@ export async function createExpressApp() {
       const type: string = event?.type || "";
       const data = event?.data || {};
       const emailId: string | undefined = data.email_id || data.id;
-      const tags = Array.isArray(data.tags) ? data.tags : [];
-      const submissionIdTag = tags.find(
-        (t: any) => t?.name === "submissionId"
-      );
-      const submissionId: string | undefined = submissionIdTag?.value;
+      // Resend's API accepts tags as an array of {name, value} objects,
+      // but the webhook payload delivers them as a plain object
+      // { submissionId: "..." }. Support both shapes defensively.
+      let submissionId: string | undefined;
+      if (Array.isArray(data.tags)) {
+        submissionId = data.tags.find((t: any) => t?.name === "submissionId")?.value;
+      } else if (data.tags && typeof data.tags === "object") {
+        submissionId = data.tags.submissionId;
+      }
 
       log(`type=${type} emailId=${emailId} submissionId=${submissionId || "(none)"}`);
 
