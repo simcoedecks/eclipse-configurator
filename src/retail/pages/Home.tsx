@@ -967,6 +967,15 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       const acc = ACCESSORIES.find(a => a.id === id);
       if (!acc) return [];
 
+      // If this side is in per-section mode, skip the uniform side split —
+      // the per-bay items are added in the sectionChoices pass below.
+      const sideForId = sideFromId(id);
+      if (sideForId && sideUsesSections(sideForId as any) &&
+          (acc.type === 'screen_width' || acc.type === 'screen_depth' ||
+           acc.type === 'wall_width' || acc.type === 'wall_depth')) {
+        return [];
+      }
+
       if (acc.type === 'screen_width') {
         const partial = partialLen(id);
         if (partial !== null) {
@@ -1050,6 +1059,41 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       }
       return [{ ...acc, cost, quantity: qty }];
     }) as any[];
+
+    // Per-section pass — emit one itemized line per bay that's marked as
+    // screen or wall in sectionChoices, regardless of whether the user
+    // originally toggled the side-wide accessory. This guarantees the
+    // quote reflects exactly what was configured per bay (e.g. 2 screens
+    // + 1 privacy wall on a 30' / 3-bay side).
+    (['front','back','left','right'] as const).forEach(side => {
+      if (!sideUsesSections(side)) return;
+      const choices = getSectionChoicesForSide(side);
+      const bayLen = getBayLengthOnSide(side);
+      const numPanelsPerBay = Math.ceil((height * 12) / 7);
+      const sideLabel = side.charAt(0).toUpperCase() + side.slice(1);
+      choices.forEach((choice, idx) => {
+        if (choice === 'screen') {
+          const price = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+          itemizedAccessories.push({
+            id: `screen_${side}_bay${idx}`,
+            name: `Motorized Screen · ${sideLabel} · Bay ${idx + 1} (${bayLen.toFixed(1)}')`,
+            cost: price,
+            quantity: 1,
+          });
+        } else if (choice === 'wall') {
+          let price = bayLen * height * wallUnitPrice;
+          if (wallColor === '#8B5A2B') {
+            price += numPanelsPerBay * (bayLen < 12 ? 100 : 150);
+          }
+          itemizedAccessories.push({
+            id: `wall_${side}_bay${idx}`,
+            name: `Privacy Wall · ${sideLabel} · Bay ${idx + 1} (${bayLen.toFixed(1)}')`,
+            cost: price,
+            quantity: 1,
+          });
+        }
+      });
+    });
 
     if (louverUpgrade > 0) {
       itemizedAccessories.push({
