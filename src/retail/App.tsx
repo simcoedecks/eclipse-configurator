@@ -3,6 +3,7 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import AdminConfigurator from './pages/AdminConfigurator';
 import ProposalPreview from './pages/ProposalPreview';
+import EnclosurePreview from './pages/EnclosurePreview';
 import Scan from './pages/Scan';
 import Proposal from './pages/Proposal';
 import DealerLanding from './pages/DealerLanding';
@@ -28,6 +29,7 @@ export default function App() {
           </div>
         } />
         <Route path="/proposal-preview" element={<ProposalPreview />} />
+        <Route path="/preview/enclosures" element={<EnclosurePreview />} />
       </Routes>
     </BrowserRouter>
   );
