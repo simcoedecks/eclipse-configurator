@@ -179,12 +179,19 @@ function PopularAddOns({ submission }: { submission: any }) {
   // wall upgrade suggested on it — the side is already closed off.
   const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
   // A side is "closed" if it already has a structural wall, a motorized
-  // screen, or a privacy wall — in any of those cases, don't offer the
-  // opposite enclosure as an upsell on that same side.
+  // screen, a privacy wall, OR has any per-section customization — in
+  // any of those cases, don't offer the opposite enclosure as an upsell.
+  // Per-section mode on even one bay means the side is being handled
+  // bay-by-bay and a side-wide upsell would be wrong/double-counted.
   const closedSides = new Set<string>(houseWallSides);
   for (const id of selectedIds) {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
     if (m) closedSides.add(m[2]);
+  }
+  const sectionChoices = (cfg.sectionChoices || {}) as Record<string, any[]>;
+  for (const side of ['front','back','left','right']) {
+    const arr = sectionChoices[side];
+    if (Array.isArray(arr) && arr.length > 0) closedSides.add(side);
   }
   const blockedBySide = (id: string) => {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);

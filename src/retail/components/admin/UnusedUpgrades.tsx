@@ -56,11 +56,17 @@ export default function UnusedUpgrades({ submission }: Props) {
   // Sides that already have a structural wall can't be upsold a screen/wall.
   const houseWallSides = new Set<string>(Array.isArray(cfg.houseWalls) ? cfg.houseWalls : []);
   // A side is "closed" if it has a structural wall, a motorized screen,
-  // or a privacy wall — don't offer the opposite enclosure on that side.
+  // a privacy wall, OR has any per-section customization (even just one
+  // custom bay means the side is handled bay-by-bay).
   const closedSides = new Set<string>(houseWallSides);
   for (const id of selectedIds) {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);
     if (m) closedSides.add(m[2]);
+  }
+  const sectionChoicesMap = (cfg.sectionChoices || {}) as Record<string, any[]>;
+  for (const side of ['front','back','left','right']) {
+    const arr = sectionChoicesMap[side];
+    if (Array.isArray(arr) && arr.length > 0) closedSides.add(side);
   }
   const blockedBySide = (id: string) => {
     const m = id.match(/^(screen|wall)_(front|back|left|right)$/);

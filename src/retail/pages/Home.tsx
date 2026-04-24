@@ -1306,13 +1306,17 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     return null;
   };
 
-  const getConflictReason = (id: string): 'structure' | 'screen' | null => {
+  const getConflictReason = (id: string): 'structure' | 'screen' | 'sectioned' | null => {
     const side = getSideOfAccessory(id);
     if (!side) return null;
     // Structure wall on same side is only a conflict when it spans the
     // entire side — partial structure walls leave an open portion that a
     // screen or privacy wall can fill.
     if (houseWalls.has(side) && getOpenLengthOnSide(side) <= 0) return 'structure';
+    // Per-section customization on the same side — even a single bay
+    // configured per-section means the side is being handled bay-by-bay,
+    // so the side-wide accessory would double-count.
+    if (id.match(/^(screen|wall)_/) && sideUsesSections(side)) return 'sectioned';
     // Screen on same side → privacy wall is a conflict
     if (id.startsWith('wall_') && selectedAccessories.has(`screen_${side}`)) return 'screen';
     return null;
@@ -1359,7 +1363,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     // Only check for conflict on ADD, not remove
     if (!alreadySelected) {
       const reason = getConflictReason(id);
-      if (reason) {
+      if (reason === 'sectioned') {
+        toast.info('This side is using per-section customization. Adjust bays in the Per-Section panel instead.');
+        return;
+      }
+      if (reason === 'structure' || reason === 'screen') {
         setPendingConflict({ id, reason });
         return;
       }
@@ -2302,7 +2310,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                 <button
                   key={a.id}
                   onClick={() => toggleAccessory(a.id)}
-                  title={conflict === 'structure' ? 'A structure wall is on this side' : conflict === 'screen' ? 'A motorized screen is on this side' : undefined}
+                  title={conflict === 'structure' ? 'A structure wall is on this side' : conflict === 'screen' ? 'A motorized screen is on this side' : conflict === 'sectioned' ? 'This side is using per-section customization — configure screens/walls there instead' : undefined}
                   className={`flex items-center justify-between px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
                     isSelected
                       ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700'
