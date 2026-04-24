@@ -881,7 +881,16 @@ export async function createExpressApp() {
       if (!resend) {
         return res.status(500).json({ success: false, error: "Email service not configured" });
       }
-      const htmlBody = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;line-height:1.55;"><div style="white-space:pre-wrap;">${String(body).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div><hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/><p style="color:#999;font-size:11px;">This message was sent from Eclipse Pergola CRM.</p></div>`;
+      // Escape HTML, then auto-linkify http(s) URLs as real <a> tags so
+      // Resend's click tracking (and our webhook) can see the clicks.
+      // Plain text URLs get auto-linked by the email client, but those
+      // clicks bypass Resend's tracking rewrite entirely.
+      const escaped = String(body).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const linkified = escaped.replace(
+        /(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" style="color:#C5A059;text-decoration:underline;">$1</a>'
+      );
+      const htmlBody = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;line-height:1.55;"><div style="white-space:pre-wrap;">${linkified}</div><hr style="border:none;border-top:1px solid #eee;margin:24px 0;"/><p style="color:#999;font-size:11px;">This message was sent from Eclipse Pergola CRM.</p></div>`;
       const r = await resend.emails.send({
         from: FROM_EMAIL,
         to,
