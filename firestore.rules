@@ -306,6 +306,19 @@ service cloud.firestore {
       allow delete: if true;
     }
 
+    // ── Collection-group reads (admin Dashboard) ─────────────────
+    // The path-scoped rules above (e.g. /submissions/{id}/activities)
+    // grant access to subcollections via the parent path. They do NOT
+    // satisfy collectionGroup queries which read across all parents.
+    // The Dashboard fans out across activities + tasks for an
+    // overview, so it needs these wildcard rules. Admins only.
+    match /{path=**}/activities/{activityId} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/tasks/{taskId} {
+      allow read: if isAdmin();
+    }
+
     match /{path=**} {
       allow read, write: if false;
     }
