@@ -166,6 +166,16 @@ export default function Admin() {
     const q = searchQuery.trim().toLowerCase();
 
     let list = standardSubmissions.filter(sub => {
+      // 'New Leads' (submissions) tab is the inbox: only fresh leads (stage
+      // unset or 'new') and drafts that haven't been processed yet. Once a
+      // lead moves to Contacted (or any later stage), it leaves this tab
+      // and lives in the Pipeline tab instead.
+      if (activeTab === 'submissions') {
+        const stage = sub.pipelineStage || defaultStageFor(sub);
+        if (!sub.isDraft && stage !== 'new') return false;
+      }
+      // 'Pipeline' tab (kanban) takes care of itself, but the kanban
+      // already filters out drafts internally.
       if (q) {
         const hay = [sub.name, sub.email, sub.phone, sub.city, sub.address, ...(sub.tags || [])].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
@@ -265,7 +275,7 @@ export default function Admin() {
       });
     }
     return list;
-  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, emailFilter, submissionStatusFilter, columnSort]);
+  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, emailFilter, submissionStatusFilter, activeTab, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
@@ -277,6 +287,11 @@ export default function Admin() {
 
   const unreadCustomCount = useMemo(() => customRequests.filter(s => !s.viewedAt).length, [customRequests]);
   const unreadCount = useMemo(() => standardSubmissions.filter(s => !s.viewedAt).length, [standardSubmissions]);
+  // Count of items that belong in the New Leads tab (fresh + drafts).
+  const newLeadsCount = useMemo(
+    () => standardSubmissions.filter(s => s.isDraft || (s.pipelineStage || defaultStageFor(s)) === 'new').length,
+    [standardSubmissions]
+  );
   const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
   const acceptedCount = useMemo(() => submissions.filter(s => !!s.acceptance?.signedAt).length, [submissions]);
   const uniqueTags = useMemo(() => {
@@ -448,7 +463,7 @@ export default function Admin() {
 
   const navItems: Array<{ key: TabKey; label: string; icon: any; badge?: number | string; sub?: string }> = [
     { key: 'dashboard',   label: 'Dashboard',   icon: Home,     sub: 'Overview' },
-    { key: 'submissions', label: 'Leads',       icon: List,     badge: unreadCount > 0 ? unreadCount : undefined, sub: `${standardSubmissions.length} total` },
+    { key: 'submissions', label: 'New Leads',   icon: List,     badge: newLeadsCount > 0 ? newLeadsCount : undefined, sub: `${newLeadsCount} fresh` },
     { key: 'custom-requests', label: 'Custom Requests', icon: Sparkles, badge: unreadCustomCount > 0 ? unreadCustomCount : undefined, sub: `${customRequests.length} to quote` },
     { key: 'kanban',      label: 'Pipeline',    icon: Kanban,   sub: `${pendingCount} active` },
     { key: 'map',         label: 'Map',         icon: MapIcon,  sub: 'Geography' },
@@ -545,7 +560,7 @@ export default function Admin() {
               </h1>
               <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-gray-500'}`}>
                 {activeTab === 'dashboard' && "Here's what's happening today."}
-                {activeTab === 'submissions' && `Manage and filter all ${standardSubmissions.length} configurator quotes.`}
+                {activeTab === 'submissions' && `${newLeadsCount} fresh ${newLeadsCount === 1 ? 'lead' : 'leads'} waiting for first contact. Move them through the Pipeline tab once contacted.`}
                 {activeTab === 'custom-requests' && `${customRequests.length} bespoke pergola request${customRequests.length === 1 ? '' : 's'} awaiting a custom quote.`}
                 {activeTab === 'kanban' && 'Drag leads between stages.'}
                 {activeTab === 'map' && 'Geographic distribution of all leads.'}
@@ -877,7 +892,8 @@ export default function Admin() {
                           </button>
                         </th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('date')} className="inline-flex items-center gap-1 hover:text-luxury-black">Date <SortIcon col="date" /></button></th>
-                        <th className="p-3 font-semibold">Stage</th>
+                        {/* Header label flips to 'Status' in the New Leads tab — every row there is by definition stage='new' (or a draft), so 'Stage' would be redundant. */}
+                        <th className="p-3 font-semibold">{activeTab === 'submissions' ? 'Status' : 'Stage'}</th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1 hover:text-luxury-black">Customer <SortIcon col="name" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
@@ -921,9 +937,9 @@ export default function Admin() {
                               </div>
                             </td>
                             <td className="p-3 align-top">
-                              {/* Drafts (in-progress / abandoned) live outside the sales pipeline.
-                                  Show their submission-lifecycle badge only — no stage selector. */}
-                              {sub.isDraft ? (() => {
+                              {/* Stage selector hidden in the New Leads tab — every row there is by definition
+                                  stage='new' (or a draft). Other tabs show it for moving leads through the pipeline. */}
+                              {activeTab !== 'submissions' && (sub.isDraft ? (() => {
                                 const status = submissionStatus(sub);
                                 const info = SUBMISSION_STATUS[status];
                                 return (
@@ -931,8 +947,18 @@ export default function Admin() {
                                     {info.label}
                                   </span>
                                 );
-                              })() : <PipelineStageSelector submission={sub} />}
-                              <div className="flex gap-1 mt-1 flex-wrap">
+                              })() : <PipelineStageSelector submission={sub} />)}
+                              <div className={`flex gap-1 flex-wrap ${activeTab === 'submissions' ? '' : 'mt-1'}`}>
+                                {/* Drafts in the New Leads tab still need their submission-status badge so admin can tell apart abandoned vs in-progress. */}
+                                {activeTab === 'submissions' && sub.isDraft && (() => {
+                                  const status = submissionStatus(sub);
+                                  const info = SUBMISSION_STATUS[status];
+                                  return (
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${info.color}`} title={info.description}>
+                                      {info.label}
+                                    </span>
+                                  );
+                                })()}
                                 {sub.acceptance?.signedAt && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800">Signed</span>}
                                 {sub.isDuplicate && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Dup</span>}
                                 {/* Email status badge — Opened / Sent / Not Sent.
