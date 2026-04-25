@@ -201,7 +201,21 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
   // Draft / "In Progress" submission id — created as soon as the welcome
   // form is filled in so the CRM sees the lead in real time and knows
   // if they never clicked the final Submit button.
-  const [draftSubmissionId, setDraftSubmissionId] = useState<string | null>(null);
+  // Persisted in localStorage so a page refresh between the welcome form
+  // and Submit doesn't reset state and cause a duplicate draft + submission
+  // pair. Cleared after a successful submit.
+  const [draftSubmissionId, _setDraftSubmissionId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try { return window.localStorage.getItem('eclipse-draft-submission-id'); } catch { return null; }
+  });
+  const setDraftSubmissionId = (id: string | null) => {
+    _setDraftSubmissionId(id);
+    try {
+      if (typeof window === 'undefined') return;
+      if (id) window.localStorage.setItem('eclipse-draft-submission-id', id);
+      else    window.localStorage.removeItem('eclipse-draft-submission-id');
+    } catch {}
+  };
   const getQuoteSummary = () => {
     let accessoriesText = 'None';
     if (selectedAccessories.size > 0) {
@@ -1880,6 +1894,36 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           const submissionRef = await submitWithFallback();
           submissionId = submissionRef.id;
         }
+
+        // Defensive cleanup: in case the flip path failed silently (e.g.
+        // page was refreshed between draft create and Submit, so
+        // draftSubmissionId state was lost) any orphan drafts with the
+        // same email get removed so the New Leads tab doesn't show dupes.
+        // Best-effort — failures here just leave the orphan in place.
+        try {
+          if (submissionId && email) {
+            const dupQuery = query(
+              collection(db, 'submissions'),
+              where('email', '==', email),
+              where('isDraft', '==', true)
+            );
+            const snap = await getDocs(dupQuery);
+            for (const d of snap.docs) {
+              if (d.id === submissionId) continue; // never delete the active one
+              try {
+                await deleteDoc(doc(db, 'submissions', d.id));
+                console.log('[submissions] cleaned up orphan draft', d.id);
+              } catch (e) {
+                console.warn('[submissions] orphan-draft cleanup failed for', d.id, e);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[submissions] orphan-draft cleanup query failed', e);
+        }
+        // Clear the persisted draft id — this session's draft is now
+        // either the submitted lead itself or has been cleaned up.
+        setDraftSubmissionId(null);
 
         // Pipedrive integration removed — the CRM lives in Firestore only.
 

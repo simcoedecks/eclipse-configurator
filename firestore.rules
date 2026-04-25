@@ -198,7 +198,10 @@ service cloud.firestore {
                     || isValidSubmissionUpdate(request.resource.data, resource.data)
                     || isValidDraftUpdate(request.resource.data, resource.data)
                     || isValidSignatureWrite(request.resource.data, resource.data);
-      allow delete: if isAdmin();
+      // Drafts can be deleted by anyone (defensive cleanup of orphans
+      // when a customer submits — see Home.tsx submit flow). Admins
+      // can delete anything as before.
+      allow delete: if isAdmin() || (resource.data.isDraft == true);
 
       // CRM subcollections — all admin-only
       match /activities/{activityId} {
