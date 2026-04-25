@@ -292,6 +292,52 @@ export default function Admin() {
     () => standardSubmissions.filter(s => s.isDraft || (s.pipelineStage || defaultStageFor(s)) === 'new').length,
     [standardSubmissions]
   );
+
+  // Find drafts that are duplicates of a more recent submitted lead with the
+  // same email. These are the records that should have been cleaned up by
+  // the client-side flip but slipped through (e.g. cross-device sessions).
+  // We expose a one-click cleanup so the admin can wipe them in bulk.
+  const duplicateDrafts = useMemo(() => {
+    const submittedByEmail = new Map<string, any>();
+    for (const s of standardSubmissions) {
+      if (s.isDraft || !s.email) continue;
+      const e = String(s.email).toLowerCase().trim();
+      const cur = submittedByEmail.get(e);
+      const sCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const curCreated = cur?.createdAt?.toDate?.()?.getTime?.() || 0;
+      if (!cur || sCreated > curCreated) submittedByEmail.set(e, s);
+    }
+    return standardSubmissions.filter(s => {
+      if (!s.isDraft || !s.email) return false;
+      const e = String(s.email).toLowerCase().trim();
+      const submitted = submittedByEmail.get(e);
+      if (!submitted) return false;
+      const dCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const sCreated = submitted.createdAt?.toDate?.()?.getTime?.() || 0;
+      // Only flag drafts that pre-date a successful submission for the same
+      // person — we want to keep drafts that are actually still in progress.
+      return dCreated < sCreated;
+    });
+  }, [standardSubmissions]);
+
+  const cleanupDuplicateDrafts = async () => {
+    if (duplicateDrafts.length === 0) return;
+    const confirmMsg =
+      `Delete ${duplicateDrafts.length} duplicate draft${duplicateDrafts.length === 1 ? '' : 's'}? ` +
+      `Each one is an abandoned configurator session that already has a matching submitted lead.`;
+    if (!confirm(confirmMsg)) return;
+    try {
+      const batch = writeBatch(db);
+      for (const d of duplicateDrafts) {
+        batch.delete(doc(db, 'submissions', d.id));
+      }
+      await batch.commit();
+      toast.success(`Cleaned up ${duplicateDrafts.length} duplicate draft${duplicateDrafts.length === 1 ? '' : 's'}`);
+    } catch (e: any) {
+      console.error('cleanup-duplicate-drafts failed', e);
+      toast.error(`Cleanup failed: ${e?.message || 'unknown error'}`);
+    }
+  };
   const pendingCount = useMemo(() => submissions.filter(s => !s.acceptance?.signedAt).length, [submissions]);
   const acceptedCount = useMemo(() => submissions.filter(s => !!s.acceptance?.signedAt).length, [submissions]);
   const uniqueTags = useMemo(() => {
@@ -704,6 +750,23 @@ export default function Admin() {
           {/* Submissions */}
           {activeTab === 'submissions' && (
             <>
+              {/* Duplicate-draft cleanup banner — only shown when there are
+                  abandoned drafts that already have a matching submitted lead. */}
+              {duplicateDrafts.length > 0 && (
+                <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between gap-3">
+                  <div className="text-xs text-amber-900">
+                    <strong>{duplicateDrafts.length} abandoned draft{duplicateDrafts.length === 1 ? '' : 's'}</strong> here already have a matching submitted lead. They cluttered the inbox because the customer's session lost context (refresh / different device) before they hit Submit.
+                  </div>
+                  <button
+                    onClick={cleanupDuplicateDrafts}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700"
+                    title="Delete the abandoned drafts and keep their corresponding submitted leads"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Clean Up Duplicates
+                  </button>
+                </div>
+              )}
               {/* Status tabs */}
               <div className="flex gap-1 mb-4 border-b border-slate-200">
                 {[
