@@ -1226,7 +1226,25 @@ export default function Admin() {
 
       {/* Detail modal */}
       <AnimatePresence>
-        {detailSub && <SubmissionDetail key={detailSub.id} sub={detailSub} contractors={contractors} onClose={() => setDetailSub(null)} onCompose={setComposeMode} onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }} />}
+        {detailSub && <SubmissionDetail
+          key={detailSub.id}
+          sub={detailSub}
+          contractors={contractors}
+          onClose={() => setDetailSub(null)}
+          onCompose={setComposeMode}
+          onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }}
+          onDelete={async () => {
+            if (!confirm(`Permanently delete this lead (${detailSub.name || detailSub.email || detailSub.id})?\n\nThis cannot be undone.`)) return;
+            try {
+              await deleteDoc(doc(db, 'submissions', detailSub.id));
+              setDetailSub(null);
+              toast.success('Lead deleted');
+            } catch (e: any) {
+              console.error('delete failed', e);
+              toast.error(`Delete failed: ${e?.message || 'unknown error'}`);
+            }
+          }}
+        />}
       </AnimatePresence>
 
       {/* Compose modal */}
@@ -1238,7 +1256,7 @@ export default function Admin() {
 }
 
 // ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
-function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; contractors: any[] }) {
+function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; onDelete: () => void; contractors: any[] }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   // Fallback: recompute basePrice from dimensions if the stored
@@ -1458,6 +1476,9 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               <a href={`/proposal/${sub.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold/10 text-luxury-black border border-luxury-gold/30 rounded-lg text-xs font-bold hover:bg-luxury-gold hover:text-white">
                 <Eye className="w-3.5 h-3.5" />Customer View
               </a>
+              <button onClick={onDelete} className="p-2 text-gray-400 hover:text-white hover:bg-rose-600 rounded-lg" title="Permanently delete this lead">
+                <Trash2 className="w-4 h-4" />
+              </button>
               <button onClick={onMarkUnread} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-slate-100 rounded-lg" title="Mark unread & close">
                 <EyeOff className="w-4 h-4" />
               </button>
