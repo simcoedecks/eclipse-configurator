@@ -59,9 +59,7 @@ class AdminErrorBoundary extends Component<{ children: React.ReactNode }, Bounda
  *
  * Access is by URL only — no sign-in gate. Share the link internally.
  *
- * URL: /admin/configurator/standard
- * (parent /admin/configurator now shows a chooser between standard
- *  and custom multi-section flows)
+ * URL: /admin/configurator
  */
 export default function AdminConfigurator() {
   // Read ?submissionId=... so the admin can re-open an existing quote

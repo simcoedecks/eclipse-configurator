@@ -2,8 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import AdminConfigurator from './pages/AdminConfigurator';
-import AdminConfiguratorChooser from './pages/AdminConfiguratorChooser';
-import AdminConfiguratorCustom from './pages/AdminConfiguratorCustom';
 import ProposalPreview from './pages/ProposalPreview';
 import Scan from './pages/Scan';
 import Proposal from './pages/Proposal';
@@ -19,9 +17,7 @@ export default function App() {
         <Route path="/proposal/:id" element={<Proposal />} />
         <Route path="/dealer/:slug" element={<DealerLanding />} />
         <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/configurator" element={<AdminConfiguratorChooser />} />
-        <Route path="/admin/configurator/standard" element={<AdminConfigurator />} />
-        <Route path="/admin/configurator/custom" element={<AdminConfiguratorCustom />} />
+        <Route path="/admin/configurator" element={<AdminConfigurator />} />
         <Route path="/contractor" element={
           <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">
             <div className="text-center p-8">

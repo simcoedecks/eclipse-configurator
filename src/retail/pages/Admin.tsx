@@ -1205,7 +1205,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                 );
               })()}
               <button
-                onClick={() => window.open(`/admin/configurator/standard?submissionId=${sub.id}`, '_blank')}
+                onClick={() => window.open(`/admin/configurator?submissionId=${sub.id}`, '_blank')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxury-gold text-luxury-black rounded-lg text-xs font-bold hover:bg-luxury-gold/90"
                 title="Open this quote in the admin configurator to edit dimensions, accessories, etc."
               >
