@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Suspense, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, increment, collection, addDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../shared/firebase';
 import { Mail, Phone, MapPin, Calendar, FileText, Download, Loader2, CheckCircle2, Shield, Clock, PenLine, X, Eraser, User } from 'lucide-react';
 import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
@@ -569,9 +569,10 @@ export default function Proposal() {
 
     const HEARTBEAT_SECONDS = 15;
     const submissionRef = doc(db, 'submissions', id);
+    const sessionsRef = collection(db, 'submissions', id, 'viewSessions');
 
-    // First-view stamp (runs once per page load — increments view count
-    // every time the customer opens the proposal link).
+    // Aggregate stats on the submission doc (powers the at-a-glance pill
+    // in the admin detail header).
     setDoc(
       submissionRef,
       {
@@ -584,9 +585,24 @@ export default function Proposal() {
       { merge: true }
     ).catch(e => console.warn('view-tracking: first-view write failed', e));
 
+    // Per-session row in the activity timeline. Created here, updated by
+    // each heartbeat with the current duration so the admin can see exactly
+    // how long this individual visit lasted.
+    let sessionDocRef: ReturnType<typeof doc> | null = null;
+    let durationSec = 0;
+    addDoc(sessionsRef, {
+      startedAt: serverTimestamp(),
+      lastActiveAt: serverTimestamp(),
+      durationSeconds: 0,
+      userAgent: (navigator.userAgent || '').slice(0, 480),
+    })
+      .then((ref) => { sessionDocRef = ref; })
+      .catch((e) => console.warn('view-tracking: session create failed', e));
+
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const heartbeat = () => {
+      durationSec += HEARTBEAT_SECONDS;
       setDoc(
         submissionRef,
         {
@@ -595,6 +611,12 @@ export default function Proposal() {
         },
         { merge: true }
       ).catch(e => console.warn('view-tracking: heartbeat failed', e));
+      if (sessionDocRef) {
+        updateDoc(sessionDocRef, {
+          lastActiveAt: serverTimestamp(),
+          durationSeconds: durationSec,
+        }).catch(e => console.warn('view-tracking: session heartbeat failed', e));
+      }
     };
 
     const start = () => {

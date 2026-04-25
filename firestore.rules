@@ -201,6 +201,27 @@ service cloud.firestore {
       match /files/{fileId} {
         allow read, write: if isAdmin();
       }
+      // Per-page-load view tracking entries written from the public
+      // /proposal/:id viewer. Strictly validated so anonymous writes
+      // can only set the documented fields and reasonable values.
+      match /viewSessions/{sessionId} {
+        function isValidViewSession(data) {
+          return data.keys().hasOnly(['startedAt', 'lastActiveAt', 'durationSeconds', 'userAgent']) &&
+                 data.startedAt is timestamp &&
+                 (!('lastActiveAt' in data) || data.lastActiveAt is timestamp) &&
+                 (!('durationSeconds' in data) ||
+                    (data.durationSeconds is number &&
+                     data.durationSeconds >= 0 &&
+                     data.durationSeconds < 86400)) &&
+                 (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() < 500));
+        }
+        allow read: if isAdmin();
+        allow create: if isValidViewSession(request.resource.data);
+        // Updates may bump duration / lastActiveAt only — startedAt is locked.
+        allow update: if isValidViewSession(request.resource.data) &&
+                         resource.data.startedAt == request.resource.data.startedAt;
+        allow delete: if isAdmin();
+      }
     }
 
     match /leads/{userId} {

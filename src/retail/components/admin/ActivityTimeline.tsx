@@ -58,21 +58,78 @@ function relativeTime(date: Date | null): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds < 1) return 'less than 15s';
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+
 export default function ActivityTimeline({ submissionId }: Props) {
   const [activities, setActivities] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
 
   useEffect(() => {
-    const q = query(
+    const aQuery = query(
       collection(db, 'submissions', submissionId, 'activities'),
       orderBy('createdAt', 'desc')
     );
-    const unsub = onSnapshot(q, (snap) => {
+    const unsubA = onSnapshot(aQuery, (snap) => {
       setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return () => unsub();
+
+    // Customer view sessions — one doc per page open. We render each as
+    // its own row in the timeline so the admin can see individual visits.
+    const sQuery = query(
+      collection(db, 'submissions', submissionId, 'viewSessions'),
+      orderBy('startedAt', 'desc')
+    );
+    const unsubS = onSnapshot(
+      sQuery,
+      (snap) => {
+        setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      },
+      // Quietly swallow permission errors if rules haven't been deployed
+      // yet — the rest of the timeline still renders.
+      (err) => console.warn('view-sessions subscribe failed', err)
+    );
+
+    return () => { unsubA(); unsubS(); };
   }, [submissionId]);
 
-  if (activities.length === 0) {
+  // Merge activities + sessions into a single time-ordered list.
+  type Row = {
+    id: string;
+    kind: 'activity' | 'session';
+    when: Date | null;
+    type?: string;
+    message?: string;
+    actor?: string;
+    durationSeconds?: number;
+  };
+  const rows: Row[] = [
+    ...activities.map((a): Row => ({
+      id: `a:${a.id}`,
+      kind: 'activity',
+      when: a.createdAt?.toDate?.() || null,
+      type: a.type,
+      message: a.message,
+      actor: a.actor,
+    })),
+    ...sessions.map((s): Row => ({
+      id: `s:${s.id}`,
+      kind: 'session',
+      when: s.startedAt?.toDate?.() || null,
+      durationSeconds: s.durationSeconds || 0,
+      actor: 'customer',
+    })),
+  ].sort((a, b) => (b.when?.getTime() || 0) - (a.when?.getTime() || 0));
+
+  if (rows.length === 0) {
     return (
       <div className="text-center py-6 text-xs text-gray-400 italic">
         No activity yet. Actions you take on this lead will appear here.
@@ -82,18 +139,34 @@ export default function ActivityTimeline({ submissionId }: Props) {
 
   return (
     <ol className="space-y-3 relative pl-6 before:content-[''] before:absolute before:left-[11px] before:top-1 before:bottom-1 before:w-0.5 before:bg-slate-200">
-      {activities.map((a) => {
-        const date = a.createdAt?.toDate?.() || null;
+      {rows.map((r) => {
+        if (r.kind === 'session') {
+          const dur = r.durationSeconds || 0;
+          const engaged = dur >= 60;
+          return (
+            <li key={r.id} className="relative">
+              <div className={`absolute -left-[calc(1.5rem-2px)] top-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm ${engaged ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'}`}>
+                <Eye className="w-3.5 h-3.5" />
+              </div>
+              <div className="pl-2">
+                <p className="text-sm text-luxury-black leading-tight">
+                  Customer viewed proposal · <span className="font-semibold">{formatDuration(dur)}</span>
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">customer · {relativeTime(r.when)}</p>
+              </div>
+            </li>
+          );
+        }
         return (
-          <li key={a.id} className="relative">
-            <div className={`absolute -left-[calc(1.5rem-2px)] top-0.5 w-6 h-6 rounded-full flex items-center justify-center ${colorFor(a.type)} ring-2 ring-white shadow-sm`}>
-              {iconFor(a.type)}
+          <li key={r.id} className="relative">
+            <div className={`absolute -left-[calc(1.5rem-2px)] top-0.5 w-6 h-6 rounded-full flex items-center justify-center ${colorFor(r.type || '')} ring-2 ring-white shadow-sm`}>
+              {iconFor(r.type || '')}
             </div>
             <div className="pl-2">
-              <p className="text-sm text-luxury-black leading-tight">{a.message}</p>
+              <p className="text-sm text-luxury-black leading-tight">{r.message}</p>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                {a.actor && <span>{a.actor === 'system' ? 'System' : a.actor} · </span>}
-                {relativeTime(date)}
+                {r.actor && <span>{r.actor === 'system' ? 'System' : r.actor} · </span>}
+                {relativeTime(r.when)}
               </p>
             </div>
           </li>
