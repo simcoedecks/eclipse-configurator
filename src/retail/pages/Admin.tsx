@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import {
-  LogOut, Download, Loader2, Mail, Calendar, MapPin, Phone, Plus, Building2, Send,
+  LogOut, Download, Loader2, Mail, MailOpen, Calendar, MapPin, Phone, Plus, Building2, Send,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
   Bookmark, Save, Copy, Sparkles, Paperclip, PenLine,
@@ -66,7 +66,7 @@ export default function Admin() {
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [assignedFilter, setAssignedFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [emailFilter, setEmailFilter] = useState<'all' | 'sent' | 'not-sent' | 'failed'>('all');
+  const [emailFilter, setEmailFilter] = useState<'all' | 'opened' | 'sent' | 'not-sent' | 'failed'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
   const [composeMode, setComposeMode] = useState<'email' | 'sms' | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -186,8 +186,10 @@ export default function Admin() {
       if (emailFilter !== 'all' && !sub.isDraft) {
         const sent = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
         const failed = !!sub.customerError;
-        if (emailFilter === 'sent' && !sent) return false;
-        if (emailFilter === 'failed' && !failed) return false;
+        const opened = !!(sub.customerEmailOpenedAt || sub.customerFirstViewedAt);
+        if (emailFilter === 'opened'   && !(sent && opened)) return false;
+        if (emailFilter === 'sent'     && !(sent && !opened)) return false;
+        if (emailFilter === 'failed'   && !failed) return false;
         if (emailFilter === 'not-sent' && (sent || failed)) return false;
       } else if (emailFilter !== 'all' && sub.isDraft) {
         // Drafts haven't reached the email step yet — only surface them
@@ -741,7 +743,8 @@ export default function Admin() {
                   </select>
                   <select value={emailFilter} onChange={e => setEmailFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by proposal email status">
                     <option value="all">Email: All</option>
-                    <option value="sent">Email: Sent</option>
+                    <option value="opened">Email: Opened</option>
+                    <option value="sent">Email: Sent (not opened)</option>
                     <option value="not-sent">Email: Not Sent</option>
                     <option value="failed">Email: Failed</option>
                   </select>
@@ -901,8 +904,10 @@ export default function Admin() {
                                 {!sub.isDraft && (() => {
                                   const sentOk = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
                                   const failed = !!sub.customerError;
-                                  if (sentOk) return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800" title="Proposal email delivered to customer"><Mail className="w-2.5 h-2.5" />Sent</span>;
-                                  if (failed)  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={String(sub.customerError)}><Mail className="w-2.5 h-2.5" />Failed</span>;
+                                  const opened = !!(sub.customerEmailOpenedAt || sub.customerFirstViewedAt);
+                                  if (sentOk && opened) return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800" title="Customer has opened the proposal"><MailOpen className="w-2.5 h-2.5" />Opened</span>;
+                                  if (sentOk)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-800" title="Proposal email delivered, not opened yet"><Mail className="w-2.5 h-2.5" />Sent</span>;
+                                  if (failed)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={String(sub.customerError)}><Mail className="w-2.5 h-2.5" />Failed</span>;
                                   return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Customer hasn't received the proposal email yet"><Mail className="w-2.5 h-2.5" />Not Sent</span>;
                                 })()}
                               </div>
@@ -1138,18 +1143,31 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               <p className="text-xs text-gray-500">
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
-              {/* Email status pill — was the proposal email actually delivered to the customer? */}
+              {/* Email status pill — three-state progression. */}
               {!sub.isDraft && (() => {
-                const sentAt = sub.emailSentAt?.toDate?.();
-                const hasCustomerId = !!sub.customerEmailId;
-                const failed = !!sub.customerError;
-                if (sentAt && hasCustomerId && !failed) {
+                const sentAt    = sub.emailSentAt?.toDate?.();
+                const hasSent   = sentAt && !!sub.customerEmailId && !sub.customerError;
+                const failed    = !!sub.customerError;
+                // 'Opened' = customer either landed on the proposal page
+                // (strongest signal — they actually looked at it) OR Resend
+                // fired an email.opened event (denormalized by the webhook).
+                const openedAt  =
+                  sub.customerEmailOpenedAt?.toDate?.() ||
+                  sub.customerFirstViewedAt?.toDate?.() ||
+                  null;
+                if (hasSent && openedAt) {
                   return (
                     <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-emerald-50 border-emerald-200 text-emerald-800">
+                      <MailOpen className="w-3 h-3" />
+                      <span>Email opened · {openedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  );
+                }
+                if (hasSent) {
+                  return (
+                    <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-sky-50 border-sky-200 text-sky-800">
                       <Mail className="w-3 h-3" />
-                      <span>
-                        Proposal email sent · {sentAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
+                      <span>Email sent · {sentAt!.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
                   );
                 }
@@ -1157,14 +1175,14 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   return (
                     <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-rose-50 border-rose-200 text-rose-800" title={String(sub.customerError)}>
                       <Mail className="w-3 h-3" />
-                      <span>Proposal email failed</span>
+                      <span>Email failed</span>
                     </div>
                   );
                 }
                 return (
                   <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800">
                     <Mail className="w-3 h-3" />
-                    <span>Proposal email not sent yet</span>
+                    <span>Email not sent</span>
                   </div>
                 );
               })()}

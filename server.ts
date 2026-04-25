@@ -1029,6 +1029,25 @@ export async function createExpressApp() {
           },
         });
 
+      // Denormalize the latest event timestamps onto the submission doc
+      // so the admin CRM list / detail view can show 'Email Opened' etc.
+      // without scanning the activities subcollection per row.
+      const docPatch: Record<string, any> = {};
+      const now = FieldValue.serverTimestamp();
+      if (type === "email.delivered")  docPatch.customerEmailDeliveredAt = now;
+      if (type === "email.opened")     docPatch.customerEmailOpenedAt    = now;
+      if (type === "email.clicked")    docPatch.customerEmailClickedAt   = now;
+      if (type === "email.bounced")    docPatch.customerEmailBouncedAt   = now;
+      if (type === "email.complained") docPatch.customerEmailComplainedAt = now;
+      if (Object.keys(docPatch).length > 0) {
+        try {
+          await adminDb.collection("submissions").doc(submissionId).update(docPatch);
+        } catch (e) {
+          // Don't fail the whole webhook if denorm fails — activity is logged.
+          console.warn("[resend-webhook] denorm patch failed:", e);
+        }
+      }
+
       return res.status(200).json({ received: true });
     } catch (e: any) {
       console.error("[resend-webhook] error:", e);
