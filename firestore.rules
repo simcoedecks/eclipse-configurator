@@ -151,6 +151,9 @@ service cloud.firestore {
       // during the live debounced syncs AND during the draft → submitted
       // flip on Submit — otherwise the flip fails and the client
       // fallback creates a duplicate doc via addDoc.
+      // Note: `affectedKeys()` counts ANY key present in the write payload,
+      // even if the value is unchanged — so all keys in the spread, not
+      // just genuinely-changed ones, must appear in this list.
       let allowedFields = [
         'name', 'email', 'phone', 'address', 'city', 'heardAbout',
         'configuration', 'pricingBreakdown', 'summary',
@@ -160,7 +163,7 @@ service cloud.firestore {
         'pipedriveLeadId', 'isDuplicate', 'tags',
         // Fields written during the flip-to-submitted that previously
         // tripped this rule and caused duplicate submission docs:
-        'source', 'sourceRef', 'viewedAt', 'assignedTo',
+        'type', 'source', 'sourceRef', 'viewedAt', 'assignedTo',
         'dealerSlug', 'dealerName',
       ];
       let affectedKeys = data.diff(prevData).affectedKeys();
