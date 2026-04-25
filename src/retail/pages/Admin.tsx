@@ -905,10 +905,19 @@ export default function Admin() {
                             </td>
                             <td className="p-3 align-top whitespace-nowrap">
                               <div className="flex items-center gap-2 text-gray-600">
-                                {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-luxury-gold animate-pulse" />}
-                                <span className={isUnread ? 'font-semibold text-luxury-black' : ''}>
-                                  {sub.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) || '—'}
-                                </span>
+                                {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-luxury-gold animate-pulse mt-0.5 shrink-0" />}
+                                {(() => {
+                                  const d = sub.createdAt?.toDate?.();
+                                  if (!d) return <span>—</span>;
+                                  const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                  const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                  return (
+                                    <div className="leading-tight">
+                                      <div className={isUnread ? 'font-semibold text-luxury-black' : ''}>{dateStr}</div>
+                                      <div className="text-[10px] text-gray-400">{timeStr}</div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </td>
                             <td className="p-3 align-top">
