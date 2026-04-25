@@ -102,6 +102,9 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
     const map: Record<string, any[]> = {};
     PIPELINE_STAGES.forEach(s => { map[s.id] = []; });
     submissions.forEach(sub => {
+      // Drafts (in-progress / abandoned) live outside the sales pipeline —
+      // they show up in their own surface, not as kanban cards.
+      if (sub.isDraft) return;
       const stage = sub.pipelineStage || defaultStageFor(sub);
       if (!map[stage]) map[stage] = [];
       map[stage].push(sub);

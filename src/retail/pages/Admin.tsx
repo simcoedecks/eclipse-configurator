@@ -33,7 +33,7 @@ import UnusedUpgrades from '../components/admin/UnusedUpgrades';
 import TwoAngleViews from '../components/admin/TwoAngleViews';
 import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { calculateBasePrice } from '../../shared/lib/pricing';
-import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail, stepLabel } from '../../shared/lib/crm';
+import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail, stepLabel, submissionStatus, SUBMISSION_STATUS } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
 type TabKey = 'dashboard' | 'submissions' | 'custom-requests' | 'kanban' | 'map' | 'jobs' | 'contractors';
@@ -67,6 +67,7 @@ export default function Admin() {
   const [assignedFilter, setAssignedFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [emailFilter, setEmailFilter] = useState<'all' | 'opened' | 'sent' | 'not-sent' | 'failed'>('all');
+  const [submissionStatusFilter, setSubmissionStatusFilter] = useState<'all' | 'in-progress' | 'abandoned' | 'submitted'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
   const [composeMode, setComposeMode] = useState<'email' | 'sms' | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -183,7 +184,10 @@ export default function Admin() {
         else if (sub.assignedTo !== assignedFilter) return false;
       }
       if (sourceFilter !== 'all' && (sub.source || 'organic') !== sourceFilter) return false;
-      if (emailFilter !== 'all' && !sub.isDraft) {
+      // Email filter: only meaningful for submitted leads. Drafts never
+      // reached the email step, so they fall out of any non-"all" filter.
+      if (emailFilter !== 'all') {
+        if (sub.isDraft) return false;
         const sent = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
         const failed = !!sub.customerError;
         const opened = !!(sub.customerEmailOpenedAt || sub.customerFirstViewedAt);
@@ -191,10 +195,10 @@ export default function Admin() {
         if (emailFilter === 'sent'     && !(sent && !opened)) return false;
         if (emailFilter === 'failed'   && !failed) return false;
         if (emailFilter === 'not-sent' && (sent || failed)) return false;
-      } else if (emailFilter !== 'all' && sub.isDraft) {
-        // Drafts haven't reached the email step yet — only surface them
-        // under 'not-sent'.
-        if (emailFilter !== 'not-sent') return false;
+      }
+      // Submission Status filter: lifecycle of the form itself.
+      if (submissionStatusFilter !== 'all') {
+        if (submissionStatus(sub) !== submissionStatusFilter) return false;
       }
       if (dateFilter !== 'all' && sub.createdAt?.toDate) {
         const created = sub.createdAt.toDate();
@@ -255,15 +259,15 @@ export default function Admin() {
       });
     }
     return list;
-  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, emailFilter, columnSort]);
+  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, emailFilter, submissionStatusFilter, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
     setCustomDateFrom(''); setCustomDateTo('');
     setSortBy('date-desc'); setReadFilter('all'); setSignedFilter('all'); setStageFilter('all'); setTagFilter('all');
-    setAssignedFilter('all'); setSourceFilter('all'); setEmailFilter('all');
+    setAssignedFilter('all'); setSourceFilter('all'); setEmailFilter('all'); setSubmissionStatusFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all' || emailFilter !== 'all';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all' || emailFilter !== 'all' || submissionStatusFilter !== 'all';
 
   const unreadCustomCount = useMemo(() => customRequests.filter(s => !s.viewedAt).length, [customRequests]);
   const unreadCount = useMemo(() => standardSubmissions.filter(s => !s.viewedAt).length, [standardSubmissions]);
@@ -741,11 +745,17 @@ export default function Admin() {
                     <option value="all">All Sources</option>
                     {LEAD_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
-                  <select value={emailFilter} onChange={e => setEmailFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by proposal email status">
+                  <select value={submissionStatusFilter} onChange={e => setSubmissionStatusFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by what the customer did with the form">
+                    <option value="all">Submission: All</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="abandoned">Abandoned</option>
+                  </select>
+                  <select value={emailFilter} onChange={e => setEmailFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by proposal email status (only applies to submitted leads)">
                     <option value="all">Email: All</option>
                     <option value="opened">Email: Opened</option>
                     <option value="sent">Email: Sent (not opened)</option>
-                    <option value="not-sent">Email: Abandoned</option>
+                    <option value="not-sent">Email: Pending</option>
                     <option value="failed">Email: Failed</option>
                   </select>
                   <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
@@ -897,10 +907,21 @@ export default function Admin() {
                               </div>
                             </td>
                             <td className="p-3 align-top">
-                              <PipelineStageSelector submission={sub} />
+                              {/* Drafts (in-progress / abandoned) live outside the sales pipeline.
+                                  Show their submission-lifecycle badge only — no stage selector. */}
+                              {sub.isDraft ? (() => {
+                                const status = submissionStatus(sub);
+                                const info = SUBMISSION_STATUS[status];
+                                return (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${info.color}`} title={info.description}>
+                                    {info.label}
+                                  </span>
+                                );
+                              })() : <PipelineStageSelector submission={sub} />}
                               <div className="flex gap-1 mt-1 flex-wrap">
                                 {sub.acceptance?.signedAt && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800">Signed</span>}
                                 {sub.isDuplicate && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Dup</span>}
+                                {/* Email status badge — only meaningful for submitted leads. */}
                                 {!sub.isDraft && (() => {
                                   const sentOk = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
                                   const failed = !!sub.customerError;
@@ -908,7 +929,7 @@ export default function Admin() {
                                   if (sentOk && opened) return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800" title="Customer has opened the proposal"><MailOpen className="w-2.5 h-2.5" />Opened</span>;
                                   if (sentOk)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-800" title="Proposal email delivered, not opened yet"><Mail className="w-2.5 h-2.5" />Sent</span>;
                                   if (failed)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={String(sub.customerError)}><Mail className="w-2.5 h-2.5" />Failed</span>;
-                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Customer didn't reach the submit step — no proposal email was sent"><Mail className="w-2.5 h-2.5" />Abandoned</span>;
+                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Submitted but the proposal email hasn't fired yet"><Mail className="w-2.5 h-2.5" />Pending</span>;
                                 })()}
                               </div>
                             </td>
@@ -1143,49 +1164,55 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
               <p className="text-xs text-gray-500">
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
-              {/* Email status pill — three-state progression. */}
-              {!sub.isDraft && (() => {
-                const sentAt    = sub.emailSentAt?.toDate?.();
-                const hasSent   = sentAt && !!sub.customerEmailId && !sub.customerError;
-                const failed    = !!sub.customerError;
-                // 'Opened' = customer either landed on the proposal page
-                // (strongest signal — they actually looked at it) OR Resend
-                // fired an email.opened event (denormalized by the webhook).
-                const openedAt  =
-                  sub.customerEmailOpenedAt?.toDate?.() ||
-                  sub.customerFirstViewedAt?.toDate?.() ||
-                  null;
-                if (hasSent && openedAt) {
+              {/* Two clear pills: Submission status + Email status (when relevant). */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(() => {
+                  const status = submissionStatus(sub);
+                  const info = SUBMISSION_STATUS[status];
                   return (
-                    <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-emerald-50 border-emerald-200 text-emerald-800">
-                      <MailOpen className="w-3 h-3" />
-                      <span>Email opened · {openedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    </div>
+                    <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${info.color}`} title={info.description}>
+                      {status === 'submitted' ? <CheckCheck className="w-3 h-3" /> : <Loader2 className={`w-3 h-3 ${status === 'in-progress' ? 'animate-spin' : ''}`} />}
+                      <span>{info.label}</span>
+                    </span>
                   );
-                }
-                if (hasSent) {
+                })()}
+                {!sub.isDraft && (() => {
+                  const sentAt   = sub.emailSentAt?.toDate?.();
+                  const hasSent  = sentAt && !!sub.customerEmailId && !sub.customerError;
+                  const failed   = !!sub.customerError;
+                  const openedAt =
+                    sub.customerEmailOpenedAt?.toDate?.() ||
+                    sub.customerFirstViewedAt?.toDate?.() ||
+                    null;
+                  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  if (hasSent && openedAt) {
+                    return (
+                      <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-emerald-50 border-emerald-200 text-emerald-800">
+                        <MailOpen className="w-3 h-3" />Email opened · {fmt(openedAt)}
+                      </span>
+                    );
+                  }
+                  if (hasSent) {
+                    return (
+                      <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-sky-50 border-sky-200 text-sky-800">
+                        <Mail className="w-3 h-3" />Email sent · {fmt(sentAt!)}
+                      </span>
+                    );
+                  }
+                  if (failed) {
+                    return (
+                      <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-rose-50 border-rose-200 text-rose-800" title={String(sub.customerError)}>
+                        <Mail className="w-3 h-3" />Email failed
+                      </span>
+                    );
+                  }
                   return (
-                    <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-sky-50 border-sky-200 text-sky-800">
-                      <Mail className="w-3 h-3" />
-                      <span>Email sent · {sentAt!.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                    </div>
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800" title="Submitted but the proposal email hasn't fired yet">
+                      <Mail className="w-3 h-3" />Email pending
+                    </span>
                   );
-                }
-                if (failed) {
-                  return (
-                    <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-rose-50 border-rose-200 text-rose-800" title={String(sub.customerError)}>
-                      <Mail className="w-3 h-3" />
-                      <span>Email failed</span>
-                    </div>
-                  );
-                }
-                return (
-                  <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800" title="Customer didn't reach the submit step — no proposal email was sent">
-                    <Mail className="w-3 h-3" />
-                    <span>Abandoned (no email)</span>
-                  </div>
-                );
-              })()}
+                })()}
+              </div>
               {sub.customerViewCount > 0 && (() => {
                 const totalSec = sub.customerTotalViewSeconds || 0;
                 const mins = Math.floor(totalSec / 60);

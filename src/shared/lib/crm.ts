@@ -17,7 +17,9 @@ export interface PipelineStage {
 }
 
 export const PIPELINE_STAGES: PipelineStage[] = [
-  { id: 'in-progress',     label: 'Configuring',         color: 'bg-orange-100 text-orange-800 border-orange-300', accent: '#ea580c', description: 'Customer is mid-design in the configurator — may be abandoned.' },
+  // Note: 'in-progress' / 'configuring' is intentionally NOT in this list
+  // anymore. Drafts (still configuring or abandoned) live outside the
+  // sales pipeline — see submissionStatus() below for that lifecycle.
   { id: 'new',             label: 'New Lead',            color: 'bg-slate-100 text-slate-800 border-slate-300',    accent: '#64748b', description: 'Fresh submission, not yet contacted.' },
   { id: 'contacted',       label: 'Contacted',           color: 'bg-sky-100 text-sky-800 border-sky-300',          accent: '#0284c7', description: 'Initial outreach made — waiting for response.' },
   { id: 'cool-lead',       label: 'Nurture',             color: 'bg-cyan-100 text-cyan-800 border-cyan-300',       accent: '#0891b2', description: 'Long-term — follow up later.' },
@@ -33,10 +35,69 @@ export const PIPELINE_STAGES: PipelineStage[] = [
  *  on older submission docs. We map them to a current stage for display
  *  so the CRM keeps rendering them sensibly. */
 const STAGE_ALIASES: Record<string, string> = {
-  // Old 'Declined' (a customer passing on the proposal) is now folded into
-  // the broader 'Lost' terminal stage.
+  // 'Declined' (customer passed on the proposal) folded into 'Lost'.
   declined: 'lost',
+  // 'In Progress' / 'Configuring' is no longer a pipeline stage — drafts
+  // live outside the pipeline now. Old data that had this stage set
+  // displays under 'New Lead' once the draft is finalized.
+  'in-progress': 'new',
 };
+
+// ─── Submission Status ─────────────────────────────────────────────────────
+// Lifecycle of the form itself, separate from the sales pipeline. Every
+// submission is in exactly one of these states based on its data.
+
+export type SubmissionStatus = 'in-progress' | 'abandoned' | 'submitted';
+
+export interface SubmissionStatusInfo {
+  id: SubmissionStatus;
+  label: string;
+  /** Tailwind classes for badges */
+  color: string;
+  /** Hex for charts */
+  accent: string;
+  description: string;
+}
+
+export const SUBMISSION_STATUS: Record<SubmissionStatus, SubmissionStatusInfo> = {
+  'in-progress': {
+    id: 'in-progress',
+    label: 'In Progress',
+    color: 'bg-orange-100 text-orange-800 border-orange-300',
+    accent: '#ea580c',
+    description: 'Customer is currently designing — recent activity, not yet submitted.',
+  },
+  'abandoned': {
+    id: 'abandoned',
+    label: 'Abandoned',
+    color: 'bg-rose-100 text-rose-800 border-rose-300',
+    accent: '#e11d48',
+    description: 'Started the configurator but quit before clicking Submit (idle 20+ minutes).',
+  },
+  'submitted': {
+    id: 'submitted',
+    label: 'Submitted',
+    color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    accent: '#059669',
+    description: 'Customer completed the form and clicked Submit.',
+  },
+};
+
+/** Threshold (minutes) after which a draft is considered abandoned. */
+export const ABANDONED_AFTER_MIN = 20;
+
+/** Compute the submission lifecycle status from the doc's data. */
+export function submissionStatus(sub: any): SubmissionStatus {
+  if (!sub?.isDraft) return 'submitted';
+  const last =
+    sub.lastStepAt?.toDate?.() ||
+    sub.updatedAt?.toDate?.() ||
+    sub.createdAt?.toDate?.() ||
+    null;
+  if (!last) return 'in-progress';
+  const idleMin = (Date.now() - last.getTime()) / 60000;
+  return idleMin >= ABANDONED_AFTER_MIN ? 'abandoned' : 'in-progress';
+}
 
 export function stageById(id: string | undefined | null): PipelineStage | undefined {
   if (!id) return undefined;
@@ -47,13 +108,12 @@ export function stageById(id: string | undefined | null): PipelineStage | undefi
   return undefined;
 }
 
-/** Infer the default pipeline stage for a submission if not explicitly set. */
+/** Infer the default pipeline stage for a submission if not explicitly set.
+ *  Drafts no longer have a pipeline stage — they live under submissionStatus
+ *  instead — but we return 'new' as a defensive fallback so any UI that
+ *  insists on a stage value still has something to render. */
 export function defaultStageFor(sub: any): string {
-  // Drafts always belong in the Configuring column, regardless of what
-  // pipelineStage the client wrote (defensive — if the client ever
-  // forgets to set the stage or a rule rejects the field).
-  if (sub.isDraft) return 'in-progress';
-  if (sub.acceptance?.signedAt) return 'accepted';
+  if (sub?.acceptance?.signedAt) return 'accepted';
   return 'new';
 }
 
