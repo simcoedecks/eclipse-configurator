@@ -66,7 +66,7 @@ export default function Admin() {
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [assignedFilter, setAssignedFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [emailFilter, setEmailFilter] = useState<'all' | 'opened' | 'sent' | 'not-sent' | 'failed'>('all');
+  const [emailFilter, setEmailFilter] = useState<'all' | 'opened' | 'sent' | 'not-sent'>('all');
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState<'all' | 'in-progress' | 'abandoned' | 'submitted'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
   const [composeMode, setComposeMode] = useState<'email' | 'sms' | null>(null);
@@ -188,13 +188,11 @@ export default function Admin() {
       // reached the email step, so they fall out of any non-"all" filter.
       if (emailFilter !== 'all') {
         if (sub.isDraft) return false;
-        const sent = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
-        const failed = !!sub.customerError;
+        const sent = !!(sub.emailSentAt && sub.customerEmailId && !sub.customerError);
         const opened = !!(sub.customerEmailOpenedAt || sub.customerFirstViewedAt);
         if (emailFilter === 'opened'   && !(sent && opened)) return false;
         if (emailFilter === 'sent'     && !(sent && !opened)) return false;
-        if (emailFilter === 'failed'   && !failed) return false;
-        if (emailFilter === 'not-sent' && (sent || failed)) return false;
+        if (emailFilter === 'not-sent' && sent) return false;
       }
       // Submission Status filter: lifecycle of the form itself.
       if (submissionStatusFilter !== 'all') {
@@ -755,8 +753,7 @@ export default function Admin() {
                     <option value="all">Email: All</option>
                     <option value="opened">Email: Opened</option>
                     <option value="sent">Email: Sent (not opened)</option>
-                    <option value="not-sent">Email: Pending</option>
-                    <option value="failed">Email: Failed</option>
+                    <option value="not-sent">Email: Not Sent</option>
                   </select>
                   <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
                     <option value="all">Read & Unread</option>
@@ -921,15 +918,14 @@ export default function Admin() {
                               <div className="flex gap-1 mt-1 flex-wrap">
                                 {sub.acceptance?.signedAt && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800">Signed</span>}
                                 {sub.isDuplicate && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Dup</span>}
-                                {/* Email status badge — only meaningful for submitted leads. */}
+                                {/* Email status badge — Sent / Opened / Not Sent. */}
                                 {!sub.isDraft && (() => {
-                                  const sentOk = sub.emailSentAt && sub.customerEmailId && !sub.customerError;
-                                  const failed = !!sub.customerError;
+                                  const sentOk = !!(sub.emailSentAt && sub.customerEmailId && !sub.customerError);
                                   const opened = !!(sub.customerEmailOpenedAt || sub.customerFirstViewedAt);
                                   if (sentOk && opened) return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800" title="Customer has opened the proposal"><MailOpen className="w-2.5 h-2.5" />Opened</span>;
                                   if (sentOk)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-800" title="Proposal email delivered, not opened yet"><Mail className="w-2.5 h-2.5" />Sent</span>;
-                                  if (failed)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={String(sub.customerError)}><Mail className="w-2.5 h-2.5" />Failed</span>;
-                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Submitted but the proposal email hasn't fired yet"><Mail className="w-2.5 h-2.5" />Pending</span>;
+                                  const reason = sub.customerError ? `Send failed: ${sub.customerError}` : 'No record of an email being sent';
+                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={reason}><Mail className="w-2.5 h-2.5" />Not Sent</span>;
                                 })()}
                               </div>
                             </td>
@@ -1178,8 +1174,7 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                 })()}
                 {!sub.isDraft && (() => {
                   const sentAt   = sub.emailSentAt?.toDate?.();
-                  const hasSent  = sentAt && !!sub.customerEmailId && !sub.customerError;
-                  const failed   = !!sub.customerError;
+                  const hasSent  = !!(sentAt && sub.customerEmailId && !sub.customerError);
                   const openedAt =
                     sub.customerEmailOpenedAt?.toDate?.() ||
                     sub.customerFirstViewedAt?.toDate?.() ||
@@ -1199,16 +1194,13 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                       </span>
                     );
                   }
-                  if (failed) {
-                    return (
-                      <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-rose-50 border-rose-200 text-rose-800" title={String(sub.customerError)}>
-                        <Mail className="w-3 h-3" />Email failed
-                      </span>
-                    );
-                  }
+                  // Anything else (failed, pending, never sent) collapses
+                  // into a single 'Not Sent' state — the customer didn't
+                  // receive the email regardless of the underlying reason.
+                  const reason = sub.customerError ? `Send failed: ${sub.customerError}` : 'No record of an email being sent';
                   return (
-                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800" title="Submitted but the proposal email hasn't fired yet">
-                      <Mail className="w-3 h-3" />Email pending
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-rose-50 border-rose-200 text-rose-800" title={reason}>
+                      <Mail className="w-3 h-3" />Email not sent
                     </span>
                   );
                 })()}
