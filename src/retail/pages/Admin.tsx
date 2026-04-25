@@ -745,7 +745,7 @@ export default function Admin() {
                     <option value="all">Email: All</option>
                     <option value="opened">Email: Opened</option>
                     <option value="sent">Email: Sent (not opened)</option>
-                    <option value="not-sent">Email: Not Sent</option>
+                    <option value="not-sent">Email: Abandoned</option>
                     <option value="failed">Email: Failed</option>
                   </select>
                   <select value={readFilter} onChange={e => setReadFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
@@ -908,7 +908,7 @@ export default function Admin() {
                                   if (sentOk && opened) return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800" title="Customer has opened the proposal"><MailOpen className="w-2.5 h-2.5" />Opened</span>;
                                   if (sentOk)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-800" title="Proposal email delivered, not opened yet"><Mail className="w-2.5 h-2.5" />Sent</span>;
                                   if (failed)           return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-rose-100 text-rose-800" title={String(sub.customerError)}><Mail className="w-2.5 h-2.5" />Failed</span>;
-                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Customer hasn't received the proposal email yet"><Mail className="w-2.5 h-2.5" />Not Sent</span>;
+                                  return <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800" title="Customer didn't reach the submit step — no proposal email was sent"><Mail className="w-2.5 h-2.5" />Abandoned</span>;
                                 })()}
                               </div>
                             </td>
@@ -1180,9 +1180,9 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   );
                 }
                 return (
-                  <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800">
+                  <div className="mt-2 mr-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11px] font-semibold bg-amber-50 border-amber-200 text-amber-800" title="Customer didn't reach the submit step — no proposal email was sent">
                     <Mail className="w-3 h-3" />
-                    <span>Email not sent</span>
+                    <span>Abandoned (no email)</span>
                   </div>
                 );
               })()}
