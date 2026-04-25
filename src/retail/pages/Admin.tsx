@@ -1248,31 +1248,32 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, contractors }
                   }
                 };
                 const currentStage = sub.pipelineStage || defaultStageFor(sub);
+                // 'declined' is a deprecated alias for 'lost' — treat both as lost.
                 const isAccepted = currentStage === 'accepted';
-                const isDeclined = currentStage === 'declined';
+                const isLost = currentStage === 'lost' || currentStage === 'declined';
                 const isCool = currentStage === 'cool-lead';
                 return (
                   <div className="inline-flex items-center gap-1 pr-2 border-r border-slate-200">
                     <button
                       onClick={() => setStage('accepted')}
                       className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${isAccepted ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500'}`}
-                      title="Mark as accepted"
+                      title="Mark as signed"
                     >
-                      ✓ Accept
+                      ✓ Sign
                     </button>
                     <button
-                      onClick={() => setStage('declined')}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${isDeclined ? 'bg-rose-500 text-white border-rose-500' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500'}`}
-                      title="Mark as declined"
+                      onClick={() => setStage('lost')}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${isLost ? 'bg-rose-500 text-white border-rose-500' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500'}`}
+                      title="Mark as lost"
                     >
-                      ✕ Decline
+                      ✕ Lost
                     </button>
                     <button
                       onClick={() => setStage('cool-lead')}
                       className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${isCool ? 'bg-cyan-500 text-white border-cyan-500' : 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-500 hover:text-white hover:border-cyan-500'}`}
-                      title="Mark as cool lead (deprioritize, follow up later)"
+                      title="Mark for nurture (long-term follow-up)"
                     >
-                      ❄ Cool Lead
+                      ❄ Nurture
                     </button>
                   </div>
                 );
