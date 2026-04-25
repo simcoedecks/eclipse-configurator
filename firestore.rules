@@ -146,6 +146,11 @@ service cloud.firestore {
     // Once the customer clicks Submit, isDraft flips to false in the same
     // update and future updates go through the admin-only path.
     function isValidDraftUpdate(data, prevData) {
+      // Fields that may be touched while a doc is still isDraft=true.
+      // This list MUST stay in sync with everything Home.tsx writes both
+      // during the live debounced syncs AND during the draft → submitted
+      // flip on Submit — otherwise the flip fails and the client
+      // fallback creates a duplicate doc via addDoc.
       let allowedFields = [
         'name', 'email', 'phone', 'address', 'city', 'heardAbout',
         'configuration', 'pricingBreakdown', 'summary',
@@ -153,6 +158,10 @@ service cloud.firestore {
         'currentStep', 'lastStepAt', 'updatedAt', 'submittedAt',
         'pipelineStage', 'isDraft', 'contractorId', 'jobNumber',
         'pipedriveLeadId', 'isDuplicate', 'tags',
+        // Fields written during the flip-to-submitted that previously
+        // tripped this rule and caused duplicate submission docs:
+        'source', 'sourceRef', 'viewedAt', 'assignedTo',
+        'dealerSlug', 'dealerName',
       ];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return prevData.get('isDraft', false) == true
