@@ -1012,7 +1012,34 @@ export default function Admin() {
                               </div>
                             </td>
                             <td className="p-3 align-top" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex gap-1">
+                              <div className="flex gap-1 items-center">
+                                {/* Quick action: in New Leads tab, give a one-click 'Mark Contacted'
+                                    button so admins can process leads without opening the detail panel.
+                                    Drafts can also be skipped: 'Move to Pipeline' moves them straight
+                                    to Contacted (treats the abandoned config as a real lead). */}
+                                {activeTab === 'submissions' && (() => {
+                                  const markContacted = async (e: any) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await setDoc(doc(db, 'submissions', sub.id), { pipelineStage: 'contacted' }, { merge: true });
+                                      try { await logActivity(sub.id, 'stage_changed', `Moved to Pipeline (Contacted)`, { from: 'new', to: 'contacted', via: 'quick-action' }); } catch {}
+                                      toast.success(`${sub.name || 'Lead'} moved to Pipeline → Contacted`);
+                                    } catch (err: any) {
+                                      console.error('mark-contacted failed', err);
+                                      toast.error('Failed to update stage');
+                                    }
+                                  };
+                                  return (
+                                    <button
+                                      onClick={markContacted}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-500 hover:text-white hover:border-sky-500 text-[11px] font-semibold whitespace-nowrap"
+                                      title="Move this lead into the Pipeline as 'Contacted'"
+                                    >
+                                      <CheckCheck className="w-3 h-3" />
+                                      Contacted
+                                    </button>
+                                  );
+                                })()}
                                 {sub.pdfUrl && (
                                   <a href={sub.pdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-luxury-gold/10 text-luxury-gold hover:bg-luxury-gold hover:text-white text-[11px] font-semibold border border-luxury-gold/20" title="View original PDF">
                                     <FileText className="w-3 h-3" />
