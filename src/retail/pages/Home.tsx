@@ -3558,9 +3558,15 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             }
                             setCornerPostOffsets(out);
                           };
-                          const nudgeX = (delta: number) => writeOffset(xInset + delta, zInset);
-                          const nudgeZ = (delta: number) => writeOffset(xInset, zInset + delta);
+                          // Either-or axis constraint: a corner post must
+                          // remain under a beam, so it can move along the
+                          // X axis OR the Z axis but not both. Nudging one
+                          // axis silently clears the other.
+                          const nudgeX = (delta: number) => writeOffset(xInset + delta, 0);
+                          const nudgeZ = (delta: number) => writeOffset(0, zInset + delta);
                           const reset = () => writeOffset(0, 0);
+                          const xLocked = zInset > 0; // can't nudge X while Z is active
+                          const zLocked = xInset > 0; // can't nudge Z while X is active
                           const readout = (xInset === 0 && zInset === 0)
                             ? 'Default'
                             : [xInset > 0 && `${xInset}' ${xInwardLabel}`, zInset > 0 && `${zInset}' ${zInwardLabel}`].filter(Boolean).join(' · ');
@@ -3580,24 +3586,24 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                               </div>
                               {isSelected && (
                                 <div className="pt-1 space-y-1.5" onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex items-center gap-1">
-                                    <button type="button" onClick={() => nudgeX(-1)} disabled={xInset <= 0}
+                                  <div className={`flex items-center gap-1 ${xLocked ? 'opacity-40' : ''}`} title={xLocked ? 'Reset front/back inset to use this axis' : undefined}>
+                                    <button type="button" onClick={() => nudgeX(-1)} disabled={xLocked || xInset <= 0}
                                       className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
                                       −1'
                                     </button>
                                     <span className={`flex-1 text-center text-[10px] font-bold ${isDark ? 'text-white/70' : 'text-luxury-black/70'}`}>{xInset}' {xInwardLabel}</span>
-                                    <button type="button" onClick={() => nudgeX(1)} disabled={xInset >= maxX}
+                                    <button type="button" onClick={() => nudgeX(1)} disabled={xLocked || xInset >= maxX}
                                       className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
                                       +1'
                                     </button>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <button type="button" onClick={() => nudgeZ(-1)} disabled={zInset <= 0}
+                                  <div className={`flex items-center gap-1 ${zLocked ? 'opacity-40' : ''}`} title={zLocked ? 'Reset left/right inset to use this axis' : undefined}>
+                                    <button type="button" onClick={() => nudgeZ(-1)} disabled={zLocked || zInset <= 0}
                                       className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
                                       −1'
                                     </button>
                                     <span className={`flex-1 text-center text-[10px] font-bold ${isDark ? 'text-white/70' : 'text-luxury-black/70'}`}>{zInset}' {zInwardLabel}</span>
-                                    <button type="button" onClick={() => nudgeZ(1)} disabled={zInset >= maxZ}
+                                    <button type="button" onClick={() => nudgeZ(1)} disabled={zLocked || zInset >= maxZ}
                                       className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
                                       +1'
                                     </button>
@@ -3615,7 +3621,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         })}
                       </div>
                       <p className={`text-[9px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                        Click a corner, then inset it inward along either axis. The beam stays at the pergola edge — the post slides under it. Max inset ⅓ of each edge.
+                        Click a corner, then inset along ONE axis only — left/right OR front/back. The post must stay under a beam, so the two axes are mutually exclusive. Reset to switch axes. Max inset ⅓ of each edge.
                       </p>
                     </div>
                   );
