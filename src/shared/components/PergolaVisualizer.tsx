@@ -152,10 +152,15 @@ interface PergolaVisualizerProps {
    *  doesn't structurally require one. */
   forceMiddleXPost?: boolean;
   forceMiddleZPost?: boolean;
-  /** Admin-only: free-standing decorative posts inside the pergola.
-   *  Each has x (feet from left edge) and z (feet from back edge).
-   *  Pure visual — they don't carry a beam or split the louver grid. */
-  decorativePosts?: Array<{ id: string; x: number; z: number }>;
+  /** Admin-only: extra vertical supports beneath a chosen perimeter beam.
+   *  side  = which perimeter beam (back/front/left/right)
+   *  position = feet along that beam (0 = left/back end → max = right/front end)
+   *  They don't add a new beam or split the louver grid. */
+  decorativePosts?: Array<{
+    id: string;
+    side: 'back' | 'front' | 'left' | 'right';
+    position: number;
+  }>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -836,13 +841,30 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
         </React.Fragment>
       ))}
 
-      {/* Decorative Posts — admin-added free-standing supports inside the
-          pergola. They share the structural post profile but don't connect
-          to a beam. Coordinates are in feet from the back-left corner:
-          x = distance from left edge, z = distance from back edge. */}
+      {/* Decorative Posts — admin-added supports that sit UNDER one of the
+          perimeter beams. We compute the world (x, z) from the side and
+          position-along-beam, then drop the post-size pillar there. */}
       {decorativePosts && decorativePosts.length > 0 && decorativePosts.map((p) => {
-        const xWorld = p.x - width / 2;
-        const zWorld = p.z - depth / 2;
+        // Inset post centerline so it sits inside the perimeter beam line,
+        // matching the corner posts (which are inset by postSize/2 from
+        // the very edge of the pergola).
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const inset = postSize / 2;
+        let xWorld = 0, zWorld = 0;
+        if (p.side === 'back') {
+          xWorld = p.position - halfW;     // along width
+          zWorld = -halfD + inset;         // hugging back edge
+        } else if (p.side === 'front') {
+          xWorld = p.position - halfW;
+          zWorld =  halfD - inset;
+        } else if (p.side === 'left') {
+          xWorld = -halfW + inset;
+          zWorld = p.position - halfD;     // along depth
+        } else if (p.side === 'right') {
+          xWorld =  halfW - inset;
+          zWorld = p.position - halfD;
+        }
         // Stop slightly under the beam plane so the post doesn't visually
         // pierce the louvers (postSize/2 worth of clearance below).
         const postH = Math.max(0.5, height - postSize);

@@ -505,11 +505,18 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   // Admin: which middle posts are removed entirely. Keys are `${axis}-${index}`.
   // When a post is removed, the adjacent bays merge into one for rendering.
   const [removedMiddlePosts, setRemovedMiddlePosts] = useState<Set<string>>(new Set());
-  // Admin: decorative posts — vertical supports inside the pergola that DON'T
-  // add a beam or split the louver section. Used for visual appeal or extra
-  // load-bearing without disturbing the structural grid. x/z are in feet from
-  // the back-left corner; rendering uses the same column profile as structural posts.
-  const [decorativePosts, setDecorativePosts] = useState<Array<{ id: string; x: number; z: number }>>([]);
+  // Admin: decorative posts — extra vertical supports placed UNDER a chosen
+  // perimeter beam (front / back / left / right). They don't split the
+  // louver grid or add another beam — they just sit beneath the existing
+  // perimeter beam at a chosen position along it. Used for additional
+  // load-bearing or visual symmetry beyond the four corner posts.
+  //   side:     which perimeter beam the post sits under
+  //   position: feet along that beam (0 = left/back end → max = right/front end)
+  const [decorativePosts, setDecorativePosts] = useState<Array<{
+    id: string;
+    side: 'back' | 'front' | 'left' | 'right';
+    position: number;
+  }>>([]);
   const MAX_DECORATIVE_POSTS = 2;
   const [selectedAccessories, setSelectedAccessories] = useState<Set<string>>(new Set());
   const [accessoryQuantities, setAccessoryQuantities] = useState<Record<string, number>>({});
@@ -750,7 +757,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         if (Array.isArray(cfg.removedMiddlePosts)) setRemovedMiddlePosts(new Set(cfg.removedMiddlePosts));
         if (Array.isArray(cfg.decorativePosts)) {
           setDecorativePosts(cfg.decorativePosts.filter((p: any) =>
-            p && typeof p.x === 'number' && typeof p.z === 'number'
+            p && typeof p.position === 'number' &&
+            ['back', 'front', 'left', 'right'].includes(p.side)
           ).slice(0, 2));
         }
         if (cfg.cantileverInsets) setCantileverInsets(cfg.cantileverInsets);
@@ -3198,9 +3206,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   </div>
                 )}
 
-                {/* Decorative Posts — admin-only. Vertical supports inside
-                    the pergola that DON'T add a beam or split the louver
-                    section. Pure visual / extra-load-bearing element. */}
+                {/* Decorative Posts — admin-only. Extra vertical supports
+                    that sit UNDER a chosen perimeter beam (back/front/left/
+                    right). They don't split the louver grid or add a new
+                    beam — they just slide along the existing perimeter
+                    beam, between the corner posts. */}
                 {adminMode && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -3211,13 +3221,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       <button
                         type="button"
                         onClick={() => {
-                          // Default position: roughly centered, but offset
-                          // for a 2nd post so they don't overlap.
                           const idx = decorativePosts.length;
-                          const cx = +(width / 2 + (idx === 1 ? 2 : 0)).toFixed(1);
-                          const cz = +(depth / 2 + (idx === 1 ? 2 : 0)).toFixed(1);
+                          // Default: under the back beam, centered along width.
                           const id = `dec-${Date.now().toString(36)}-${idx}`;
-                          setDecorativePosts([...decorativePosts, { id, x: cx, z: cz }]);
+                          setDecorativePosts([
+                            ...decorativePosts,
+                            { id, side: 'back', position: +(width / 2).toFixed(1) },
+                          ]);
                         }}
                         className={`w-full rounded-lg border-dashed border px-3 py-2 text-left transition-all ${isDark ? 'border-white/15 hover:border-luxury-gold/50 bg-white/[0.02]' : 'border-slate-300 hover:border-luxury-gold bg-luxury-paper/40'}`}
                       >
@@ -3226,88 +3236,95 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                           <span className="text-[10px] uppercase tracking-widest font-bold text-luxury-black dark:text-white">Add Decorative Post</span>
                         </div>
                         <p className={`text-[9px] italic mt-1 ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                          Stands inside the pergola without a beam. Slide freely on either axis. Max {MAX_DECORATIVE_POSTS}.
+                          Sits under a perimeter beam. Pick the side and slide along it. Max {MAX_DECORATIVE_POSTS}.
                         </p>
                       </button>
                     )}
                     <div className="space-y-1.5">
                       {decorativePosts.map((p, idx) => {
+                        // Position runs along width for back/front beams,
+                        // along depth for left/right beams. Keep 1' clearance
+                        // from the corners so the post doesn't overlap them.
+                        const isAlongWidth = p.side === 'back' || p.side === 'front';
                         const minPos = 1;
-                        const maxX = Math.max(1, width - 1);
-                        const maxZ = Math.max(1, depth - 1);
-                        const updatePost = (next: { x?: number; z?: number }) => {
+                        const maxPos = Math.max(1, (isAlongWidth ? width : depth) - 1);
+                        const startLabel = isAlongWidth ? 'Left' : 'Back';
+                        const endLabel = isAlongWidth ? 'Right' : 'Front';
+                        const updatePost = (patch: Partial<typeof p>) => {
                           setDecorativePosts(decorativePosts.map(dp =>
-                            dp.id !== p.id ? dp : { ...dp, ...next }
+                            dp.id !== p.id ? dp : { ...dp, ...patch }
                           ));
                         };
                         const removePost = () => {
                           setDecorativePosts(decorativePosts.filter(dp => dp.id !== p.id));
                         };
-                        const nudgeX = (delta: number) => {
-                          const nx = Math.max(minPos, Math.min(maxX, +(p.x + delta).toFixed(1)));
-                          updatePost({ x: nx });
+                        const setSide = (side: typeof p.side) => {
+                          const nextMaxPos = (side === 'back' || side === 'front')
+                            ? Math.max(1, width - 1)
+                            : Math.max(1, depth - 1);
+                          // Clamp position to the new beam length, default to centered.
+                          const newPos = Math.min(nextMaxPos, Math.max(minPos,
+                            (side === 'back' || side === 'front') ? +(width / 2).toFixed(1) : +(depth / 2).toFixed(1)
+                          ));
+                          updatePost({ side, position: newPos });
                         };
-                        const nudgeZ = (delta: number) => {
-                          const nz = Math.max(minPos, Math.min(maxZ, +(p.z + delta).toFixed(1)));
-                          updatePost({ z: nz });
+                        const nudge = (delta: number) => {
+                          const np = Math.max(minPos, Math.min(maxPos, +(p.position + delta).toFixed(1)));
+                          updatePost({ position: np });
                         };
                         return (
                           <div
                             key={p.id}
                             className={`rounded-lg border px-3 py-2 ${isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-luxury-paper/40'}`}
                           >
-                            <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center justify-between mb-2">
                               <span className={`text-[10px] uppercase tracking-widest font-bold ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
                                 Decorative Post #{idx + 1}
                               </span>
                               <span className="text-[11px] font-serif text-luxury-gold">
-                                {p.x.toFixed(1)}' from L · {p.z.toFixed(1)}' from B
+                                {p.side[0].toUpperCase() + p.side.slice(1)} beam · {p.position.toFixed(1)}' from {startLabel}
                               </span>
                             </div>
-                            <div className="space-y-1">
-                              {/* Left/Right axis: x increases left→right */}
-                              <div className="flex items-center gap-1">
-                                <button type="button" onClick={() => nudgeX(-1)} disabled={p.x - 1 < minPos}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  ◀ Left 1'
+                            {/* Beam side picker */}
+                            <div className="grid grid-cols-4 gap-1 mb-2">
+                              {(['back', 'front', 'left', 'right'] as const).map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => setSide(s)}
+                                  className={`py-1.5 rounded text-[9px] font-bold uppercase tracking-widest border transition-colors ${
+                                    p.side === s
+                                      ? 'bg-luxury-gold text-luxury-black border-luxury-gold'
+                                      : (isDark ? 'bg-white/[0.03] text-white/50 border-white/10 hover:text-white' : 'bg-white text-luxury-black/50 border-slate-200 hover:text-luxury-black')
+                                  }`}
+                                >
+                                  {s[0].toUpperCase() + s.slice(1)}
                                 </button>
-                                <button type="button" onClick={() => nudgeX(-0.5)} disabled={p.x - 0.5 < minPos}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  ◁ 6″
-                                </button>
-                                <button type="button" onClick={() => nudgeX(0.5)} disabled={p.x + 0.5 > maxX}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  6″ ▷
-                                </button>
-                                <button type="button" onClick={() => nudgeX(1)} disabled={p.x + 1 > maxX}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  1' Right ▶
-                                </button>
-                              </div>
-                              {/* Back/Front axis: z increases back→front */}
-                              <div className="flex items-center gap-1">
-                                <button type="button" onClick={() => nudgeZ(-1)} disabled={p.z - 1 < minPos}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  ◀ Back 1'
-                                </button>
-                                <button type="button" onClick={() => nudgeZ(-0.5)} disabled={p.z - 0.5 < minPos}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  ◁ 6″
-                                </button>
-                                <button type="button" onClick={() => nudgeZ(0.5)} disabled={p.z + 0.5 > maxZ}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  6″ ▷
-                                </button>
-                                <button type="button" onClick={() => nudgeZ(1)} disabled={p.z + 1 > maxZ}
-                                  className="flex-1 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
-                                  1' Front ▶
-                                </button>
-                              </div>
-                              <button type="button" onClick={removePost}
-                                className="w-full mt-1.5 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20">
-                                ✕ Remove
+                              ))}
+                            </div>
+                            {/* Position nudgers — slide along the chosen beam */}
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => nudge(-1)} disabled={p.position - 1 < minPos}
+                                className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                ◀ {startLabel} 1'
+                              </button>
+                              <button type="button" onClick={() => nudge(-0.5)} disabled={p.position - 0.5 < minPos}
+                                className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                ◁ 6″
+                              </button>
+                              <button type="button" onClick={() => nudge(0.5)} disabled={p.position + 0.5 > maxPos}
+                                className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                6″ ▷
+                              </button>
+                              <button type="button" onClick={() => nudge(1)} disabled={p.position + 1 > maxPos}
+                                className="flex-1 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold disabled:opacity-30 disabled:cursor-not-allowed">
+                                1' {endLabel} ▶
                               </button>
                             </div>
+                            <button type="button" onClick={removePost}
+                              className="w-full mt-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500/20">
+                              ✕ Remove
+                            </button>
                           </div>
                         );
                       })}
