@@ -213,6 +213,20 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
     return d.toDateString() === now.toDateString();
   });
 
+  // Submissions where the proposal email never reached the customer.
+  // Surfaces in 'Your Focus' as a high-priority item until admin either
+  // resends successfully OR explicitly dismisses (by clearing
+  // customerError manually).
+  const failedEmails = useMemo(() => {
+    return submissions
+      .filter(s => !s.isDraft && !!s.customerError)
+      .sort((a, b) => {
+        const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
+        const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
+        return bd - ad;
+      });
+  }, [submissions]);
+
   const hotLeads = useMemo(() => {
     return submissions
       .filter(s => !s.acceptance?.signedAt && (s.pipelineStage === 'proposal-sent' || s.pipelineStage === 'site-visit' || s.tags?.includes('Hot Lead')))
@@ -544,7 +558,7 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
             <h2 className="font-serif text-lg text-luxury-black">Your Focus</h2>
           </div>
 
-          {overdueTasks.length === 0 && todayTasks.length === 0 ? (
+          {failedEmails.length === 0 && overdueTasks.length === 0 && todayTasks.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
                 <FileCheck2 className="w-6 h-6 text-emerald-500" />
@@ -554,6 +568,43 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Email-failure alerts come first — these are submissions
+                  where the customer never received their proposal and the
+                  admin needs to resend manually. Stays visible until the
+                  underlying customerError field is cleared (which happens
+                  automatically when a successful resend overwrites the
+                  emailSentAt + customerEmailId fields). */}
+              {failedEmails.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-rose-600 mb-1.5">
+                    <AlertCircle className="w-3 h-3" />
+                    Email Failed ({failedEmails.length})
+                  </div>
+                  <ul className="space-y-1">
+                    {failedEmails.slice(0, 4).map(s => (
+                      <li key={s.id}>
+                        <button
+                          onClick={() => onOpenSubmission(s)}
+                          className="w-full text-left p-2 bg-rose-50 border border-rose-200 rounded-lg hover:border-rose-400 transition-colors"
+                        >
+                          <p className="text-sm font-semibold text-luxury-black truncate">{s.name || s.email || s.id.slice(0, 8)}</p>
+                          <p className="text-[11px] text-rose-600 truncate" title={String(s.customerError)}>
+                            {String(s.customerError).slice(0, 80)}{String(s.customerError).length > 80 ? '…' : ''}
+                          </p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            Submitted {relativeTime(s.createdAt?.toDate?.())} — needs resend
+                          </p>
+                        </button>
+                      </li>
+                    ))}
+                    {failedEmails.length > 4 && (
+                      <li className="text-[11px] text-gray-500 italic px-2 pt-1">
+                        +{failedEmails.length - 4} more — open the submissions list to see all
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
               {overdueTasks.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-rose-600 mb-1.5">
