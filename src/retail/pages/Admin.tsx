@@ -294,6 +294,32 @@ export default function Admin() {
     [standardSubmissions]
   );
 
+  // Map every draft to the submitted lead that 'replaces' it (same email,
+  // submitted AFTER the draft). Used to (1) flag draft rows with a 'Customer
+  // later submitted' tag, (2) surface the bulk-cleanup banner.
+  const submittedTwinByDraftId = useMemo(() => {
+    const submittedByEmail = new Map<string, any>();
+    for (const s of standardSubmissions) {
+      if (s.isDraft || !s.email) continue;
+      const e = String(s.email).toLowerCase().trim();
+      const cur = submittedByEmail.get(e);
+      const sCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const curCreated = cur?.createdAt?.toDate?.()?.getTime?.() || 0;
+      if (!cur || sCreated > curCreated) submittedByEmail.set(e, s);
+    }
+    const out = new Map<string, any>();
+    for (const s of standardSubmissions) {
+      if (!s.isDraft || !s.email) continue;
+      const e = String(s.email).toLowerCase().trim();
+      const submitted = submittedByEmail.get(e);
+      if (!submitted) continue;
+      const dCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const sCreated = submitted.createdAt?.toDate?.()?.getTime?.() || 0;
+      if (dCreated < sCreated) out.set(s.id, submitted);
+    }
+    return out;
+  }, [standardSubmissions]);
+
   // Find drafts that are duplicates of a more recent submitted lead with the
   // same email. These are the records that should have been cleaned up by
   // the client-side flip but slipped through (e.g. cross-device sessions).
@@ -1048,6 +1074,19 @@ export default function Admin() {
                                 })()}
                                 {sub.acceptance?.signedAt && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800">Signed</span>}
                                 {sub.isDuplicate && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Dup</span>}
+                                {/* Customer later submitted — only on draft rows that have a matching submitted lead. */}
+                                {sub.isDraft && submittedTwinByDraftId.get(sub.id) && (() => {
+                                  const twin = submittedTwinByDraftId.get(sub.id);
+                                  return (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setDetailSub(twin); }}
+                                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-100 text-sky-800 hover:bg-sky-500 hover:text-white border border-sky-300"
+                                      title="This customer later submitted a real quote — click to jump to it"
+                                    >
+                                      📨 Submitted →
+                                    </button>
+                                  );
+                                })()}
                                 {/* Email status badge — Opened / Sent / Not Sent.
                                     For drafts the badge says 'Not Sent (Abandoned)'
                                     since they never reached the email step. */}
@@ -1254,6 +1293,8 @@ export default function Admin() {
           key={detailSub.id}
           sub={detailSub}
           contractors={contractors}
+          submittedTwin={detailSub.isDraft ? submittedTwinByDraftId.get(detailSub.id) || null : null}
+          onJumpToSubmission={(s) => setDetailSub(s)}
           onClose={() => setDetailSub(null)}
           onCompose={setComposeMode}
           onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }}
@@ -1280,7 +1321,7 @@ export default function Admin() {
 }
 
 // ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
-function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, contractors }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; onDelete: () => void; contractors: any[] }) {
+function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, contractors, submittedTwin, onJumpToSubmission }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; onDelete: () => void; contractors: any[]; submittedTwin?: any | null; onJumpToSubmission?: (s: any) => void }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   // Fallback: recompute basePrice from dimensions if the stored
@@ -1338,10 +1379,44 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
                 <PipelineStageSelector submission={sub} />
                 {sub.acceptance?.signedAt && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">✓ Signed</span>}
                 {sub.isDuplicate && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Duplicate</span>}
+                {/* Customer-later-submitted tag: only shown on draft details that
+                    have a matching submitted lead. Click jumps to that lead. */}
+                {sub.isDraft && submittedTwin && (
+                  <button
+                    onClick={() => onJumpToSubmission?.(submittedTwin)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-500 hover:text-white"
+                    title="This customer later submitted a real quote — click to jump to it"
+                  >
+                    📨 Customer Later Submitted →
+                  </button>
+                )}
               </div>
               <p className="text-xs text-gray-500">
                 Submitted {sub.createdAt?.toDate?.()?.toLocaleString() || '—'} · Source: {sourceLabel} · ID {sub.id.slice(0, 8)}
               </p>
+              {/* Inline alert for draft duplicates — shown prominently so the
+                  admin can decide whether to delete this draft or leave it. */}
+              {sub.isDraft && submittedTwin && (
+                <div className="mt-3 p-3 rounded-lg border border-sky-300 bg-sky-50 flex items-start gap-3">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center text-[12px]">📨</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-sky-700">Customer eventually submitted</p>
+                    <p className="text-sm text-sky-900 mt-0.5">
+                      This abandoned draft has a real submission from{' '}
+                      <button onClick={() => onJumpToSubmission?.(submittedTwin)} className="font-semibold underline hover:text-sky-700">
+                        {submittedTwin.name || submittedTwin.email || submittedTwin.id.slice(0, 8)}
+                      </button>
+                      {' '}created {submittedTwin.createdAt?.toDate?.()?.toLocaleString?.() || 'later'}. This draft is likely safe to delete.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onJumpToSubmission?.(submittedTwin)}
+                    className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-sky-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-sky-700"
+                  >
+                    Open Submitted Lead →
+                  </button>
+                </div>
+              )}
               {/* Two clear pills: Submission status + Email status (when relevant). */}
               <div className="flex flex-wrap gap-2 mt-2">
                 {(() => {
