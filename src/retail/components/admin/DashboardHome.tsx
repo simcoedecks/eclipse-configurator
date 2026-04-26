@@ -4,7 +4,8 @@ import { db } from '../../../shared/firebase';
 import StatCard from './StatCard';
 import { PIPELINE_STAGES, stageById, defaultStageFor } from '../../../shared/lib/crm';
 import { motion } from 'motion/react';
-import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight, Globe, Download, Loader2, ShieldCheck } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight, Globe, Download, Loader2, ShieldCheck, AlertCircle, Trash2 } from 'lucide-react';
+import { writeBatch, doc as firestoreDoc } from 'firebase/firestore';
 import { LEAD_SOURCES } from '../../../shared/lib/crm';
 import { downloadFullBackup, type BackupProgress } from '../../lib/backupExport';
 import { toast } from 'sonner';
@@ -242,6 +243,60 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
 
   const maxStageValue = Math.max(...pipelineByStage.map(p => p.value), 1);
 
+  // Detect drafts that look like duplicates of a more recent submitted
+  // lead (same email, draft created BEFORE the submitted one). These are
+  // the records the admin probably wants to clean up — same person, two
+  // entries — and they should be alerted to them up front, not have
+  // them silently deleted.
+  const duplicateDrafts = useMemo(() => {
+    const submittedByEmail = new Map<string, any>();
+    for (const s of submissions) {
+      if (s.isDraft || !s.email) continue;
+      const e = String(s.email).toLowerCase().trim();
+      const cur = submittedByEmail.get(e);
+      const sCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const curCreated = cur?.createdAt?.toDate?.()?.getTime?.() || 0;
+      if (!cur || sCreated > curCreated) submittedByEmail.set(e, s);
+    }
+    return submissions.filter(s => {
+      if (!s.isDraft || !s.email) return false;
+      const e = String(s.email).toLowerCase().trim();
+      const submitted = submittedByEmail.get(e);
+      if (!submitted) return false;
+      const dCreated = s.createdAt?.toDate?.()?.getTime?.() || 0;
+      const sCreated = submitted.createdAt?.toDate?.()?.getTime?.() || 0;
+      return dCreated < sCreated;
+    }).map(d => ({
+      draft: d,
+      submitted: submittedByEmail.get(String(d.email).toLowerCase().trim()),
+    }));
+  }, [submissions]);
+
+  const cleanupAllDuplicates = async () => {
+    if (duplicateDrafts.length === 0) return;
+    if (!confirm(`Delete ${duplicateDrafts.length} duplicate draft${duplicateDrafts.length === 1 ? '' : 's'}?\n\nEach one is an abandoned configurator session that has a matching submitted lead from the same person.`)) return;
+    try {
+      const batch = writeBatch(db);
+      for (const pair of duplicateDrafts) batch.delete(firestoreDoc(db, 'submissions', pair.draft.id));
+      await batch.commit();
+      toast.success(`Cleaned up ${duplicateDrafts.length} duplicate draft${duplicateDrafts.length === 1 ? '' : 's'}`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Cleanup failed: ${e?.message || 'unknown error'}`);
+    }
+  };
+
+  const cleanupSingleDuplicate = async (draftId: string) => {
+    if (!confirm('Delete this abandoned draft? The submitted lead with the same email is kept.')) return;
+    try {
+      await (await import('firebase/firestore')).deleteDoc(firestoreDoc(db, 'submissions', draftId));
+      toast.success('Duplicate draft removed');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Delete failed: ${e?.message || 'unknown error'}`);
+    }
+  };
+
   // Draft / in-progress leads — shown as a banner so the team sees them
   // the moment they walk into the CRM. "Live" means still actively moving
   // through the configurator; "Abandoned" means idle 20+ minutes so
@@ -261,6 +316,70 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
 
   return (
     <div className="space-y-8">
+      {/* Duplicate-drafts alert — surfaces drafts that have a matching
+          submitted lead so admin can review/delete. Always rendered at
+          the top so the admin sees it the moment they open the CRM. */}
+      {duplicateDrafts.length > 0 && (
+        <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 overflow-hidden">
+          <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap border-b border-amber-200">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-amber-900">
+                  {duplicateDrafts.length} duplicate draft{duplicateDrafts.length === 1 ? '' : 's'} detected
+                </h3>
+                <p className="text-xs text-amber-800 mt-0.5 max-w-2xl">
+                  These customers started as abandoned drafts but later submitted a real quote with the same email. The drafts are now redundant — review and delete to keep your inbox clean.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={cleanupAllDuplicates}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 uppercase tracking-widest"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete All ({duplicateDrafts.length})
+            </button>
+          </div>
+          <div className="divide-y divide-amber-200 max-h-72 overflow-y-auto">
+            {duplicateDrafts.map(({ draft, submitted }) => {
+              const last = draft.lastStepAt?.toDate?.() || draft.updatedAt?.toDate?.() || draft.createdAt?.toDate?.() || null;
+              const idleMin = last ? Math.round((Date.now() - last.getTime()) / 60000) : 0;
+              const draftCreated = draft.createdAt?.toDate?.();
+              const submittedCreated = submitted?.createdAt?.toDate?.();
+              return (
+                <div key={draft.id} className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-amber-100/40">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900 truncate">{draft.name || draft.email || draft.id.slice(0, 8)}</p>
+                    <p className="text-[11px] text-amber-700 truncate">
+                      Draft (Step {draft.currentStep || '?'}/5, {idleMin}m idle) {draftCreated ? `from ${draftCreated.toLocaleDateString()}` : ''}
+                      {submittedCreated && ` → submitted ${submittedCreated.toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => onOpenSubmission(submitted)}
+                      className="text-[11px] font-bold text-amber-800 hover:text-amber-900 underline"
+                    >
+                      View submitted lead
+                    </button>
+                    <button
+                      onClick={() => cleanupSingleDuplicate(draft.id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-widest bg-rose-100 text-rose-700 border border-rose-300 rounded hover:bg-rose-500 hover:text-white"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Delete Draft
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Live + abandoned draft banner */}
       {(draftBuckets.live.length > 0 || draftBuckets.abandoned.length > 0) && (
         <section className="grid grid-cols-1 md:grid-cols-2 gap-3">

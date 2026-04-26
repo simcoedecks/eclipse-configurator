@@ -1915,34 +1915,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           submissionId = submissionRef.id;
         }
 
-        // Defensive cleanup: in case the flip path failed silently (e.g.
-        // page was refreshed between draft create and Submit, so
-        // draftSubmissionId state was lost) any orphan drafts with the
-        // same email get removed so the New Leads tab doesn't show dupes.
-        // Best-effort — failures here just leave the orphan in place.
-        try {
-          if (submissionId && email) {
-            const dupQuery = query(
-              collection(db, 'submissions'),
-              where('email', '==', email),
-              where('isDraft', '==', true)
-            );
-            const snap = await getDocs(dupQuery);
-            for (const d of snap.docs) {
-              if (d.id === submissionId) continue; // never delete the active one
-              try {
-                await deleteDoc(doc(db, 'submissions', d.id));
-                console.log('[submissions] cleaned up orphan draft', d.id);
-              } catch (e) {
-                console.warn('[submissions] orphan-draft cleanup failed for', d.id, e);
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('[submissions] orphan-draft cleanup query failed', e);
-        }
-        // Clear the persisted draft id — this session's draft is now
-        // either the submitted lead itself or has been cleaned up.
+        // NOTE: auto-cleanup of orphan drafts removed — admin wants to be
+        // alerted to duplicates rather than have them silently deleted.
+        // The flip path (Home.tsx ~line 1721) still updates the same draft
+        // doc in place for the dominant same-session case, so most flows
+        // never produce a duplicate. Cross-device / hard-refresh cases that
+        // slip through surface in the admin Dashboard 'Duplicate Drafts'
+        // banner where the admin can review and clean up explicitly.
         setDraftSubmissionId(null);
 
         // Pipedrive integration removed — the CRM lives in Firestore only.

@@ -532,7 +532,7 @@ export default function Admin() {
   }
 
   const navItems: Array<{ key: TabKey; label: string; icon: any; badge?: number | string; sub?: string }> = [
-    { key: 'dashboard',   label: 'Dashboard',   icon: Home,     sub: 'Overview' },
+    { key: 'dashboard',   label: 'Dashboard',   icon: Home,     badge: duplicateDrafts.length > 0 ? `${duplicateDrafts.length} dup` : undefined, sub: duplicateDrafts.length > 0 ? `${duplicateDrafts.length} duplicate${duplicateDrafts.length === 1 ? '' : 's'}` : 'Overview' },
     { key: 'submissions', label: 'New Leads',   icon: List,     badge: newLeadsCount > 0 ? newLeadsCount : undefined, sub: `${newLeadsCount} fresh` },
     { key: 'custom-requests', label: 'Custom Requests', icon: Sparkles, badge: unreadCustomCount > 0 ? unreadCustomCount : undefined, sub: `${customRequests.length} to quote` },
     { key: 'kanban',      label: 'Pipeline',    icon: Kanban,   sub: `${pendingCount} active` },
