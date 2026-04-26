@@ -716,6 +716,74 @@ export default function Proposal() {
       </header>
 
       <div ref={contentRef} className="max-w-5xl mx-auto px-6 py-10 space-y-10">
+        {/* 3D Visualizer (Pictures) — Perspective + Front + Top.
+            Surfaced FIRST so customers see their pergola visualization
+            before scrolling through cover info, terms, and pricing. */}
+        {(data.configuration?.width || data.configuration?.depth) && (() => {
+          const cfgTop = data.configuration || {};
+          const itemsTop = (data.pricingBreakdown?.itemizedAccessories || []) as any[];
+          const frameHexTop = COLORS.find(c => c.name === cfgTop.frameColor)?.hex || '#0A0A0A';
+          const louverHexTop = COLORS.find(c => c.name === cfgTop.louverColor)?.hex || '#F6F6F6';
+          const visPropsTop = {
+            width: Number(cfgTop.width) || 12,
+            depth: Number(cfgTop.depth) || 16,
+            height: Number(cfgTop.height) || 9,
+            accessories: new Set<string>(itemsTop.map((i: any) => i.id).filter(Boolean)),
+            frameColor: frameHexTop,
+            louverColor: louverHexTop,
+            louverAngle: 0,
+            screenDrop: 100,
+            guillotineOpen: 50,
+            wallColor: frameHexTop,
+            houseWallColor: '#e2e8f0',
+            houseWall: 'none' as const,
+            houseWalls: new Set<'back'|'front'|'left'|'right'>((cfgTop.houseWalls || []) as any),
+            houseWallLengths: cfgTop.houseWallLengths || {},
+            houseWallAnchors: cfgTop.houseWallAnchors || {},
+            houseWallExtensions: cfgTop.houseWallExtensions || {},
+            sectionChoices: cfgTop.sectionChoices || {},
+            maxLouverSpanOverride: cfgTop.maxLouverSpanOverride,
+            maxBaySpanOverride: cfgTop.maxBaySpanOverride,
+            forceMiddleXPost: !!cfgTop.forceMiddleXPost,
+            forceMiddleZPost: !!cfgTop.forceMiddleZPost,
+          };
+          return (
+            <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">
+              <div className="p-6 border-b border-luxury-cream">
+                <h2 className="text-lg font-serif text-luxury-black">Your Design</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  {cfgTop.width}' × {cfgTop.depth}' × {cfgTop.height}' • {cfgTop.frameColor} frame • {cfgTop.louverColor} louvers
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-luxury-cream border-b border-luxury-cream">
+                <div>
+                  <TopViewWithDimensions visProps={visPropsTop} />
+                </div>
+                <div>
+                  <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                    Front View
+                  </div>
+                  <div className="h-[360px] bg-[#f1f5f9]">
+                    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                      <PergolaVisualizer {...visPropsTop} view="perspective-front" staticMode />
+                    </Suspense>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
+                  3D Perspective
+                </div>
+                <div className="h-[420px] bg-[#f1f5f9]">
+                  <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
+                    <PergolaVisualizer {...visPropsTop} view="perspective" />
+                  </Suspense>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Cover */}
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
           {/* Brand mark — always rendered (unlike the sticky header which
@@ -852,72 +920,8 @@ export default function Proposal() {
 
         </section>
 
-        {/* 3D Visualizer — Perspective (large) + Front + Top (small) */}
-        {(cfg.width || cfg.depth) && (() => {
-          const visProps = {
-            width: Number(cfg.width) || 12,
-            depth: Number(cfg.depth) || 16,
-            height: Number(cfg.height) || 9,
-            accessories: new Set<string>(items.map((i: any) => i.id).filter(Boolean)),
-            frameColor: frameHex,
-            louverColor: louverHex,
-            louverAngle: 0,
-            screenDrop: 100,
-            guillotineOpen: 50,
-            wallColor: frameHex,
-            houseWallColor: '#e2e8f0',
-            houseWall: 'none' as const,
-            // Thread the saved structure/section/admin config through
-            // so the customer-facing proposal matches what they
-            // designed (or what the admin customized).
-            houseWalls: new Set<'back'|'front'|'left'|'right'>((cfg.houseWalls || []) as any),
-            houseWallLengths: cfg.houseWallLengths || {},
-            houseWallAnchors: cfg.houseWallAnchors || {},
-            houseWallExtensions: cfg.houseWallExtensions || {},
-            sectionChoices: cfg.sectionChoices || {},
-            maxLouverSpanOverride: cfg.maxLouverSpanOverride,
-            maxBaySpanOverride: cfg.maxBaySpanOverride,
-            forceMiddleXPost: !!cfg.forceMiddleXPost,
-            forceMiddleZPost: !!cfg.forceMiddleZPost,
-          };
-          return (
-            <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">
-              <div className="p-6 border-b border-luxury-cream">
-                <h2 className="text-lg font-serif text-luxury-black">Your Design</h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  {cfg.width}' × {cfg.depth}' × {cfg.height}' • {cfg.frameColor} frame • {cfg.louverColor} louvers
-                </p>
-              </div>
-              {/* Top row — top-down plan (with dimensions) + front elevation */}
-              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-luxury-cream border-b border-luxury-cream">
-                <div>
-                  <TopViewWithDimensions visProps={visProps} />
-                </div>
-                <div>
-                  <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                    Front View
-                  </div>
-                  <div className="h-[360px] bg-[#f1f5f9]">
-                    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                      <PergolaVisualizer {...visProps} view="perspective-front" staticMode />
-                    </Suspense>
-                  </div>
-                </div>
-              </div>
-              {/* Bottom — 3D perspective */}
-              <div>
-                <div className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-gray-500 bg-luxury-paper border-b border-luxury-cream">
-                  3D Perspective
-                </div>
-                <div className="h-[420px] bg-[#f1f5f9]">
-                  <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>}>
-                    <PergolaVisualizer {...visProps} view="perspective" />
-                  </Suspense>
-                </div>
-              </div>
-            </section>
-          );
-        })()}
+        {/* 3D Visualizer moved to the TOP of the proposal — see the
+            'Your Design' section right after the page header. */}
 
         {/* Pricing Breakdown */}
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
