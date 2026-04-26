@@ -49,7 +49,14 @@ export default function PricingEditor({ submission }: Props) {
   const [totalOverride, setTotalOverride] = useState<number | null>(
     typeof initialOverrides.total === 'number' ? initialOverrides.total : null
   );
-  const [editingOverride, setEditingOverride] = useState<'subtotal' | 'total' | null>(null);
+  // Per-line overrides — keyed by 'base' for the pergola itself, or 'acc:N'
+  // for the accessory at index N. Value is the manual amount in dollars.
+  const [lineOverrides, setLineOverrides] = useState<Record<string, number>>(
+    initialOverrides.lineItems && typeof initialOverrides.lineItems === 'object'
+      ? { ...initialOverrides.lineItems }
+      : {}
+  );
+  const [editingOverride, setEditingOverride] = useState<'subtotal' | 'total' | string | null>(null);
   const [overrideDraft, setOverrideDraft] = useState<string>('');
 
   // Reset when submission changes
@@ -58,13 +65,31 @@ export default function PricingEditor({ submission }: Props) {
     const ov = submission.pricingOverride || {};
     setSubtotalOverride(typeof ov.subtotal === 'number' ? ov.subtotal : null);
     setTotalOverride(typeof ov.total === 'number' ? ov.total : null);
+    setLineOverrides(ov.lineItems && typeof ov.lineItems === 'object' ? { ...ov.lineItems } : {});
     setEditingOverride(null);
     setDirty(false);
   }, [submission.id]);
 
   const pb = submission.pricingBreakdown || {};
   const additionalPergolas = submission.additionalPergolas || [];
-  const finalPricing = useMemo(() => computeFinalPricing(pb, items, additionalPergolas), [pb, items, additionalPergolas]);
+
+  // Build an effective pb that applies any per-line overrides so
+  // computeFinalPricing returns the override-aware totals.
+  const effectivePb = useMemo(() => {
+    if (!pb) return pb;
+    const baseOver = lineOverrides['base'];
+    const overriddenBase = typeof baseOver === 'number' ? baseOver : pb.basePrice;
+    const overriddenAccessories = (pb.itemizedAccessories || []).map((a: any, i: number) => {
+      const k = `acc:${i}`;
+      const v = lineOverrides[k];
+      return typeof v === 'number' ? { ...a, cost: v } : a;
+    });
+    return { ...pb, basePrice: overriddenBase, itemizedAccessories: overriddenAccessories };
+  }, [pb, lineOverrides]);
+  const finalPricing = useMemo(
+    () => computeFinalPricing(effectivePb, items, additionalPergolas),
+    [effectivePb, items, additionalPergolas]
+  );
   const originalFinal = useMemo(() => computeFinalPricing(pb, submission.customLineItems || [], submission.additionalPergolas || []), [pb, submission.customLineItems, submission.additionalPergolas]);
 
   const save = async () => {
@@ -97,6 +122,7 @@ export default function PricingEditor({ submission }: Props) {
       const pricingOverride: any = {};
       if (typeof subtotalOverride === 'number') pricingOverride.subtotal = subtotalOverride;
       if (typeof totalOverride === 'number') pricingOverride.total = totalOverride;
+      if (Object.keys(lineOverrides).length > 0) pricingOverride.lineItems = lineOverrides;
       const hasOverride = Object.keys(pricingOverride).length > 0;
 
       await setDoc(
@@ -162,32 +188,131 @@ export default function PricingEditor({ submission }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Original configurator items — read-only reference */}
+      {/* Original configurator items — each amount is click-to-edit. */}
       <section>
         <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 flex items-center gap-1.5">
           <FileText className="w-3 h-3" />
-          Configurator Line Items (Read-Only)
+          Configurator Line Items
+          <span className="text-gray-400 font-normal normal-case tracking-normal">— click any amount to override</span>
         </h3>
         <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden text-sm">
-          <div className="grid grid-cols-[1fr_80px_100px] gap-2 px-3 py-2 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-gray-500">
+          <div className="grid grid-cols-[1fr_80px_140px] gap-2 px-3 py-2 bg-slate-100 text-[10px] uppercase tracking-wider font-bold text-gray-500">
             <div>Item</div><div className="text-center">Qty</div><div className="text-right">Amount</div>
           </div>
           <div className="divide-y divide-slate-200">
-            <div className="grid grid-cols-[1fr_80px_100px] gap-2 px-3 py-2">
-              <div className="font-semibold text-luxury-black">Bespoke Pergola</div>
-              <div className="text-center text-gray-500">1</div>
-              <div className="text-right font-semibold">{formatCurrencyUSD(pb.basePrice || 0)}</div>
-            </div>
-            {(pb.itemizedAccessories || []).map((a: any, i: number) => (
-              <div key={i} className="grid grid-cols-[1fr_80px_100px] gap-2 px-3 py-2">
-                <div className="text-gray-700 pl-4 text-[13px]">↳ {a.name}</div>
-                <div className="text-center text-gray-500">{a.quantity || 1}</div>
-                <div className="text-right text-gray-700">{formatCurrencyUSD(a.cost || 0)}</div>
-              </div>
-            ))}
+            {/* Bespoke Pergola — base price */}
+            {(() => {
+              const key = 'base';
+              const isEditing = editingOverride === key;
+              const original = pb.basePrice || 0;
+              const overrideValue = lineOverrides[key];
+              const displayed = typeof overrideValue === 'number' ? overrideValue : original;
+              const hasOverride = typeof overrideValue === 'number';
+              const startEdit = () => { setOverrideDraft(displayed.toFixed(2)); setEditingOverride(key); };
+              const commit = () => {
+                const n = parseFloat(overrideDraft.replace(/[^0-9.]/g, ''));
+                if (!isNaN(n) && n >= 0) {
+                  setLineOverrides({ ...lineOverrides, [key]: n });
+                  setDirty(true);
+                }
+                setEditingOverride(null);
+                setOverrideDraft('');
+              };
+              const revert = () => {
+                const next = { ...lineOverrides };
+                delete next[key];
+                setLineOverrides(next);
+                setDirty(true);
+              };
+              return (
+                <div className="grid grid-cols-[1fr_80px_140px] gap-2 px-3 py-2 items-center bg-white">
+                  <div className="font-semibold text-luxury-black">Bespoke Pergola</div>
+                  <div className="text-center text-gray-500">1</div>
+                  {isEditing ? (
+                    <form onSubmit={(e) => { e.preventDefault(); commit(); }} className="flex items-center gap-1 justify-end">
+                      <span className="text-gray-500 text-xs">$</span>
+                      <input
+                        autoFocus type="text" inputMode="decimal" value={overrideDraft}
+                        onChange={(e) => setOverrideDraft(e.target.value)}
+                        onBlur={() => { setEditingOverride(null); setOverrideDraft(''); }}
+                        className="w-24 px-2 py-1 text-right text-sm border border-luxury-gold rounded focus:outline-none focus:ring-2 focus:ring-luxury-gold"
+                      />
+                    </form>
+                  ) : (
+                    <div className="flex items-center gap-1.5 justify-end">
+                      {hasOverride && <span className="text-[10px] text-gray-400 line-through">{formatCurrencyUSD(original)}</span>}
+                      <button type="button" onClick={startEdit}
+                        className={`font-semibold hover:text-luxury-gold cursor-pointer ${hasOverride ? 'text-amber-700' : ''}`}
+                        title="Click to override base price"
+                      >
+                        {formatCurrencyUSD(displayed)}
+                      </button>
+                      {hasOverride && (
+                        <button type="button" onClick={revert} className="text-gray-400 hover:text-rose-500 text-xs" title="Revert to original">⟲</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {/* Each accessory — individually overrideable */}
+            {(pb.itemizedAccessories || []).map((a: any, i: number) => {
+              const key = `acc:${i}`;
+              const isEditing = editingOverride === key;
+              const original = a.cost || 0;
+              const overrideValue = lineOverrides[key];
+              const displayed = typeof overrideValue === 'number' ? overrideValue : original;
+              const hasOverride = typeof overrideValue === 'number';
+              const startEdit = () => { setOverrideDraft(displayed.toFixed(2)); setEditingOverride(key); };
+              const commit = () => {
+                const n = parseFloat(overrideDraft.replace(/[^0-9.]/g, ''));
+                if (!isNaN(n) && n >= 0) {
+                  setLineOverrides({ ...lineOverrides, [key]: n });
+                  setDirty(true);
+                }
+                setEditingOverride(null);
+                setOverrideDraft('');
+              };
+              const revert = () => {
+                const next = { ...lineOverrides };
+                delete next[key];
+                setLineOverrides(next);
+                setDirty(true);
+              };
+              return (
+                <div key={i} className="grid grid-cols-[1fr_80px_140px] gap-2 px-3 py-2 items-center bg-white">
+                  <div className="text-gray-700 pl-4 text-[13px]">↳ {a.name}</div>
+                  <div className="text-center text-gray-500">{a.quantity || 1}</div>
+                  {isEditing ? (
+                    <form onSubmit={(e) => { e.preventDefault(); commit(); }} className="flex items-center gap-1 justify-end">
+                      <span className="text-gray-500 text-xs">$</span>
+                      <input
+                        autoFocus type="text" inputMode="decimal" value={overrideDraft}
+                        onChange={(e) => setOverrideDraft(e.target.value)}
+                        onBlur={() => { setEditingOverride(null); setOverrideDraft(''); }}
+                        className="w-24 px-2 py-1 text-right text-sm border border-luxury-gold rounded focus:outline-none focus:ring-2 focus:ring-luxury-gold"
+                      />
+                    </form>
+                  ) : (
+                    <div className="flex items-center gap-1.5 justify-end">
+                      {hasOverride && <span className="text-[10px] text-gray-400 line-through">{formatCurrencyUSD(original)}</span>}
+                      <button type="button" onClick={startEdit}
+                        className={`hover:text-luxury-gold cursor-pointer ${hasOverride ? 'text-amber-700 font-semibold' : 'text-gray-700'}`}
+                        title="Click to override this line"
+                      >
+                        {formatCurrencyUSD(displayed)}
+                      </button>
+                      {hasOverride && (
+                        <button type="button" onClick={revert} className="text-gray-400 hover:text-rose-500 text-xs" title="Revert to original">⟲</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="px-3 py-2 bg-slate-50 text-[11px] text-gray-500 italic border-t border-slate-200">
-            These line items come from the customer's configuration and can't be edited directly. To make changes, add adjustments below.
+            Click any amount to type a manual override. Subtotal + HST + Total update live. Original prices stay visible (crossed out) so the breakdown is clear at a glance.
           </div>
         </div>
       </section>

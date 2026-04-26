@@ -677,11 +677,27 @@ export default function Proposal() {
   const pb = data.pricingBreakdown || {};
   const customLineItems = data.customLineItems || [];
   const additionalPergolas = data.additionalPergolas || [];
-  const computedPricing = computeFinalPricing(pb, customLineItems, additionalPergolas);
-  // Apply admin manual overrides if set on the submission. Subtotal override
-  // recomputes HST + Total. Total override sets the final number directly
-  // (used when the admin negotiated a flat number with the customer).
+  // Apply admin manual overrides if set on the submission.
+  //   pricingOverride.lineItems  - per-line: 'base' for the pergola, 'acc:N'
+  //                                for the accessory at index N
+  //   pricingOverride.subtotal   - replaces the computed subtotal (HST recomputes)
+  //   pricingOverride.total      - replaces the final total directly
   const overrides = data.pricingOverride || {};
+  const lineOverrides: Record<string, number> = (overrides.lineItems && typeof overrides.lineItems === 'object')
+    ? overrides.lineItems
+    : {};
+  const effectivePb = (() => {
+    if (!pb) return pb;
+    const baseOver = lineOverrides['base'];
+    const overriddenBase = typeof baseOver === 'number' ? baseOver : pb.basePrice;
+    const overriddenAccessories = (pb.itemizedAccessories || []).map((a: any, i: number) => {
+      const k = `acc:${i}`;
+      const v = lineOverrides[k];
+      return typeof v === 'number' ? { ...a, cost: v } : a;
+    });
+    return { ...pb, basePrice: overriddenBase, itemizedAccessories: overriddenAccessories };
+  })();
+  const computedPricing = computeFinalPricing(effectivePb, customLineItems, additionalPergolas);
   const finalPricing = (() => {
     let subtotal = computedPricing.subtotal;
     let hst = computedPricing.hst;
