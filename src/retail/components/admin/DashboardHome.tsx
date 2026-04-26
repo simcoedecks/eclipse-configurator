@@ -102,26 +102,37 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
 
     const conversionRate = submissions.length > 0 ? (accepted.length / submissions.length) * 100 : 0;
 
-    // Funnel conversion buckets:
+    // Three-stage funnel conversion:
     //   submittedLeads  = anyone who actually clicked Submit (not drafts)
+    //   engaged         = customer viewed the proposal page or opened the
+    //                     email — a 'soft reply' / proof of interest. When
+    //                     inbound SMS/email reply tracking is wired up, this
+    //                     can be tightened to actual replies.
     //   reachedConsult  = leads whose stage advanced to Site Visit or later
-    //   reachedApproved = leads whose stage advanced to Signed or later
+    //   reachedWon      = leads whose stage advanced to Signed or later
     //                     (also matches anyone with acceptance.signedAt)
-    // 'Lost' is intentionally excluded from both buckets — we want the
-    // conversion rate over qualified opportunities, not abandoned ones.
+    // 'Lost' submissions are intentionally INCLUDED in the denominator at
+    // each step — the goal is to measure how many leads make it from one
+    // gate to the next, regardless of where they ultimately end up.
     const stageOrder = ['new', 'contacted', 'cool-lead', 'site-visit', 'proposal-sent', 'accepted', 'in-production', 'installed'];
     const consultIdx = stageOrder.indexOf('site-visit');
-    const approvedIdx = stageOrder.indexOf('accepted');
+    const wonIdx = stageOrder.indexOf('accepted');
     const submittedLeads = submissions.filter(s => !s.isDraft);
     const stageRank = (s: any) => stageOrder.indexOf(s.pipelineStage || defaultStageFor(s));
-    const reachedConsult = submittedLeads.filter(s => stageRank(s) >= consultIdx);
-    const reachedApproved = submittedLeads.filter(s => stageRank(s) >= approvedIdx || !!s.acceptance?.signedAt);
+    const isEngaged = (s: any) =>
+      !!(s.customerFirstViewedAt || s.customerEmailOpenedAt || s.customerEmailClickedAt || s.customerViewCount > 0);
+    const engaged = submittedLeads.filter(isEngaged);
+    const reachedConsult = engaged.filter(s => stageRank(s) >= consultIdx);
+    const reachedWon = reachedConsult.filter(s => stageRank(s) >= wonIdx || !!s.acceptance?.signedAt);
 
-    const leadToConsult = submittedLeads.length > 0
-      ? (reachedConsult.length / submittedLeads.length) * 100
+    const leadToEngaged = submittedLeads.length > 0
+      ? (engaged.length / submittedLeads.length) * 100
       : 0;
-    const consultToApproved = reachedConsult.length > 0
-      ? (reachedApproved.length / reachedConsult.length) * 100
+    const engagedToConsult = engaged.length > 0
+      ? (reachedConsult.length / engaged.length) * 100
+      : 0;
+    const consultToWon = reachedConsult.length > 0
+      ? (reachedWon.length / reachedConsult.length) * 100
       : 0;
 
     const newThisWeek = submissions.filter(s => {
@@ -142,12 +153,14 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
       totalLeads: submissions.length,
       newThisWeek: newThisWeek.length,
       avgDeal,
-      // Funnel
+      // Funnel — three stages: Lead → Engaged → Consultation → Won
       submittedLeadsCount: submittedLeads.length,
+      engagedCount: engaged.length,
       reachedConsultCount: reachedConsult.length,
-      reachedApprovedCount: reachedApproved.length,
-      leadToConsult,
-      consultToApproved,
+      reachedWonCount: reachedWon.length,
+      leadToEngaged,
+      engagedToConsult,
+      consultToWon,
     };
   }, [submissions]);
 
@@ -296,21 +309,31 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
         </div>
       </section>
 
-      {/* Funnel conversion — two-stage drop-off rates */}
+      {/* Funnel conversion — three-stage drop-off rates */}
       <section>
-        <h2 className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold mb-3">Funnel Conversion</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold">Funnel Conversion</h2>
+          <span className="text-[10px] italic text-gray-400">'Engaged' = customer opened the proposal</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
-            label="Lead → Consultation"
-            value={`${stats.leadToConsult.toFixed(1)}%`}
-            sub={`${stats.reachedConsultCount} of ${stats.submittedLeadsCount} submitted leads reached site visit`}
+            label="Lead → Engaged"
+            value={`${stats.leadToEngaged.toFixed(1)}%`}
+            sub={`${stats.engagedCount} of ${stats.submittedLeadsCount} leads opened the proposal`}
+            accent="sky"
+            icon={<Users className="w-4 h-4" />}
+          />
+          <StatCard
+            label="Engaged → Consultation"
+            value={`${stats.engagedToConsult.toFixed(1)}%`}
+            sub={`${stats.reachedConsultCount} of ${stats.engagedCount} engaged leads reached site visit`}
             accent="indigo"
             icon={<CalendarClock className="w-4 h-4" />}
           />
           <StatCard
-            label="Consultation → Signed"
-            value={`${stats.consultToApproved.toFixed(1)}%`}
-            sub={`${stats.reachedApprovedCount} of ${stats.reachedConsultCount} consultations closed`}
+            label="Consultation → Won"
+            value={`${stats.consultToWon.toFixed(1)}%`}
+            sub={`${stats.reachedWonCount} of ${stats.reachedConsultCount} consultations signed`}
             accent="emerald"
             icon={<FileCheck2 className="w-4 h-4" />}
           />

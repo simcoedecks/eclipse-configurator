@@ -7,7 +7,7 @@ interface StatCardProps {
   sub?: string;
   trend?: { value: string; positive?: boolean };
   icon?: ReactNode;
-  accent?: 'gold' | 'emerald' | 'indigo' | 'rose' | 'slate';
+  accent?: 'gold' | 'emerald' | 'indigo' | 'rose' | 'slate' | 'sky';
 }
 
 const accentMap = {
@@ -16,6 +16,7 @@ const accentMap = {
   indigo:  { bg: 'bg-gradient-to-br from-indigo-500/15 to-indigo-500/5',   border: 'border-indigo-500/30',  text: 'text-indigo-600',  dot: 'bg-indigo-500' },
   rose:    { bg: 'bg-gradient-to-br from-rose-500/15 to-rose-500/5',       border: 'border-rose-500/30',    text: 'text-rose-600',    dot: 'bg-rose-500' },
   slate:   { bg: 'bg-gradient-to-br from-slate-200/40 to-slate-100/20',    border: 'border-slate-300/50',   text: 'text-slate-700',   dot: 'bg-slate-400' },
+  sky:     { bg: 'bg-gradient-to-br from-sky-500/15 to-sky-500/5',         border: 'border-sky-500/30',     text: 'text-sky-600',     dot: 'bg-sky-500' },
 };
 
 export default function StatCard({ label, value, sub, trend, icon, accent = 'slate' }: StatCardProps) {
