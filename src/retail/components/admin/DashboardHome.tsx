@@ -4,8 +4,10 @@ import { db } from '../../../shared/firebase';
 import StatCard from './StatCard';
 import { PIPELINE_STAGES, stageById, defaultStageFor } from '../../../shared/lib/crm';
 import { motion } from 'motion/react';
-import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight, Globe } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, FileCheck2, CalendarClock, AlertTriangle, Sparkles, ArrowRight, Globe, Download, Loader2, ShieldCheck } from 'lucide-react';
 import { LEAD_SOURCES } from '../../../shared/lib/crm';
+import { downloadFullBackup, type BackupProgress } from '../../lib/backupExport';
+import { toast } from 'sonner';
 
 interface Props {
   submissions: any[];
@@ -40,6 +42,36 @@ function relativeTime(date: Date | null): string {
 export default function DashboardHome({ submissions, onOpenSubmission, onGoToSubmissions, onGoToKanban }: Props) {
   const [openTasks, setOpenTasks] = useState<any[]>([]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  // Backup export state
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
+  const [lastBackup, setLastBackup] = useState<{ at: string; sizeBytes: number; counts: Record<string, number> } | null>(() => {
+    try {
+      const raw = localStorage.getItem('eclipse-last-backup');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+
+  const runBackup = async () => {
+    if (backingUp) return;
+    setBackingUp(true);
+    setBackupProgress({ step: 'Starting…' });
+    try {
+      const res = await downloadFullBackup((p) => setBackupProgress(p));
+      const sizeMb = (res.sizeBytes / (1024 * 1024)).toFixed(2);
+      const summary = `${res.counts.submissions} subs · ${res.counts.jobs} jobs · ${res.counts.contractors} contractors · ${sizeMb} MB`;
+      const meta = { at: new Date().toISOString(), sizeBytes: res.sizeBytes, counts: res.counts };
+      setLastBackup(meta);
+      try { localStorage.setItem('eclipse-last-backup', JSON.stringify(meta)); } catch {}
+      toast.success(`Backup saved: ${res.filename}`, { description: summary, duration: 6000 });
+    } catch (e: any) {
+      console.error('backup failed', e);
+      toast.error(`Backup failed: ${e?.message || 'unknown error'}`);
+    } finally {
+      setBackingUp(false);
+      setBackupProgress(null);
+    }
+  };
 
   // Fetch open tasks and recent activities across all submissions via collectionGroup
   useEffect(() => {
@@ -571,6 +603,41 @@ export default function DashboardHome({ submissions, onOpenSubmission, onGoToSub
           </div>
         </section>
       )}
+
+      {/* Backup — provider-independent JSON export of all CRM data */}
+      <section>
+        <h2 className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold mb-3">Backup</h2>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-luxury-black">Export full CRM backup</h3>
+                <p className="text-xs text-gray-600 mt-0.5 max-w-xl">
+                  Downloads every submission, activity, note, task, file, view session, job, bid, contractor and dealer profile as a single JSON file. Save it to your computer, Dropbox, or a USB drive — fully portable and not tied to Firebase.
+                </p>
+                {lastBackup && (
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    Last backup: <span className="font-semibold">{new Date(lastBackup.at).toLocaleString()}</span>
+                    {' · '}{(lastBackup.sizeBytes / (1024 * 1024)).toFixed(2)} MB
+                    {' · '}{lastBackup.counts?.submissions ?? 0} submissions
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={runBackup}
+              disabled={backingUp}
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 bg-luxury-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-luxury-black/90 disabled:opacity-50 disabled:cursor-wait"
+            >
+              {backingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {backingUp ? (backupProgress?.step || 'Working…') : 'Download Backup'}
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
