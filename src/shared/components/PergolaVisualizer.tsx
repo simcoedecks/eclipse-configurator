@@ -152,6 +152,10 @@ interface PergolaVisualizerProps {
    *  doesn't structurally require one. */
   forceMiddleXPost?: boolean;
   forceMiddleZPost?: boolean;
+  /** Admin-only: free-standing decorative posts inside the pergola.
+   *  Each has x (feet from left edge) and z (feet from back edge).
+   *  Pure visual — they don't carry a beam or split the louver grid. */
+  decorativePosts?: Array<{ id: string; x: number; z: number }>;
   view?: string;
   onViewChange?: (view: string) => void;
   staticMode?: boolean;
@@ -606,7 +610,7 @@ const HouseWall = ({ width, height, position, rotation, color }: any) => {
   );
 };
 
-const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, maxLouverSpanOverride, maxBaySpanOverride, forceMiddleXPost, forceMiddleZPost, staticMode }) => {
+const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, accessories, frameColor, louverColor, louverAngle, screenDrop, guillotineOpen, wallColor, houseWallColor, customModels, houseWall, houseWalls, houseWallLengths, houseWallAnchors, houseWallExtensions, postXOffsets, postZOffsets, postXOnlyOffsets, postZOnlyOffsets, removedMiddlePosts, cantileverInsets, cornerPostOffsets, sectionChoices, maxLouverSpanOverride, maxBaySpanOverride, forceMiddleXPost, forceMiddleZPost, decorativePosts, staticMode }) => {
   const postSize = 7.25 / 12; // 7.25 inches
   const beamSize = 10.5165 / 12; // 10.5165 inches
   const beamWidth = 6.8681 / 12; // 6.8681 inches
@@ -831,6 +835,29 @@ const PergolaModel: React.FC<PergolaVisualizerProps> = ({ width, depth, height, 
           })}
         </React.Fragment>
       ))}
+
+      {/* Decorative Posts — admin-added free-standing supports inside the
+          pergola. They share the structural post profile but don't connect
+          to a beam. Coordinates are in feet from the back-left corner:
+          x = distance from left edge, z = distance from back edge. */}
+      {decorativePosts && decorativePosts.length > 0 && decorativePosts.map((p) => {
+        const xWorld = p.x - width / 2;
+        const zWorld = p.z - depth / 2;
+        // Stop slightly under the beam plane so the post doesn't visually
+        // pierce the louvers (postSize/2 worth of clearance below).
+        const postH = Math.max(0.5, height - postSize);
+        return (
+          <group key={`dec-${p.id}`} position={[xWorld, 0, zWorld]}>
+            {customModels?.post ? (
+              <CustomPart url={customModels.post} position={[0, postH / 2, 0]} scale={[postSize, postH, postSize]} rotation={[0, 0, 0]} color={frameColor} materialProps={frameMaterialProps} />
+            ) : (
+              <RoundedBox args={[postSize, postH, postSize]} radius={0.02} smoothness={4} position={[0, postH / 2, 0]} castShadow receiveShadow>
+                <meshStandardMaterial color={frameColor} {...frameMaterialProps} />
+              </RoundedBox>
+            )}
+          </group>
+        );
+      })}
 
       {/* Perimeter Beams */}
       {customModels?.beam ? (
