@@ -39,10 +39,26 @@ export default function PricingEditor({ submission }: Props) {
   const [newItem, setNewItem] = useState<CustomLineItem>(emptyItem());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  // Manual overrides: when set, these replace the computed values on
+  // both the admin pricing summary and the customer proposal page.
+  // null = no override (use the computed value).
+  const initialOverrides = submission.pricingOverride || {};
+  const [subtotalOverride, setSubtotalOverride] = useState<number | null>(
+    typeof initialOverrides.subtotal === 'number' ? initialOverrides.subtotal : null
+  );
+  const [totalOverride, setTotalOverride] = useState<number | null>(
+    typeof initialOverrides.total === 'number' ? initialOverrides.total : null
+  );
+  const [editingOverride, setEditingOverride] = useState<'subtotal' | 'total' | null>(null);
+  const [overrideDraft, setOverrideDraft] = useState<string>('');
 
   // Reset when submission changes
   useEffect(() => {
     setItems(submission.customLineItems || []);
+    const ov = submission.pricingOverride || {};
+    setSubtotalOverride(typeof ov.subtotal === 'number' ? ov.subtotal : null);
+    setTotalOverride(typeof ov.total === 'number' ? ov.total : null);
+    setEditingOverride(null);
     setDirty(false);
   }, [submission.id]);
 
@@ -76,8 +92,34 @@ export default function PricingEditor({ submission }: Props) {
           // "TBD" instead of the (unset) amount.
           ...(i.tbd ? { tbd: true } : {}),
         }));
-      await setDoc(doc(db, 'submissions', submission.id), { customLineItems: cleaned }, { merge: true });
-      await logActivity(submission.id, 'manual', `Updated pricing — ${cleaned.length} custom line item${cleaned.length === 1 ? '' : 's'}, new total: ${formatCurrencyUSD(computeFinalPricing(pb, cleaned).total)}`);
+      // Build the pricingOverride payload. Only include fields that are
+      // actually set — Firestore will then carry exactly what's needed.
+      const pricingOverride: any = {};
+      if (typeof subtotalOverride === 'number') pricingOverride.subtotal = subtotalOverride;
+      if (typeof totalOverride === 'number') pricingOverride.total = totalOverride;
+      const hasOverride = Object.keys(pricingOverride).length > 0;
+
+      await setDoc(
+        doc(db, 'submissions', submission.id),
+        {
+          customLineItems: cleaned,
+          // null clears the field. Saving an empty object is harmless but
+          // we'd rather omit it cleanly when no overrides are set.
+          pricingOverride: hasOverride ? pricingOverride : null,
+        },
+        { merge: true }
+      );
+      const finalForLog = typeof totalOverride === 'number'
+        ? totalOverride
+        : computeFinalPricing(pb, cleaned).total;
+      const overrideNote = hasOverride
+        ? ` · manual override${typeof totalOverride === 'number' ? ' (total)' : ''}${typeof subtotalOverride === 'number' ? ' (subtotal)' : ''}`
+        : '';
+      await logActivity(
+        submission.id,
+        'manual',
+        `Updated pricing — ${cleaned.length} custom line item${cleaned.length === 1 ? '' : 's'}, new total: ${formatCurrencyUSD(finalForLog)}${overrideNote}`
+      );
       toast.success('Pricing saved — customer proposal updated');
       setItems(cleaned);
       setDirty(false);
@@ -337,9 +379,18 @@ export default function PricingEditor({ submission }: Props) {
       {/* Additional pergolas (lives inside the Pricing tab) */}
       <AdditionalPergolaEditor submission={submission} />
 
-      {/* Final totals */}
+      {/* Final totals — Subtotal AND Total are click-to-edit. Override
+          either to set a manual amount; click ⟲ to revert to computed. */}
       <section>
-        <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Updated Totals</h3>
+        <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 flex items-center gap-2">
+          Updated Totals
+          {(typeof subtotalOverride === 'number' || typeof totalOverride === 'number') && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">
+              <Edit3 className="w-2.5 h-2.5" />
+              Manual Override
+            </span>
+          )}
+        </h3>
         <div className="border-2 border-luxury-gold/30 rounded-lg overflow-hidden">
           <div className="bg-white divide-y divide-slate-100">
             <div className="flex justify-between px-4 py-2 text-sm">
@@ -360,29 +411,160 @@ export default function PricingEditor({ submission }: Props) {
                 </span>
               </div>
             )}
-            <div className="flex justify-between px-4 py-2 text-sm bg-slate-50">
+            {/* Editable Subtotal */}
+            <div className="flex justify-between items-center px-4 py-2 text-sm bg-slate-50 group">
               <span className="font-semibold">Subtotal</span>
-              <span className="font-bold">{formatCurrencyUSD(finalPricing.subtotal)}</span>
+              {editingOverride === 'subtotal' ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const n = parseFloat(overrideDraft.replace(/[^0-9.]/g, ''));
+                    if (!isNaN(n) && n >= 0) {
+                      setSubtotalOverride(n);
+                      setDirty(true);
+                    }
+                    setEditingOverride(null);
+                    setOverrideDraft('');
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <span className="text-gray-500">$</span>
+                  <input
+                    autoFocus
+                    type="text"
+                    inputMode="decimal"
+                    value={overrideDraft}
+                    onChange={(e) => setOverrideDraft(e.target.value)}
+                    onBlur={() => { setEditingOverride(null); setOverrideDraft(''); }}
+                    className="w-28 px-2 py-1 text-right text-sm border border-luxury-gold rounded focus:outline-none focus:ring-2 focus:ring-luxury-gold"
+                  />
+                </form>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {typeof subtotalOverride === 'number' && (
+                    <span className="text-[10px] text-gray-400 line-through">{formatCurrencyUSD(finalPricing.subtotal)}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = typeof subtotalOverride === 'number' ? subtotalOverride : finalPricing.subtotal;
+                      setOverrideDraft(cur.toFixed(2));
+                      setEditingOverride('subtotal');
+                    }}
+                    className={`font-bold hover:text-luxury-gold cursor-pointer ${typeof subtotalOverride === 'number' ? 'text-amber-700' : ''}`}
+                    title="Click to override the subtotal manually"
+                  >
+                    {formatCurrencyUSD(typeof subtotalOverride === 'number' ? subtotalOverride : finalPricing.subtotal)}
+                  </button>
+                  {typeof subtotalOverride === 'number' && (
+                    <button
+                      type="button"
+                      onClick={() => { setSubtotalOverride(null); setDirty(true); }}
+                      className="text-gray-400 hover:text-rose-500"
+                      title="Revert to computed subtotal"
+                    >
+                      ⟲
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex justify-between px-4 py-2 text-sm">
               <span className="text-gray-500">HST ({(finalPricing.hstRate * 100).toFixed(0)}%)</span>
-              <span>{formatCurrencyUSD(finalPricing.hst)}</span>
+              <span>
+                {typeof subtotalOverride === 'number'
+                  ? formatCurrencyUSD(subtotalOverride * finalPricing.hstRate)
+                  : formatCurrencyUSD(finalPricing.hst)}
+              </span>
             </div>
           </div>
-          <div className="flex justify-between items-baseline px-4 py-3 bg-luxury-gold/10 border-t-2 border-luxury-gold/30">
+          {/* Editable Total */}
+          <div className="flex justify-between items-baseline px-4 py-3 bg-luxury-gold/10 border-t-2 border-luxury-gold/30 group">
             <span className="text-sm font-bold uppercase tracking-widest">New Total</span>
-            <span className="text-2xl font-serif text-luxury-gold font-medium">{formatCurrencyUSD(finalPricing.total)}</span>
+            {editingOverride === 'total' ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const n = parseFloat(overrideDraft.replace(/[^0-9.]/g, ''));
+                  if (!isNaN(n) && n >= 0) {
+                    setTotalOverride(n);
+                    setDirty(true);
+                  }
+                  setEditingOverride(null);
+                  setOverrideDraft('');
+                }}
+                className="flex items-center gap-1"
+              >
+                <span className="text-luxury-gold text-xl">$</span>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="decimal"
+                  value={overrideDraft}
+                  onChange={(e) => setOverrideDraft(e.target.value)}
+                  onBlur={() => { setEditingOverride(null); setOverrideDraft(''); }}
+                  className="w-40 px-3 py-1.5 text-right text-2xl font-serif text-luxury-gold border-2 border-luxury-gold rounded focus:outline-none"
+                />
+              </form>
+            ) : (
+              <div className="flex items-center gap-2">
+                {typeof totalOverride === 'number' && (
+                  <span className="text-[11px] text-gray-400 line-through">{formatCurrencyUSD(finalPricing.total)}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    // If subtotal is overridden, compute the implied total before opening editor
+                    const computedTotal = typeof subtotalOverride === 'number'
+                      ? subtotalOverride * (1 + finalPricing.hstRate)
+                      : finalPricing.total;
+                    const cur = typeof totalOverride === 'number' ? totalOverride : computedTotal;
+                    setOverrideDraft(cur.toFixed(2));
+                    setEditingOverride('total');
+                  }}
+                  className={`text-2xl font-serif font-medium hover:underline cursor-pointer ${typeof totalOverride === 'number' ? 'text-amber-700' : 'text-luxury-gold'}`}
+                  title="Click to override the final total manually"
+                >
+                  {formatCurrencyUSD(
+                    typeof totalOverride === 'number'
+                      ? totalOverride
+                      : (typeof subtotalOverride === 'number'
+                          ? subtotalOverride * (1 + finalPricing.hstRate)
+                          : finalPricing.total)
+                  )}
+                </button>
+                {typeof totalOverride === 'number' && (
+                  <button
+                    type="button"
+                    onClick={() => { setTotalOverride(null); setDirty(true); }}
+                    className="text-gray-400 hover:text-rose-500 text-base"
+                    title="Revert to computed total"
+                  >
+                    ⟲
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          {Math.abs(finalPricing.total - originalFinal.total) > 0.01 && (
-            <div className="px-4 py-2 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800">
-              {finalPricing.total > originalFinal.total
-                ? `+${formatCurrencyUSD(finalPricing.total - originalFinal.total)} vs previous total`
-                : `−${formatCurrencyUSD(originalFinal.total - finalPricing.total)} vs previous total`}
-            </div>
-          )}
+          {(() => {
+            const displayedTotal = typeof totalOverride === 'number'
+              ? totalOverride
+              : (typeof subtotalOverride === 'number'
+                  ? subtotalOverride * (1 + finalPricing.hstRate)
+                  : finalPricing.total);
+            const delta = displayedTotal - originalFinal.total;
+            if (Math.abs(delta) < 0.01) return null;
+            return (
+              <div className="px-4 py-2 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800">
+                {delta > 0
+                  ? `+${formatCurrencyUSD(delta)} vs previous total`
+                  : `−${formatCurrencyUSD(-delta)} vs previous total`}
+              </div>
+            );
+          })()}
         </div>
         <p className="text-[11px] text-gray-500 italic mt-2 leading-relaxed">
-          Changes you save here show up instantly on the customer's interactive proposal page. The original PDF attachment stays as a historical snapshot.
+          Click <strong>Subtotal</strong> or <strong>New Total</strong> to override manually. HST recalculates from the subtotal automatically. Changes save to the customer proposal page when you click Save.
         </p>
       </section>
 

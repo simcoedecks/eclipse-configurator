@@ -677,7 +677,25 @@ export default function Proposal() {
   const pb = data.pricingBreakdown || {};
   const customLineItems = data.customLineItems || [];
   const additionalPergolas = data.additionalPergolas || [];
-  const finalPricing = computeFinalPricing(pb, customLineItems, additionalPergolas);
+  const computedPricing = computeFinalPricing(pb, customLineItems, additionalPergolas);
+  // Apply admin manual overrides if set on the submission. Subtotal override
+  // recomputes HST + Total. Total override sets the final number directly
+  // (used when the admin negotiated a flat number with the customer).
+  const overrides = data.pricingOverride || {};
+  const finalPricing = (() => {
+    let subtotal = computedPricing.subtotal;
+    let hst = computedPricing.hst;
+    let total = computedPricing.total;
+    if (typeof overrides.subtotal === 'number') {
+      subtotal = overrides.subtotal;
+      hst = subtotal * computedPricing.hstRate;
+      total = subtotal + hst;
+    }
+    if (typeof overrides.total === 'number') {
+      total = overrides.total;
+    }
+    return { ...computedPricing, subtotal, hst, total };
+  })();
   const customCharges = customLineItems.filter((i: any) => i.kind !== 'discount');
   const customDiscounts = customLineItems.filter((i: any) => i.kind === 'discount');
   const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
