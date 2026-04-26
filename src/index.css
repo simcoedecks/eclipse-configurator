@@ -20,6 +20,13 @@
     @apply bg-luxury-paper text-luxury-black font-sans antialiased;
   }
 
+  /* Mobile-friendly slider: keep vertical page scroll working when the
+     user starts a touch on a horizontal slider track. The browser handles
+     horizontal slider drags; we only delegate vertical pans to the page. */
+  input[type='range'] {
+    touch-action: pan-y;
+  }
+
   .dark body,
   body:where(.dark *) {
     @apply bg-[#0a0a0a] text-[#e5e5e5];

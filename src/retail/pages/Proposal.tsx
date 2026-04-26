@@ -1441,8 +1441,8 @@ function SignatureModal({
                   <canvas
                     ref={canvasRef}
                     width={600}
-                    height={160}
-                    className="w-full h-40 cursor-crosshair touch-none"
+                    height={240}
+                    className="w-full h-56 sm:h-40 cursor-crosshair touch-none"
                     onMouseDown={startDraw}
                     onMouseMove={draw}
                     onMouseUp={endDraw}

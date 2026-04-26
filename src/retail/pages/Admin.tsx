@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { db, auth, googleProvider, signInWithPopup, onAuthStateChanged, User } from '../../shared/firebase';
 import { collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import {
-  LogOut, Download, Loader2, Mail, MailOpen, Calendar, MapPin, Phone, Plus, Building2, Send,
+  LogOut, Download, Loader2, Mail, MailOpen, Calendar, MapPin, Phone, Plus, Building2, Send, Menu,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
   Bookmark, Save, Copy, Sparkles, Paperclip, PenLine,
@@ -43,6 +43,10 @@ export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
+  // Mobile-only sidebar drawer toggle. On lg: and up, the sidebar is
+  // always visible; below that it's hidden and only opens via the
+  // hamburger button in the mobile header.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
@@ -571,8 +575,43 @@ export default function Admin() {
     <div className={`min-h-screen flex ${isDark ? 'dark bg-[#0a0a0a]' : 'bg-gradient-to-br from-luxury-paper via-white to-luxury-paper'}`}>
       <Toaster position="top-right" theme={isDark ? 'dark' : 'light'} />
 
+      {/* Mobile top bar — visible only on < lg. Houses the hamburger and a
+          condensed Eclipse / CRM brand row. Sidebar is hidden by default
+          and slides in as a drawer when toggled. */}
+      <div className="lg:hidden fixed top-0 inset-x-0 z-30 bg-luxury-black text-white border-b border-white/10 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          className="p-2 -ml-2 rounded-lg hover:bg-white/5"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Eclipse" className="h-6 object-contain brightness-0 invert" />
+          <span className="text-[10px] uppercase tracking-[0.25em] font-bold text-luxury-gold">CRM</span>
+        </div>
+        <div className="w-9" />
+      </div>
+
+      {/* Mobile drawer backdrop */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ─── SIDEBAR ─── */}
-      <aside className="w-64 bg-luxury-black text-white flex flex-col shrink-0">
+      <aside className={`bg-luxury-black text-white flex flex-col shrink-0 transition-transform duration-200 ease-out
+        lg:static lg:w-64 lg:translate-x-0
+        fixed inset-y-0 left-0 z-50 w-64
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}
+      onClick={() => {
+        // Close drawer when any nav item is clicked on mobile (event bubbles up here).
+        if (window.innerWidth < 1024) setSidebarOpen(false);
+      }}>
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center gap-2.5">
             <img src="/logo.png" alt="Eclipse" className="h-9 object-contain brightness-0 invert" />
@@ -646,7 +685,7 @@ export default function Admin() {
       </aside>
 
       {/* ─── MAIN CONTENT ─── */}
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-1 overflow-x-hidden pt-14 lg:pt-0">
         {/* Page header */}
         <header className={`sticky top-0 z-30 backdrop-blur-md border-b ${isDark ? 'bg-[#0a0a0a]/80 border-white/10' : 'bg-white/80 border-slate-200'}`}>
           <div className="px-8 py-4 flex items-center justify-between">
@@ -1009,11 +1048,11 @@ export default function Admin() {
                         <th className="p-3 font-semibold">{activeTab === 'submissions' ? 'Status' : 'Stage'}</th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1 hover:text-luxury-black">Customer <SortIcon col="name" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
-                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
+                        <th className="hidden md:table-cell p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1 hover:text-luxury-black">Value <SortIcon col="price" /></button></th>
-                        <th className="p-3 font-semibold">Owner</th>
-                        <th className="p-3 font-semibold">Tags</th>
-                        <th className="p-3 font-semibold">PDF</th>
+                        <th className="hidden lg:table-cell p-3 font-semibold">Owner</th>
+                        <th className="hidden lg:table-cell p-3 font-semibold">Tags</th>
+                        <th className="hidden md:table-cell p-3 font-semibold">PDF</th>
                       </tr>
                     </thead>
                     <tbody className="text-sm divide-y divide-slate-100">
@@ -1122,14 +1161,14 @@ export default function Admin() {
                                 {sub.phone && <a href={`tel:${sub.phone}`} onClick={(e) => e.stopPropagation()} className="hover:text-luxury-gold inline-flex items-center gap-1.5"><Phone className="w-3 h-3" />{sub.phone}</a>}
                               </div>
                             </td>
-                            <td className="p-3 align-top text-xs text-gray-600">
+                            <td className="hidden md:table-cell p-3 align-top text-xs text-gray-600">
                               {sub.city ? <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{sub.city}</div> : <span className="text-gray-400 italic">—</span>}
                             </td>
                             <td className="p-3 align-top font-bold text-luxury-black">{config.totalPrice || '—'}</td>
-                            <td className="p-3 align-top">
+                            <td className="hidden lg:table-cell p-3 align-top">
                               <AssignedToSelector submission={sub} compact />
                             </td>
-                            <td className="p-3 align-top">
+                            <td className="hidden lg:table-cell p-3 align-top">
                               <div className="flex flex-wrap gap-0.5 max-w-[140px]">
                                 {(sub.tags || []).slice(0, 2).map((t: string) => (
                                   <span key={t} className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{t}</span>
@@ -1137,7 +1176,7 @@ export default function Admin() {
                                 {(sub.tags || []).length > 2 && <span className="text-[9px] text-gray-400">+{sub.tags.length - 2}</span>}
                               </div>
                             </td>
-                            <td className="p-3 align-top" onClick={(e) => e.stopPropagation()}>
+                            <td className="hidden md:table-cell p-3 align-top" onClick={(e) => e.stopPropagation()}>
                               <div className="flex gap-1 items-center">
                                 {/* Quick action: in New Leads tab, give a one-click 'Mark Contacted'
                                     button so admins can process leads without opening the detail panel.
@@ -1356,13 +1395,13 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm lg:p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[94vh] overflow-hidden flex flex-col"
+        className="bg-white shadow-2xl flex flex-col w-full h-full overflow-hidden lg:rounded-2xl lg:max-w-6xl lg:max-h-[94vh] lg:h-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
