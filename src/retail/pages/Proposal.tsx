@@ -722,8 +722,10 @@ export default function Proposal() {
   const frameHex = COLORS.find(c => c.name === cfg.frameColor)?.hex || '#0A0A0A';
   const louverHex = COLORS.find(c => c.name === cfg.louverColor)?.hex || '#F6F6F6';
 
-  // Group accessories for display
-  const items = pb.itemizedAccessories || [];
+  // Group accessories for display — use the OVERRIDE-aware list so the
+  // individual line amounts on the customer proposal reflect any manual
+  // adjustments admin made in the Pricing tab.
+  const items = effectivePb?.itemizedAccessories || [];
   const wallCoverages = items.filter((i: any) =>
     i.id?.startsWith('screen_') || i.id?.startsWith('wall_') || i.id?.startsWith('guillotine_')
   );
@@ -964,7 +966,7 @@ export default function Proposal() {
                 <p className="font-medium text-luxury-black">Motorized Aluminum Louvered Pergola</p>
                 <p className="text-xs text-gray-500 mt-1">Includes motorized louver system &amp; LED perimeter lighting</p>
               </div>
-              <span className="font-serif text-luxury-gold text-lg">{fmt(pb.basePrice)}</span>
+              <span className="font-serif text-luxury-gold text-lg">{fmt(effectivePb?.basePrice ?? pb.basePrice)}</span>
             </div>
 
             {louverUpgrade && (
