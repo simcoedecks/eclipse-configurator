@@ -695,10 +695,9 @@ export async function createExpressApp() {
         (isDuplicate ? "⚠ DUPLICATE · " : "📐 New Quote · ") +
         `${name}` +
         (city ? ` · ${city}` : "");
-      const customerSubject = `Your Eclipse Pergola design is ready`;
-      // Suppress unused-var warning for customerFirst — kept for future use
-      // (e.g. body greetings) but not currently injected into the subject.
-      void customerFirst;
+      // Personal greeting using the customer's first name. Falls back to a
+      // friendly 'Hi there, ...' when no name was provided.
+      const customerSubject = `Hi ${customerFirst}, your pergola design is ready`;
 
       const makePayload = (to: string | string[], subject: string) => ({
         from: FROM_EMAIL,
