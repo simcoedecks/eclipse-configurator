@@ -691,15 +691,11 @@ export async function createExpressApp() {
         : undefined;
 
       const customerFirst = String(name || "").split(/\s+/)[0] || "there";
-      const totalForSubject = configuration.totalPrice || "";
       const adminSubject =
         (isDuplicate ? "⚠ DUPLICATE · " : "📐 New Quote · ") +
         `${name}` +
-        (totalForSubject ? ` · ${totalForSubject}` : "") +
         (city ? ` · ${city}` : "");
-      const customerSubject = totalForSubject
-        ? `Your Eclipse Pergola design is ready — ${totalForSubject}`
-        : `Your Eclipse Pergola design is ready`;
+      const customerSubject = `Your Eclipse Pergola design is ready`;
       // Suppress unused-var warning for customerFirst — kept for future use
       // (e.g. body greetings) but not currently injected into the subject.
       void customerFirst;
@@ -819,7 +815,7 @@ export async function createExpressApp() {
             await resend.emails.send({
               from: FROM_EMAIL,
               to: dealerEmail,
-              subject: `🌟 New lead from ${name}${city ? ` — ${city}` : ''}${configuration.totalPrice ? ` · ${configuration.totalPrice}` : ''}`,
+              subject: `🌟 New lead from ${name}${city ? ` — ${city}` : ''}`,
               html: `
                 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;">
                   <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Customer Lead</h1>
