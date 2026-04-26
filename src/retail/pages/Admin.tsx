@@ -42,6 +42,7 @@ export default function Admin() {
   const { toggleTheme, isDark } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
   const [bids, setBids] = useState<any[]>([]);
@@ -496,10 +497,33 @@ export default function Admin() {
           <h1 className="text-2xl font-serif text-luxury-black mb-2">Admin Portal</h1>
           <p className="text-sm text-gray-500 mb-8">Sign in with your admin Google account to access the CRM.</p>
           <button
-            onClick={async () => { try { await signInWithPopup(auth, googleProvider); } catch (e: any) { setError('Failed: ' + e.message); } }}
-            className="w-full bg-luxury-black text-white py-3 px-4 rounded-lg font-medium hover:bg-luxury-black/90 transition-colors"
+            disabled={signingIn}
+            onClick={async () => {
+              if (signingIn) return;
+              setSigningIn(true);
+              setError(null);
+              try {
+                await signInWithPopup(auth, googleProvider);
+              } catch (e: any) {
+                // 'cancelled-popup-request' fires when a second popup is
+                // requested before the first one resolves. It's harmless
+                // and typically means the user double-clicked Sign In.
+                // 'popup-closed-by-user' = user dismissed the window.
+                // Silently swallow both — nothing to alert about.
+                if (
+                  e?.code !== 'auth/cancelled-popup-request' &&
+                  e?.code !== 'auth/popup-closed-by-user'
+                ) {
+                  setError(`Sign-in failed: ${e?.message || 'unknown error'}`);
+                }
+              } finally {
+                setSigningIn(false);
+              }
+            }}
+            className="w-full bg-luxury-black text-white py-3 px-4 rounded-lg font-medium hover:bg-luxury-black/90 transition-colors disabled:opacity-60 disabled:cursor-wait inline-flex items-center justify-center gap-2"
           >
-            Sign in with Google
+            {signingIn && <Loader2 className="w-4 h-4 animate-spin" />}
+            {signingIn ? 'Opening Google sign-in…' : 'Sign in with Google'}
           </button>
           {error && <p className="text-red-500 mt-4 text-sm">{error}</p>}
         </div>
