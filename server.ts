@@ -690,11 +690,25 @@ export async function createExpressApp() {
         ? [{ name: "submissionId", value: submissionId }]
         : undefined;
 
-      const makePayload = (to: string | string[]) => ({
+      const customerFirst = String(name || "").split(/\s+/)[0] || "there";
+      const totalForSubject = configuration.totalPrice || "";
+      const adminSubject =
+        (isDuplicate ? "⚠ DUPLICATE · " : "📐 New Quote · ") +
+        `${name}` +
+        (totalForSubject ? ` · ${totalForSubject}` : "") +
+        (city ? ` · ${city}` : "");
+      const customerSubject = totalForSubject
+        ? `Your Eclipse Pergola design is ready — ${totalForSubject}`
+        : `Your Eclipse Pergola design is ready`;
+      // Suppress unused-var warning for customerFirst — kept for future use
+      // (e.g. body greetings) but not currently injected into the subject.
+      void customerFirst;
+
+      const makePayload = (to: string | string[], subject: string) => ({
         from: FROM_EMAIL,
         to,
         ...(resendTags ? { tags: resendTags } : {}),
-        subject: `${isDuplicate ? "[DUPLICATE] " : ""}New Pergola Quote: ${name}`,
+        subject,
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
             <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Pergola Quote</h1>
@@ -739,7 +753,7 @@ export async function createExpressApp() {
       let adminEmailId: string | undefined;
       let adminError: string | null = null;
       try {
-        const r = await resend.emails.send(makePayload(ADMIN_EMAIL));
+        const r = await resend.emails.send(makePayload(ADMIN_EMAIL, adminSubject));
         if (r.error) {
           adminError = r.error.message;
           console.error("Resend admin error:", r.error);
@@ -754,7 +768,7 @@ export async function createExpressApp() {
       let customerError: string | null = null;
       if (customerEmail) {
         try {
-          const r = await resend.emails.send(makePayload(customerEmail));
+          const r = await resend.emails.send(makePayload(customerEmail, customerSubject));
           if (r.error) customerError = r.error.message;
           else customerEmailId = r.data?.id;
         } catch (e: unknown) {
@@ -805,7 +819,7 @@ export async function createExpressApp() {
             await resend.emails.send({
               from: FROM_EMAIL,
               to: dealerEmail,
-              subject: `New lead from your Eclipse co-branded configurator — ${name}`,
+              subject: `🌟 New lead from ${name}${city ? ` — ${city}` : ''}${configuration.totalPrice ? ` · ${configuration.totalPrice}` : ''}`,
               html: `
                 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;">
                   <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Customer Lead</h1>
