@@ -101,10 +101,19 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
   const grouped = useMemo(() => {
     const map: Record<string, any[]> = {};
     PIPELINE_STAGES.forEach(s => { map[s.id] = []; });
+    // Synthetic columns at the start of the kanban — drafts (still in-flight)
+    // and abandoned drafts (idle 20+ min). These let the sales team see and
+    // reach out to people who started but never finished the configurator.
+    map['__abandoned'] = [];
+    map['__in_progress'] = [];
     submissions.forEach(sub => {
-      // Drafts (in-progress / abandoned) live outside the sales pipeline —
-      // they show up in their own surface, not as kanban cards.
-      if (sub.isDraft) return;
+      if (sub.isDraft) {
+        const last = sub.lastStepAt?.toDate?.() || sub.updatedAt?.toDate?.() || sub.createdAt?.toDate?.();
+        const idleMin = last ? (Date.now() - last.getTime()) / 60000 : 0;
+        if (idleMin >= 20) map['__abandoned'].push(sub);
+        else                map['__in_progress'].push(sub);
+        return;
+      }
       const stage = sub.pipelineStage || defaultStageFor(sub);
       if (!map[stage]) map[stage] = [];
       map[stage].push(sub);
@@ -112,9 +121,24 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
     return map;
   }, [submissions]);
 
+  // Synthetic stage descriptors for the abandoned + in-progress columns.
+  // They look like real PIPELINE_STAGES entries to the renderer but are
+  // not draggable targets (they exist outside the sales pipeline).
+  const SYNTHETIC_STAGES = [
+    { id: '__abandoned',  label: 'Abandoned',   accent: '#e11d48', readonly: true },
+    { id: '__in_progress', label: 'In Progress', accent: '#ea580c', readonly: true },
+  ];
+  const ALL_COLUMNS: Array<typeof PIPELINE_STAGES[number] & { readonly?: boolean }> = [
+    ...SYNTHETIC_STAGES.map(s => ({ ...s, color: '', description: '' })) as any,
+    ...PIPELINE_STAGES,
+  ];
+
   const handleDrop = (e: DragEvent<HTMLDivElement>, stageId: string) => {
     e.preventDefault();
     setDragOver(null);
+    // Synthetic columns (abandoned / in-progress) aren't drop targets —
+    // a draft has to be properly submitted before it can join the pipeline.
+    if (stageId.startsWith('__')) return;
     if (!draggedId) return;
     const sub = submissions.find(s => s.id === draggedId);
     if (!sub) return;
@@ -129,8 +153,9 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
   return (
     <div className="overflow-x-auto pb-4 -mx-6 px-6">
       <div className="flex gap-4 min-w-max">
-        {PIPELINE_STAGES.map(stage => {
+        {ALL_COLUMNS.map(stage => {
           const items = grouped[stage.id] || [];
+          const isSynthetic = stage.id.startsWith('__');
           const valueTotal = items.reduce((sum, s) => {
             const v = s.pricingBreakdown?.total || 0;
             return sum + (typeof v === 'number' ? v : 0);
@@ -139,12 +164,13 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
           return (
             <div
               key={stage.id}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(stage.id); }}
+              onDragOver={(e) => { if (!isSynthetic) { e.preventDefault(); setDragOver(stage.id); } }}
               onDragLeave={() => setDragOver(null)}
               onDrop={(e) => handleDrop(e, stage.id)}
               className={`w-72 shrink-0 rounded-xl border-2 transition-colors ${
-                isOver ? 'border-luxury-gold bg-luxury-gold/5' : 'border-transparent'
-              }`}
+                isOver && !isSynthetic ? 'border-luxury-gold bg-luxury-gold/5' : 'border-transparent'
+              } ${isSynthetic ? 'opacity-90' : ''}`}
+              title={isSynthetic ? 'Drafts — not draggable into the pipeline. Convert by clicking the lead and changing its stage.' : undefined}
             >
               <div className="px-3 py-3 flex items-center justify-between border-b-2 rounded-t-xl"
                    style={{ borderBottomColor: stage.accent, background: `${stage.accent}10` }}>
@@ -164,7 +190,7 @@ export default function KanbanBoard({ submissions, onOpen }: Props) {
               <div className="p-2 min-h-[200px] max-h-[70vh] overflow-y-auto">
                 {items.length === 0 ? (
                   <p className="text-xs text-gray-400 italic text-center py-8 px-2">
-                    Drop leads here
+                    {isSynthetic ? 'Nothing here right now' : 'Drop leads here'}
                   </p>
                 ) : (
                   items.map(sub => (
