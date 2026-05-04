@@ -48,7 +48,17 @@ try {
   __dirname  = process.cwd();
 }
 const resend      = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "test@example.com";
+// ADMIN_EMAIL accepts a single address OR a comma-separated list.
+// Resend's `to` field accepts an array, so multiple admins can receive
+// every quote / accept / change-request notification from a single env var.
+//   ADMIN_EMAIL=info@eclipsepergola.ca
+//   ADMIN_EMAIL=info@eclipsepergola.ca, info@simcoedecks.ca, ...
+const ADMIN_EMAIL_RAW = process.env.ADMIN_EMAIL || "test@example.com";
+const ADMIN_EMAIL_LIST = ADMIN_EMAIL_RAW.split(",").map((e) => e.trim()).filter(Boolean);
+// Single primary address used for the duplicate-suppression check (a
+// customer who enters this on the form shouldn't also receive a 'customer'
+// copy on top of the 'admin' copy). Default to the first entry.
+const ADMIN_EMAIL = ADMIN_EMAIL_LIST[0] || "test@example.com";
 const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || "test@example.com";
 const PORT        = parseInt(process.env.PORT || "3000", 10);
 
@@ -748,7 +758,7 @@ export async function createExpressApp() {
       let adminEmailId: string | undefined;
       let adminError: string | null = null;
       try {
-        const r = await resend.emails.send(makePayload(ADMIN_EMAIL, adminSubject));
+        const r = await resend.emails.send(makePayload(ADMIN_EMAIL_LIST, adminSubject));
         if (r.error) {
           adminError = r.error.message;
           console.error("Resend admin error:", r.error);
@@ -1143,7 +1153,7 @@ export async function createExpressApp() {
           try {
             await resend.emails.send({
               from: FROM_EMAIL,
-              to: ADMIN_EMAIL,
+              to: ADMIN_EMAIL_LIST,
               subject: `✅ Proposal Accepted — ${existing.name || signedName}`,
               html: `
                 <h2 style="color:#1A1A1A;">Proposal Accepted</h2>
