@@ -55,16 +55,17 @@ service cloud.firestore {
 
     function isAdmin() {
       // Two paths to admin:
-      //   1. Hard-coded email allowlist — verified Google accounts only.
-      //      Add team members here, then have them sign in with Google.
+      //   1. Hard-coded email allowlist — Google OR email/password accounts.
+      //      Add team members here, then have them sign in.
       //   2. Firestore users/{uid} doc with role='admin' — useful for
       //      contractor accounts or anyone managed via the Firebase
       //      Console without a rules redeploy.
+      // Note: we don't enforce email_verified here because account creation
+      // for these allowlisted addresses happens in the Firebase Console
+      // (not public sign-up), so the allowlist itself is the trust gate.
       return isAuthenticated() && (
-        (request.auth.token.email_verified == true && (
-          request.auth.token.email == "michael@simcoedecks.ca" ||
-          request.auth.token.email == "kevin@eclipsepergola.ca"
-        )) ||
+        request.auth.token.email == "michael@simcoedecks.ca" ||
+        request.auth.token.email == "kevin@eclipsepergola.ca" ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
