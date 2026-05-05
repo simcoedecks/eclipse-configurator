@@ -54,9 +54,19 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "michael@simcoedecks.ca" && request.auth.token.email_verified == true));
+      // Two paths to admin:
+      //   1. Hard-coded email allowlist — verified Google accounts only.
+      //      Add team members here, then have them sign in with Google.
+      //   2. Firestore users/{uid} doc with role='admin' — useful for
+      //      contractor accounts or anyone managed via the Firebase
+      //      Console without a rules redeploy.
+      return isAuthenticated() && (
+        (request.auth.token.email_verified == true && (
+          request.auth.token.email == "michael@simcoedecks.ca" ||
+          request.auth.token.email == "kevin@eclipsepergola.ca"
+        )) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     function isOwner(userId) {
