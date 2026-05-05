@@ -1006,25 +1006,57 @@ export default function Proposal() {
               </div>
             )}
 
-            {/* Additional pergolas on the same project */}
+            {/* Additional pergolas on the same project — full line-item
+                breakdown so the customer sees the same level of detail as
+                the primary pergola, not just a single summary number. */}
             {additionalPergolas.length > 0 && (
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Additional Pergolas</p>
-                <div className="space-y-3">
-                  {additionalPergolas.map((p: any) => (
-                    <div key={p.id} className="border border-luxury-cream rounded-lg p-3">
-                      <div className="flex justify-between items-start mb-1">
-                        <div>
-                          <p className="font-semibold text-luxury-black">{p.label}</p>
-                          <p className="text-[11px] text-gray-500">
-                            {p.width}' × {p.depth}' × {p.height}' • {p.frameColor} frame • {p.louverColor} louvers
-                          </p>
-                          {p.notes && <p className="text-[11px] text-gray-500 italic mt-1">{p.notes}</p>}
+                <div className="space-y-4">
+                  {additionalPergolas.map((p: any) => {
+                    const pTotal = computeAdditionalPergolaPrice(p);
+                    const lineItems = Array.isArray(p.lineItems) ? p.lineItems : [];
+                    return (
+                      <div key={p.id} className="border border-luxury-cream rounded-lg overflow-hidden">
+                        {/* Header — pergola name + dimensions + colors + total */}
+                        <div className="bg-luxury-paper px-4 py-3 border-b border-luxury-cream flex justify-between items-start gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-luxury-black">{p.label}</p>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              {p.width}' × {p.depth}' × {p.height}'
+                              {p.frameColor && ` • ${p.frameColor} frame`}
+                              {p.louverColor && ` • ${p.louverColor} louvers`}
+                            </p>
+                            {p.notes && <p className="text-[11px] text-gray-500 italic mt-1">{p.notes}</p>}
+                          </div>
+                          <span className="font-serif text-luxury-gold text-lg whitespace-nowrap shrink-0">
+                            {fmt(pTotal)}
+                          </span>
                         </div>
-                        <span className="font-serif text-luxury-gold text-lg whitespace-nowrap ml-2">{fmt(computeAdditionalPergolaPrice(p))}</span>
+                        {/* Line items, when present */}
+                        {lineItems.length > 0 && (
+                          <div className="divide-y divide-luxury-cream">
+                            {lineItems.map((li: any, idx: number) => {
+                              const qty = li.quantity || 1;
+                              const lineTotal = (li.cost || 0) * qty;
+                              return (
+                                <div key={li.id || idx} className="px-4 py-2 flex justify-between items-start gap-3 text-sm">
+                                  <div className="min-w-0">
+                                    <p className="text-luxury-black/90">
+                                      {li.name || 'Item'}
+                                      {qty > 1 && <span className="text-gray-400"> × {qty}</span>}
+                                    </p>
+                                    {li.description && <p className="text-[11px] text-gray-500 mt-0.5">{li.description}</p>}
+                                  </div>
+                                  <span className="text-luxury-black/80 whitespace-nowrap shrink-0">{fmt(lineTotal)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
