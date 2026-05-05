@@ -1006,60 +1006,89 @@ export default function Proposal() {
               </div>
             )}
 
-            {/* Additional pergolas on the same project — full line-item
-                breakdown so the customer sees the same level of detail as
-                the primary pergola, not just a single summary number. */}
-            {additionalPergolas.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Additional Pergolas</p>
-                <div className="space-y-4">
-                  {additionalPergolas.map((p: any) => {
-                    const pTotal = computeAdditionalPergolaPrice(p);
-                    const lineItems = Array.isArray(p.lineItems) ? p.lineItems : [];
-                    return (
-                      <div key={p.id} className="border border-luxury-cream rounded-lg overflow-hidden">
-                        {/* Header — pergola name + dimensions + colors + total */}
-                        <div className="bg-luxury-paper px-4 py-3 border-b border-luxury-cream flex justify-between items-start gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-luxury-black">{p.label}</p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">
-                              {p.width}' × {p.depth}' × {p.height}'
-                              {p.frameColor && ` • ${p.frameColor} frame`}
-                              {p.louverColor && ` • ${p.louverColor} louvers`}
-                            </p>
-                            {p.notes && <p className="text-[11px] text-gray-500 italic mt-1">{p.notes}</p>}
-                          </div>
-                          <span className="font-serif text-luxury-gold text-lg whitespace-nowrap shrink-0">
-                            {fmt(pTotal)}
-                          </span>
-                        </div>
-                        {/* Line items, when present */}
-                        {lineItems.length > 0 && (
-                          <div className="divide-y divide-luxury-cream">
-                            {lineItems.map((li: any, idx: number) => {
-                              const qty = li.quantity || 1;
-                              const lineTotal = (li.cost || 0) * qty;
-                              return (
-                                <div key={li.id || idx} className="px-4 py-2 flex justify-between items-start gap-3 text-sm">
-                                  <div className="min-w-0">
-                                    <p className="text-luxury-black/90">
-                                      {li.name || 'Item'}
-                                      {qty > 1 && <span className="text-gray-400"> × {qty}</span>}
-                                    </p>
-                                    {li.description && <p className="text-[11px] text-gray-500 mt-0.5">{li.description}</p>}
-                                  </div>
-                                  <span className="text-luxury-black/80 whitespace-nowrap shrink-0">{fmt(lineTotal)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+            {/* Additional pergolas on the same project — formatted identically
+                to the primary pergola block above (header line, then category-
+                grouped line items) so the customer sees a consistent layout
+                across every pergola in the project. */}
+            {additionalPergolas.map((p: any) => {
+              const pTotal = computeAdditionalPergolaPrice(p);
+              const allItems: any[] = Array.isArray(p.lineItems) ? p.lineItems : [];
+              // Categorize line items by name. Names admin can enter from
+              // the CRM Pricing → Additional Pergolas catalog mostly fall
+              // into 'wall coverage' (screens, walls, guillotine windows)
+              // or 'add-on' (heaters, lighting, audio).
+              const isWallCoverage = (n: string) => {
+                const s = (n || '').toLowerCase();
+                return s.includes('screen') || s.includes('privacy wall') || s.includes('guillotine');
+              };
+              const isPergolaBase = (n: string) => {
+                const s = (n || '').toLowerCase();
+                return s.includes('motorized aluminum louvered pergola') || s === 'pergola' || s.includes('base pergola');
+              };
+              const baseLine = allItems.find((i) => isPergolaBase(i.name));
+              const itemsAfterBase = allItems.filter((i) => i !== baseLine);
+              const pWallCoverages = itemsAfterBase.filter((i) => isWallCoverage(i.name));
+              const pAddOns = itemsAfterBase.filter((i) => !isWallCoverage(i.name));
+              // Header price: if a base line was found, show its cost; else
+              // show the total of everything (so the customer still sees a
+              // single pergola price up top).
+              const headerPrice = baseLine ? (baseLine.cost || 0) * (baseLine.quantity || 1) : pTotal;
+              return (
+                <div key={p.id} className="space-y-5 pt-4 border-t-2 border-luxury-gold/30">
+                  {/* Pergola base — same line as the primary pergola header */}
+                  <div className="flex justify-between items-start pb-4 border-b border-luxury-cream">
+                    <div>
+                      <p className="font-medium text-luxury-black">{p.label || 'Additional Pergola'}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {p.width}' × {p.depth}' × {p.height}'
+                        {p.frameColor && ` • ${p.frameColor} frame`}
+                        {p.louverColor && ` • ${p.louverColor} louvers`}
+                      </p>
+                      {p.notes && <p className="text-xs text-gray-500 italic mt-1">{p.notes}</p>}
+                    </div>
+                    <span className="font-serif text-luxury-gold text-lg whitespace-nowrap ml-2">{fmt(headerPrice)}</span>
+                  </div>
+
+                  {/* Wall coverages — same gold-heading + list pattern */}
+                  {pWallCoverages.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Wall Coverages</p>
+                      <div className="space-y-1">
+                        {pWallCoverages.map((i: any, idx: number) => {
+                          const qty = i.quantity || 1;
+                          const lineCost = (i.cost || 0) * qty;
+                          return (
+                            <div key={i.id || idx} className="flex justify-between items-center text-sm py-1">
+                              <span className="text-gray-700">{i.name}{qty > 1 ? ` × ${qty}` : ''}</span>
+                              <span className="font-medium text-gray-900">{fmt(lineCost)}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {/* Add-ons */}
+                  {pAddOns.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-luxury-gold mb-2">Add-Ons &amp; Features</p>
+                      <div className="space-y-1">
+                        {pAddOns.map((i: any, idx: number) => {
+                          const qty = i.quantity || 1;
+                          const lineCost = (i.cost || 0) * qty;
+                          return (
+                            <div key={i.id || idx} className="flex justify-between items-center text-sm py-1">
+                              <span className="text-gray-700">{i.name}{qty > 1 ? ` × ${qty}` : ''}</span>
+                              <span className="font-medium text-gray-900">{fmt(lineCost)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })}
 
             {/* Custom additions (admin-added) */}
             {customCharges.length > 0 && (
