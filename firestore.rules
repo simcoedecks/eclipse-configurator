@@ -60,6 +60,16 @@ service cloud.firestore {
       );
     }
 
+    function isUidAdmin() {
+      // Hard-coded UID allowlist — used when a team member signs in with
+      // email/password and the email-claim path doesn't trigger. UIDs are
+      // immutable per Firebase Auth user, so this is the most reliable
+      // bypass when the email-allowlist clause fails to match.
+      return isAuthenticated() && (
+        request.auth.uid == "CmvwjS0C6BRm7QJJUnEwAODp5ak2"  // kevin@eclipsepergola.ca
+      );
+    }
+
     function isUsersDocAdmin() {
       // Guarded with exists() — a get() on a non-existent doc returns a
       // null-data resource that throws when .data.role is read, killing
@@ -71,10 +81,14 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Two paths: hard-coded email allowlist OR a users/{uid} role doc.
-      // We don't enforce email_verified — accounts for allowlisted emails
-      // are created in the Firebase Console, so the allowlist is the gate.
-      return isEmailAdmin() || isUsersDocAdmin();
+      // Three paths to admin (in cheapest-first order so we short-circuit
+      // before doing any Firestore reads):
+      //   1. UID allowlist  — most reliable, immutable identifier
+      //   2. Email allowlist — convenient but case-sensitive
+      //   3. users/{uid} role doc — managed via Firebase Console
+      // We don't enforce email_verified because allowlisted accounts are
+      // created in the Firebase Console (not public sign-up).
+      return isUidAdmin() || isEmailAdmin() || isUsersDocAdmin();
     }
 
     function isOwner(userId) {
