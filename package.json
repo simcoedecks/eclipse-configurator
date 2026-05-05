@@ -10,7 +10,8 @@
     "build:netlify": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "rules:deploy": "firebase deploy --only firestore:ai-studio-50a4e31b-a41e-4089-bd4a-7641dbcbf9bf:rules --project gen-lang-client-0219790250"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
