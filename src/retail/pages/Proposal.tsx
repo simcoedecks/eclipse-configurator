@@ -960,11 +960,18 @@ export default function Proposal() {
           <h2 className="text-lg font-serif text-luxury-black mb-6">Investment Breakdown</h2>
 
           <div className="space-y-5">
-            {/* Pergola base */}
+            {/* Pergola #1 — primary unit. Subtitle mirrors the format used
+                on additional pergolas so the layout is consistent across
+                every pergola in a multi-unit quote. */}
             <div className="flex justify-between items-start pb-4 border-b border-luxury-cream">
               <div>
-                <p className="font-medium text-luxury-black">Motorized Aluminum Louvered Pergola</p>
-                <p className="text-xs text-gray-500 mt-1">Includes motorized louver system &amp; LED perimeter lighting</p>
+                <p className="font-medium text-luxury-black">Pergola #1</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {cfg.width}' × {cfg.depth}' × {cfg.height}'
+                  {cfg.frameColor && ` • ${cfg.frameColor} frame`}
+                  {cfg.louverColor && ` • ${cfg.louverColor} louvers`}
+                </p>
+                <p className="text-[11px] text-gray-400 italic mt-1">Includes motorized louver system &amp; LED perimeter lighting</p>
               </div>
               <span className="font-serif text-luxury-gold text-lg">{fmt(effectivePb?.basePrice ?? pb.basePrice)}</span>
             </div>
@@ -1010,8 +1017,12 @@ export default function Proposal() {
                 to the primary pergola block above (header line, then category-
                 grouped line items) so the customer sees a consistent layout
                 across every pergola in the project. */}
-            {additionalPergolas.map((p: any) => {
+            {additionalPergolas.map((p: any, pIdx: number) => {
               const pTotal = computeAdditionalPergolaPrice(p);
+              // Sequential numbering — primary pergola is #1, additionals
+              // continue from #2. Always use the canonical label even if
+              // admin set a custom one in the CRM (consistent with primary).
+              const pergolaNumber = pIdx + 2;
               const allItems: any[] = Array.isArray(p.lineItems) ? p.lineItems : [];
               // Categorize line items by name. Names admin can enter from
               // the CRM Pricing → Additional Pergolas catalog mostly fall
@@ -1035,10 +1046,10 @@ export default function Proposal() {
               const headerPrice = baseLine ? (baseLine.cost || 0) * (baseLine.quantity || 1) : pTotal;
               return (
                 <div key={p.id} className="space-y-5 pt-4 border-t-2 border-luxury-gold/30">
-                  {/* Pergola base — same line as the primary pergola header */}
+                  {/* Pergola #N — same line format as the primary pergola header */}
                   <div className="flex justify-between items-start pb-4 border-b border-luxury-cream">
                     <div>
-                      <p className="font-medium text-luxury-black">{p.label || 'Additional Pergola'}</p>
+                      <p className="font-medium text-luxury-black">Pergola #{pergolaNumber}</p>
                       <p className="text-xs text-gray-500 mt-1">
                         {p.width}' × {p.depth}' × {p.height}'
                         {p.frameColor && ` • ${p.frameColor} frame`}
