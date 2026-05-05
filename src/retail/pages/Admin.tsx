@@ -109,10 +109,25 @@ export default function Admin() {
   // Data listeners
   useEffect(() => {
     if (!user) return;
+    // Diagnostic logging — prints the signed-in user's UID + email so the
+    // admin can compare against what's in the Firestore rules allowlist.
+    // This is the fastest way to debug 'permission-denied' loops.
+    console.log('[admin-auth] signed in as', {
+      uid: user.uid,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      providerId: user.providerData?.[0]?.providerId,
+    });
     const cleanups: Array<() => void> = [];
     try {
       const qSub = query(collection(db, 'submissions'), orderBy('createdAt', 'desc'));
-      cleanups.push(onSnapshot(qSub, (snap) => setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+      cleanups.push(onSnapshot(qSub,
+        (snap) => setSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        (err) => {
+          console.error('[admin-auth] submissions listener denied for uid', user.uid, 'email', user.email, err);
+          setError(`No permission to read submissions. Signed in as ${user.email} (uid: ${user.uid}). Check Firestore rules.`);
+        }
+      ));
 
       const qJobs = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
       cleanups.push(onSnapshot(qJobs, (snap) => {
