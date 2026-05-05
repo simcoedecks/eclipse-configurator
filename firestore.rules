@@ -53,21 +53,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      // Two paths to admin:
-      //   1. Hard-coded email allowlist — Google OR email/password accounts.
-      //      Add team members here, then have them sign in.
-      //   2. Firestore users/{uid} doc with role='admin' — useful for
-      //      contractor accounts or anyone managed via the Firebase
-      //      Console without a rules redeploy.
-      // Note: we don't enforce email_verified here because account creation
-      // for these allowlisted addresses happens in the Firebase Console
-      // (not public sign-up), so the allowlist itself is the trust gate.
+    function isEmailAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == "michael@simcoedecks.ca" ||
-        request.auth.token.email == "kevin@eclipsepergola.ca" ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        request.auth.token.email == "kevin@eclipsepergola.ca"
       );
+    }
+
+    function isUsersDocAdmin() {
+      // Guarded with exists() — a get() on a non-existent doc returns a
+      // null-data resource that throws when .data.role is read, killing
+      // the whole rule evaluation even inside an ||. exists() short-
+      // circuits cleanly.
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isAdmin() {
+      // Two paths: hard-coded email allowlist OR a users/{uid} role doc.
+      // We don't enforce email_verified — accounts for allowlisted emails
+      // are created in the Firebase Console, so the allowlist is the gate.
+      return isEmailAdmin() || isUsersDocAdmin();
     }
 
     function isOwner(userId) {
