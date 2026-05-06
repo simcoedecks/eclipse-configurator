@@ -1360,6 +1360,17 @@ export default function Admin() {
                                 <p className="font-semibold text-luxury-black">{sub.name}</p>
                               </div>
                               <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
+                              {sub.dealerName && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setDealerFilter(sub.dealerSlug || 'all'); }}
+                                  title={`Filter to leads from ${sub.dealerName}`}
+                                  className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+                                >
+                                  <Building2 className="w-2.5 h-2.5" />
+                                  {sub.dealerName}
+                                </button>
+                              )}
                             </td>
                             <td className="p-3 align-top">
                               <div className="flex flex-col gap-0.5 text-xs text-gray-600">
@@ -1540,6 +1551,7 @@ export default function Admin() {
           contractors={contractors}
           submittedTwin={detailSub.isDraft ? submittedTwinByDraftId.get(detailSub.id) || null : null}
           onJumpToSubmission={(s) => setDetailSub(s)}
+          onFilterByDealer={(slug) => { setDealerFilter(slug); setActiveTab('submissions'); }}
           onClose={() => setDetailSub(null)}
           onCompose={setComposeMode}
           onMarkUnread={() => { markAsUnread(detailSub.id); setDetailSub(null); }}
@@ -1566,7 +1578,7 @@ export default function Admin() {
 }
 
 // ─── SUBMISSION DETAIL MODAL ───────────────────────────────────────────────
-function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, contractors, submittedTwin, onJumpToSubmission }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; onDelete: () => void; contractors: any[]; submittedTwin?: any | null; onJumpToSubmission?: (s: any) => void }) {
+function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, contractors, submittedTwin, onJumpToSubmission, onFilterByDealer }: { sub: any; onClose: () => void; onCompose: (m: 'email' | 'sms') => void; onMarkUnread: () => void; onDelete: () => void; contractors: any[]; submittedTwin?: any | null; onJumpToSubmission?: (s: any) => void; onFilterByDealer?: (slug: string) => void }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pricing' | 'activity' | 'notes' | 'tasks' | 'files' | 'pdf'>('overview');
   const cfg = sub.configuration || {};
   // Fallback: recompute basePrice from dimensions if the stored
@@ -1900,6 +1912,57 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
                     </div>
                   </div>
                 </section>
+                {(sub.dealerName || sub.dealerEmail || sub.dealerPhone || sub.dealerContact) && (
+                  <section className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-indigo-700" />
+                        <h3 className="text-[10px] uppercase tracking-widest font-bold text-indigo-700">Contractor</h3>
+                      </div>
+                      {sub.dealerSlug && onFilterByDealer && (
+                        <button
+                          type="button"
+                          onClick={() => { onFilterByDealer(sub.dealerSlug); onClose(); }}
+                          className="text-[10px] uppercase tracking-widest font-bold text-indigo-700 hover:underline"
+                          title="Filter all submissions to this contractor"
+                        >
+                          See all leads →
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-3">
+                      {sub.dealerLogoUrl && (
+                        <img
+                          src={sub.dealerLogoUrl}
+                          alt={sub.dealerName ? `${sub.dealerName} logo` : 'Contractor logo'}
+                          className="h-10 max-w-[120px] object-contain rounded bg-white p-1 border border-indigo-200 shrink-0"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 space-y-1 text-sm">
+                        {sub.dealerName && <div className="font-semibold text-luxury-black">{sub.dealerName}</div>}
+                        {sub.dealerContact && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-700">
+                            <span className="text-[10px] uppercase tracking-widest text-gray-400 w-12 shrink-0">Contact</span>
+                            <span>{sub.dealerContact}</span>
+                          </div>
+                        )}
+                        {sub.dealerEmail && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Mail className="w-3 h-3 text-gray-400" />
+                            <a href={`mailto:${sub.dealerEmail}`} className="text-gray-700 hover:text-luxury-gold truncate">{sub.dealerEmail}</a>
+                          </div>
+                        )}
+                        {sub.dealerPhone && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <a href={`tel:${sub.dealerPhone}`} className="text-gray-700 hover:text-luxury-gold">{sub.dealerPhone}</a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                )}
                 <section className="grid grid-cols-2 gap-3">
                   <div>
                     <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2">Owner</h3>
