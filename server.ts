@@ -62,6 +62,16 @@ const ADMIN_EMAIL = ADMIN_EMAIL_LIST[0] || "test@example.com";
 const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || "test@example.com";
 const PORT        = parseInt(process.env.PORT || "3000", 10);
 
+// ─── HTML escape helper (used in transactional email templates) ──────────────
+function escapeHtml(v: unknown): string {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ─── Pipedrive Helpers ────────────────────────────────────────────────────────
 function getPipedriveDomain(): string {
   const d = process.env.PIPEDRIVE_DOMAIN || "";
@@ -592,8 +602,11 @@ export async function createExpressApp() {
       const {
         name, email, phone, address, city,
         configuration, pdfAttachment, previewImage, proposalUrl, isDuplicate,
-        // Dealer attribution (optional, set when submission came from /dealer/:slug)
-        dealerEmail, dealerName, dealerSlug, dealerPhone,
+        // Dealer attribution (optional, set when submission came from /dealer/:slug
+        // OR /pro/quote intake)
+        dealerEmail, dealerName, dealerSlug, dealerPhone, dealerContact, dealerLogoUrl,
+        // Pro-portal extras: role-scoped edit links + intake flag
+        dealerEditUrl, clientEditUrl, isProIntake,
       } = req.body;
 
       if (!name || !email || !configuration) {
@@ -690,6 +703,30 @@ export async function createExpressApp() {
            </div>`
         : "";
 
+      // Customer-side edit-design CTA. Only shown to the customer (not
+      // admin). The dealer/admin emails get their own edit CTA below.
+      const clientEditHtml = clientEditUrl
+        ? `<div style="text-align:center;margin:8px 0 24px;">
+             <a href="${clientEditUrl}" style="display:inline-block;border:1px solid #C5A059;color:#C5A059;font-weight:700;font-size:13px;text-decoration:none;padding:10px 24px;border-radius:8px;letter-spacing:.05em;">
+               Edit your design →
+             </a>
+             <p style="color:#999;font-size:11px;margin:8px 0 0;">Quote and design are valid for 30 days. Your contractor and our team are notified of any changes.</p>
+           </div>`
+        : "";
+
+      const dealerEditHtml = dealerEditUrl
+        ? `<div style="text-align:center;margin:8px 0 24px;">
+             <a href="${dealerEditUrl}" style="display:inline-block;border:1px solid #C5A059;color:#C5A059;font-weight:700;font-size:13px;text-decoration:none;padding:10px 24px;border-radius:8px;letter-spacing:.05em;">
+               Edit this quote →
+             </a>
+             <p style="color:#999;font-size:11px;margin:8px 0 0;">Full edit access for the next 30 days, including client + project details.</p>
+           </div>`
+        : "";
+
+      const dealerLogoHtml = (isProIntake && dealerLogoUrl)
+        ? `<div style="text-align:center;margin:0 0 16px;"><img src="${dealerLogoUrl}" alt="${dealerName || 'Contractor logo'}" style="max-height:40px;max-width:200px;object-fit:contain;" /></div>`
+        : "";
+
       // Extract submissionId from the proposalUrl so we can tag the email
       // for the Resend webhook to route events back to the right submission.
       const submissionId =
@@ -702,24 +739,27 @@ export async function createExpressApp() {
 
       const customerFirst = String(name || "").split(/\s+/)[0] || "there";
       const adminSubject =
-        (isDuplicate ? "⚠ DUPLICATE · " : "📐 New Quote · ") +
+        (isDuplicate ? "⚠ DUPLICATE · " : (isProIntake ? "🤝 Pro Quote · " : "📐 New Quote · ")) +
         `${name}` +
-        (city ? ` · ${city}` : "");
+        (city ? ` · ${city}` : "") +
+        (isProIntake && dealerName ? ` (via ${dealerName})` : "");
       // Personal greeting using the customer's first name. Falls back to a
       // friendly 'Hi there, ...' when no name was provided.
       const customerSubject = `Hi ${customerFirst}, your pergola design is ready`;
 
-      const makePayload = (to: string | string[], subject: string) => ({
+      const makePayload = (to: string | string[], subject: string, role: 'admin' | 'customer' = 'admin') => ({
         from: FROM_EMAIL,
         to,
         ...(resendTags ? { tags: resendTags } : {}),
         subject,
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
-            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">New Pergola Quote</h1>
+            ${role === 'customer' ? dealerLogoHtml : ''}
+            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">${role === 'customer' ? 'Your Pergola Design' : 'New Pergola Quote'}</h1>
             ${warnHtml}
             ${previewImgHtml}
             ${proposalLinkHtml}
+            ${role === 'customer' ? clientEditHtml : dealerEditHtml}
             <h2 style="color:#C5A059;font-size:16px;margin-top:28px;">Customer</h2>
             <p><strong>Name:</strong> ${name}</p>
             <p><strong>Email:</strong> ${email}</p>
@@ -773,7 +813,7 @@ export async function createExpressApp() {
       let customerError: string | null = null;
       if (customerEmail) {
         try {
-          const r = await resend.emails.send(makePayload(customerEmail, customerSubject));
+          const r = await resend.emails.send(makePayload(customerEmail, customerSubject, 'customer'));
           if (r.error) customerError = r.error.message;
           else customerEmailId = r.data?.id;
         } catch (e: unknown) {
@@ -842,8 +882,10 @@ export async function createExpressApp() {
                      <strong>Customer Total:</strong> ${configuration.totalPrice}
                   </p>
                   <div style="margin:28px 0;text-align:center;">
-                    <a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;">View Customer Proposal</a>
+                    <a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;margin:4px;">View Customer Proposal</a>
+                    ${dealerEditUrl ? `<a href="${dealerEditUrl}" style="display:inline-block;border:1px solid #C5A059;color:#C5A059;font-weight:700;padding:11px 24px;border-radius:8px;text-decoration:none;font-size:13px;margin:4px;">Edit this quote →</a>` : ''}
                   </div>
+                  ${dealerEditUrl ? `<p style="color:#666;font-size:11px;text-align:center;margin:-12px 0 16px;">Edit access valid for 30 days. Send the customer-side edit link from the CRM if they want to tweak the design themselves.</p>` : ''}
                   <p style="color:#666;font-size:12px;line-height:1.5;border-top:1px solid #eee;padding-top:12px;margin-top:24px;">
                     This lead has been auto-assigned to you in the Eclipse CRM. We'll be in touch shortly to coordinate next steps.
                   </p>
@@ -871,6 +913,92 @@ export async function createExpressApp() {
       const msg = error instanceof Error ? error.message : "Unknown error";
       console.error("submit error:", msg);
       return res.status(500).json({ success: false, error: "Internal server error" });
+    }
+  });
+
+  // ── Design-changed notification (customer-token edits) ────────────────────
+  // Fired by the configurator when a customer updates their design via the
+  // clientEditToken edit link. Sends an itemized diff to the dealer + admin
+  // + customer so everyone is on the same page about the new spec.
+  app.post("/api/design-changed", async (req: Request, res: Response) => {
+    try {
+      const {
+        submissionId, customerName, customerEmail,
+        dealerEmail, dealerName, jobNumber,
+        proposalUrl, changes, newTotal,
+      } = req.body || {};
+      if (!submissionId || !customerEmail) {
+        return res.status(400).json({ success: false, error: "Missing submissionId or customerEmail" });
+      }
+      if (!resend) {
+        return res.status(200).json({ success: false, error: "Email service not configured" });
+      }
+      const safeChanges = Array.isArray(changes) ? changes : [];
+      const rows = safeChanges.length
+        ? safeChanges.map((c: any) => `
+            <tr>
+              <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;color:#1A1A1A;">${escapeHtml(c.label || "")}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #eee;color:#999;text-decoration:line-through;">${escapeHtml(c.before || "—")}</td>
+              <td style="padding:8px 12px;border-bottom:1px solid #eee;color:#C5A059;font-weight:600;">${escapeHtml(c.after || "—")}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="3" style="padding:12px;color:#666;">No itemized changes detected (configuration may have been re-saved without edits).</td></tr>`;
+
+      const tag = jobNumber ? ` · Job #${jobNumber}` : "";
+      const subject = `🔄 Design updated by ${customerName || "client"}${tag}`;
+      const headerLine = jobNumber
+        ? `Job #${jobNumber} · ${customerName || "Client"}`
+        : (customerName || "Client");
+
+      const html = `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;">
+          <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">Customer updated their design</h1>
+          <p style="color:#666;">${escapeHtml(headerLine)} just edited their pergola configuration. Itemized changes below.</p>
+          <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;">
+            <thead>
+              <tr style="background:#FAF9F6;">
+                <th style="padding:10px 12px;text-align:left;color:#C5A059;font-size:11px;letter-spacing:.1em;text-transform:uppercase;">Field</th>
+                <th style="padding:10px 12px;text-align:left;color:#999;font-size:11px;letter-spacing:.1em;text-transform:uppercase;">Was</th>
+                <th style="padding:10px 12px;text-align:left;color:#C5A059;font-size:11px;letter-spacing:.1em;text-transform:uppercase;">Now</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          ${newTotal != null ? `<p><strong>New total:</strong> ${typeof newTotal === 'number' ? `$${newTotal.toFixed(2)}` : escapeHtml(String(newTotal))}</p>` : ""}
+          ${proposalUrl ? `<div style="margin:24px 0;text-align:center;"><a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;">View updated proposal</a></div>` : ""}
+        </div>
+      `;
+
+      const recipients = [
+        ...ADMIN_EMAIL_LIST,
+        ...(dealerEmail ? [dealerEmail] : []),
+      ];
+      const tags = [{ name: "submissionId", value: String(submissionId) }, { name: "kind", value: "design-changed" }];
+      try {
+        await resend.emails.send({ from: FROM_EMAIL, to: recipients, subject, html, tags });
+      } catch (e) {
+        console.error("[design-changed] dealer/admin send failed:", e);
+      }
+      // Also confirm to the customer that their changes landed.
+      try {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: customerEmail,
+          subject: `Your pergola design has been updated`,
+          html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1A1A1A;">
+            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">Your design has been updated</h1>
+            <p>Thanks ${escapeHtml(String(customerName || "").split(" ")[0] || "there")} — your pergola design has been saved${dealerName ? ` and your contractor ${escapeHtml(dealerName)} has been notified` : ""}. You can keep editing anytime in the next 30 days using the edit link from your original quote email.</p>
+            ${proposalUrl ? `<div style="margin:24px 0;text-align:center;"><a href="${proposalUrl}" style="display:inline-block;background:#C5A059;color:#000;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;">View updated proposal</a></div>` : ""}
+          </div>`,
+          tags,
+        });
+      } catch (e) {
+        console.error("[design-changed] customer send failed:", e);
+      }
+      return res.json({ success: true });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("[design-changed] error:", msg);
+      return res.status(500).json({ success: false, error: msg });
     }
   });
 

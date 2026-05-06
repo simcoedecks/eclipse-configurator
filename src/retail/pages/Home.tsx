@@ -168,6 +168,34 @@ function DimensionNumberInput({
   );
 }
 
+/**
+ * Diff two configuration objects into a human-readable list of changes
+ * for the "design changed" notification email. Only surfaces fields a
+ * dealer/admin actually cares about — dimensions, colors, accessories,
+ * notes. Quietly skips internal-only state like post offsets.
+ */
+function buildDesignDiff(before: any, after: any): { label: string; before: string; after: string }[] {
+  if (!before || !after) return [];
+  const out: { label: string; before: string; after: string }[] = [];
+  const cmp = (label: string, b: any, a: any, fmt: (v: any) => string = (v) => String(v ?? '—')) => {
+    const bs = fmt(b), as = fmt(a);
+    if (bs !== as) out.push({ label, before: bs, after: as });
+  };
+  cmp('Width', before.width, after.width, (v) => v != null ? `${v}'` : '—');
+  cmp('Depth', before.depth, after.depth, (v) => v != null ? `${v}'` : '—');
+  cmp('Height', before.height, after.height, (v) => v != null ? `${v}'` : '—');
+  cmp('Frame color', before.frameColor, after.frameColor);
+  cmp('Louver color', before.louverColor, after.louverColor);
+  const aBefore = new Set<string>(Array.isArray(before.accessoryIds) ? before.accessoryIds : []);
+  const aAfter = new Set<string>(Array.isArray(after.accessoryIds) ? after.accessoryIds : []);
+  const added = [...aAfter].filter(x => !aBefore.has(x));
+  const removed = [...aBefore].filter(x => !aAfter.has(x));
+  added.forEach(id => out.push({ label: 'Accessory added', before: '—', after: id }));
+  removed.forEach(id => out.push({ label: 'Accessory removed', before: id, after: '—' }));
+  cmp('Customer notes', before.customerNotes, after.customerNotes);
+  return out;
+}
+
 interface HomeProps {
   skipIntro?: boolean;
   /** When loaded via /dealer/:slug, these tag the submission for attribution */
@@ -182,9 +210,12 @@ interface HomeProps {
    *  doc and "Submit for Quote" updates that doc in place instead of
    *  creating a new one. Passed by AdminConfigurator via ?submissionId=… */
   editSubmissionId?: string;
+  /** Customer/dealer edit-link role. 'client' locks contact info screens
+   *  and triggers the design-changed notification email on submit. */
+  editRole?: 'dealer' | 'client';
 }
 
-export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName, adminMode = false, editSubmissionId }: HomeProps) {
+export default function Home({ skipIntro = false, dealerSlug, dealerEmail, dealerName, adminMode = false, editSubmissionId, editRole }: HomeProps) {
   const { theme, toggleTheme, isDark } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const proposalRef = useRef<HTMLDivElement>(null);
@@ -198,6 +229,18 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
   // existing submission instead of creating a new one.
   const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(editSubmissionId || null);
   const [editingHydrated, setEditingHydrated] = useState<boolean>(!editSubmissionId);
+  // Snapshot of the configuration at hydrate time — used to compute the
+  // itemized design-changed diff when a customer edits via clientEditToken.
+  const [originalEditConfig, setOriginalEditConfig] = useState<any>(null);
+  // Snapshot of dealer attribution loaded from the existing doc, so a
+  // customer-token edit can re-send the dealer-notify email.
+  const [editDealerInfo, setEditDealerInfo] = useState<{
+    dealerName?: string | null;
+    dealerEmail?: string | null;
+    dealerSlug?: string | null;
+    dealerLogoUrl?: string | null;
+    jobNumber?: number | null;
+  } | null>(null);
   // Draft / "In Progress" submission id — created as soon as the welcome
   // form is filled in so the CRM sees the lead in real time and knows
   // if they never clicked the final Submit button.
@@ -631,6 +674,63 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   });
   const [scanReceived, setScanReceived] = useState(false);
 
+  // Pro-portal intake hydration. When the contractor lands here from
+  // /pro/quote we read dealer + client info from URL params, prefill
+  // the form, and skip the welcome step. Parsed once on mount.
+  const [proIntake] = useState<null | {
+    dealerName: string;
+    dealerContact: string;
+    dealerEmail: string;
+    dealerPhone: string;
+    dealerSlug: string;
+    dealerLogo: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhone: string;
+    clientAddress: string;
+    clientCity: string;
+  }>(() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('proIntake') !== '1') return null;
+    return {
+      dealerName: p.get('dealerName') || '',
+      dealerContact: p.get('dealerContact') || '',
+      dealerEmail: p.get('dealerEmail') || '',
+      dealerPhone: p.get('dealerPhone') || '',
+      dealerSlug: p.get('dealerSlug') || '',
+      dealerLogo: p.get('dealerLogo') || '',
+      clientName: p.get('clientName') || '',
+      clientEmail: p.get('clientEmail') || '',
+      clientPhone: p.get('clientPhone') || '',
+      clientAddress: p.get('clientAddress') || '',
+      clientCity: p.get('clientCity') || '',
+    };
+  });
+
+  // Effective dealer attribution — props (from /dealer/:slug) win, else
+  // pro intake URL params. Used everywhere the bare dealer* props were
+  // referenced before so attribution flows the same way for both routes.
+  const effDealerSlug  = dealerSlug  || proIntake?.dealerSlug  || undefined;
+  const effDealerEmail = dealerEmail || proIntake?.dealerEmail || undefined;
+  const effDealerName  = dealerName  || proIntake?.dealerName  || undefined;
+  const effDealerPhone = proIntake?.dealerPhone || undefined;
+  const effDealerLogo  = proIntake?.dealerLogo  || undefined;
+  const effDealerContact = proIntake?.dealerContact || undefined;
+
+  // One-shot prefill of the customer fields from pro intake. Runs only
+  // when the URL has proIntake=1 and the customer fields are still empty.
+  useEffect(() => {
+    if (!proIntake) return;
+    if (proIntake.clientName)    setName(proIntake.clientName);
+    if (proIntake.clientEmail)   setEmail(proIntake.clientEmail);
+    if (proIntake.clientPhone)   setPhone(proIntake.clientPhone);
+    if (proIntake.clientAddress) setAddress(proIntake.clientAddress);
+    if (proIntake.clientCity)    setCity(proIntake.clientCity);
+    setHasStarted(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -721,6 +821,32 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         if (!snap.exists() || cancelled) { setEditingHydrated(true); return; }
         const data: any = snap.data();
         const cfg: any = data.configuration || {};
+        // Token-link edit (dealer or client). Validate token + expiry
+        // before allowing hydrate. Admin /admin/configurator path skips
+        // this check (no editRole + auth required by Firestore rules).
+        if (editRole) {
+          const urlToken = new URLSearchParams(window.location.search).get('editToken') || '';
+          const expected = editRole === 'dealer' ? data.dealerEditToken : data.clientEditToken;
+          const expiry = typeof data.tokenExpiresAt === 'number' ? data.tokenExpiresAt : 0;
+          if (!urlToken || !expected || urlToken !== expected) {
+            toast.error('This edit link is invalid.');
+            setEditingHydrated(true);
+            return;
+          }
+          if (expiry && Date.now() > expiry) {
+            toast.error('This edit link has expired (30-day limit). Contact your contractor for a new one.');
+            setEditingHydrated(true);
+            return;
+          }
+        }
+        setOriginalEditConfig(cfg);
+        setEditDealerInfo({
+          dealerName: data.dealerName ?? null,
+          dealerEmail: data.dealerEmail ?? null,
+          dealerSlug: data.dealerSlug ?? null,
+          dealerLogoUrl: data.dealerLogoUrl ?? null,
+          jobNumber: typeof data.jobNumber === 'number' ? data.jobNumber : null,
+        });
         if (data.name) setName(data.name);
         if (data.email) setEmail(data.email);
         if (data.phone) setPhone(data.phone);
@@ -1666,6 +1792,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       const contractorId = auth.currentUser?.uid || null;
       let submissionId: string | null = null;
 
+      // Tokens are populated below at submission time. Declared here so
+      // the post-submit email block (different scope) can read them.
+      let dealerEditTokenForEmail: string | null = null;
+      let clientEditTokenForEmail: string | null = null;
+
       // 1. Save to Firestore (without PDF to save space)
       // Include full pricing breakdown so the admin detail view can show it
       const pricingBreakdown = {
@@ -1696,6 +1827,20 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         // we actually got one. Omitting the field (rather than setting
         // it to null) keeps the doc compatible with older firestore
         // rules that don't list jobNumber yet.
+        // 30-day edit tokens — dealer = full edit, client = design-only.
+        // Generated once at submit time so emails can include role-scoped
+        // links. Random 32 hex chars per token; expiry stored as ms epoch.
+        const mkToken = () => {
+          const a = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2);
+          const b = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2);
+          return (a + b).slice(0, 40);
+        };
+        const dealerEditToken = (proIntake || effDealerSlug) ? mkToken() : null;
+        const clientEditToken = (proIntake || effDealerSlug) ? mkToken() : null;
+        const tokenExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+        dealerEditTokenForEmail = dealerEditToken;
+        clientEditTokenForEmail = clientEditToken;
+
         const submissionPayload: any = {
           ...baseData,
           contractorId,
@@ -1707,12 +1852,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           summary: summaryText,
           viewedAt: null,
           pipelineStage: 'new',
-          source: leadSource,
+          source: proIntake ? 'pro-portal' : leadSource,
           sourceRef: leadSourceRef,
-          tags: dealerSlug ? ['Dealer Lead'] : [],
-          assignedTo: dealerEmail || null,
-          dealerSlug: dealerSlug || null,
-          dealerName: dealerName || null,
+          tags: (effDealerSlug || proIntake) ? ['Dealer Lead'] : [],
+          assignedTo: effDealerEmail || null,
+          dealerSlug: effDealerSlug || null,
+          dealerName: effDealerName || null,
+          dealerEmail: effDealerEmail || null,
+          dealerPhone: effDealerPhone || null,
+          dealerContact: effDealerContact || null,
+          dealerLogoUrl: effDealerLogo || null,
+          dealerEditToken,
+          clientEditToken,
+          tokenExpiresAt,
           createdAt: serverTimestamp()
         };
         if (typeof jobNumber === 'number') submissionPayload.jobNumber = jobNumber;
@@ -1782,9 +1934,43 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             const rest: any = { ...cleanPayload };
             delete rest.createdAt;      // preserve original
             delete rest.pipelineStage;  // preserve CRM stage
+            // Token-link edits (dealer / client) MUST NOT regenerate
+            // the tokens — keep whatever's on the doc so links emailed
+            // earlier still work for the full 30-day window.
+            if (editRole) {
+              delete rest.dealerEditToken;
+              delete rest.clientEditToken;
+              delete rest.tokenExpiresAt;
+            }
             const updatePayload = stripUndefined({ ...rest, updatedAt: serverTimestamp() });
             await setDoc(doc(db, 'submissions', editingSubmissionId), updatePayload, { merge: true });
             submissionId = editingSubmissionId;
+            // Customer-token edit → fire the itemized "design changed"
+            // notification email. Diff against originalEditConfig and
+            // POST to the server which sends to dealer + admin + customer.
+            if (editRole === 'client' && originalEditConfig) {
+              try {
+                const diff = buildDesignDiff(originalEditConfig, baseData.configuration);
+                const proposalUrl = `${window.location.origin}/proposal/${editingSubmissionId}`;
+                await fetch('/api/design-changed', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    submissionId: editingSubmissionId,
+                    customerName: baseData.name,
+                    customerEmail: baseData.email,
+                    dealerEmail: editDealerInfo?.dealerEmail || null,
+                    dealerName: editDealerInfo?.dealerName || null,
+                    jobNumber: editDealerInfo?.jobNumber || null,
+                    proposalUrl,
+                    changes: diff,
+                    newTotal: pdfData.total || null,
+                  }),
+                });
+              } catch (e) {
+                console.warn('[design-changed] notify failed', e);
+              }
+            }
             toast.success('Quote updated.');
             setSubmitSuccess(true);
             setTimeout(() => setSubmitSuccess(false), 5000);
@@ -1838,6 +2024,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               assignedTo: cleanPayload.assignedTo,
               dealerSlug: cleanPayload.dealerSlug,
               dealerName: cleanPayload.dealerName,
+              dealerEmail: cleanPayload.dealerEmail,
+              dealerPhone: cleanPayload.dealerPhone,
+              dealerContact: cleanPayload.dealerContact,
+              dealerLogoUrl: cleanPayload.dealerLogoUrl,
+              dealerEditToken: cleanPayload.dealerEditToken,
+              clientEditToken: cleanPayload.clientEditToken,
+              tokenExpiresAt: cleanPayload.tokenExpiresAt,
               createdAt: cleanPayload.createdAt,
             };
             const ref = await addDoc(collection(db, 'submissions'), stripUndefined(minimal));
@@ -2082,6 +2275,17 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             ? `${window.location.origin}/proposal/${submissionId}`
             : null;
 
+          // Role-scoped edit URLs. Dealers get full edit; clients get
+          // design-only edit (contact info screens locked client-side).
+          // Tokens were generated above when proIntake or effDealerSlug
+          // was present, so these are null for plain homeowner leads.
+          const dealerEditUrl = (submissionId && dealerEditTokenForEmail)
+            ? `${window.location.origin}/configurator?editId=${submissionId}&editToken=${dealerEditTokenForEmail}&editRole=dealer`
+            : null;
+          const clientEditUrl = (submissionId && clientEditTokenForEmail)
+            ? `${window.location.origin}/configurator?editId=${submissionId}&editToken=${clientEditTokenForEmail}&editRole=client`
+            : null;
+
           // Don't attach the PDF to the email — the customer clicks the
           // proposalUrl link to open the live /proposal/:id view in the CRM.
           // This also keeps the request body under Netlify's 6 MB sync
@@ -2097,9 +2301,18 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               previewImage,
               proposalUrl,
               isDuplicate: isDuplicateLead,
-              dealerEmail,
-              dealerName,
-              dealerSlug,
+              dealerEmail: effDealerEmail || null,
+              dealerName: effDealerName || null,
+              dealerSlug: effDealerSlug || null,
+              dealerContact: effDealerContact || null,
+              dealerLogoUrl: effDealerLogo || null,
+              dealerEditUrl,
+              clientEditUrl,
+              isProIntake: !!proIntake,
+              // When a customer edits via clientEditToken we'll set this
+              // flag (see customer edit-mode submit below) so the server
+              // sends the itemized "design changed" email.
+              isCustomerEdit: false,
             }),
           });
 
@@ -2666,7 +2879,20 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             animate={{ opacity: 1, x: 0 }}
             className="flex flex-col items-start"
           >
-            <img src="/logo.png" alt="Eclipse Pergola" className="h-6 lg:h-10 object-contain mb-1" />
+            <div className="flex items-center gap-3">
+              <img src="/logo.png" alt="Eclipse Pergola" className="h-6 lg:h-10 object-contain mb-1" />
+              {(effDealerLogo || editDealerInfo?.dealerLogoUrl) ? (
+                <>
+                  <span className={`h-5 w-px ${isDark ? 'bg-white/20' : 'bg-luxury-black/15'}`} aria-hidden="true" />
+                  <img
+                    src={effDealerLogo || editDealerInfo?.dealerLogoUrl || ''}
+                    alt={(effDealerName || editDealerInfo?.dealerName || 'Contractor') + ' logo'}
+                    className="h-5 lg:h-8 max-w-[120px] object-contain mb-1"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </>
+              ) : null}
+            </div>
           </motion.div>
         </div>
 
