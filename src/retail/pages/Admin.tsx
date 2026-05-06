@@ -1255,6 +1255,7 @@ export default function Admin() {
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1 hover:text-luxury-black">Customer <SortIcon col="name" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
                         <th className="hidden md:table-cell p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
+                        <th className="hidden md:table-cell p-3 font-semibold">Contractor</th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('price')} className="inline-flex items-center gap-1 hover:text-luxury-black">Value <SortIcon col="price" /></button></th>
                         <th className="hidden lg:table-cell p-3 font-semibold">Owner</th>
                         <th className="hidden lg:table-cell p-3 font-semibold">Tags</th>
@@ -1263,7 +1264,7 @@ export default function Admin() {
                     </thead>
                     <tbody className="text-sm divide-y divide-slate-100">
                       {filteredSubmissions.length === 0 ? (
-                        <tr><td colSpan={10} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
+                        <tr><td colSpan={11} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
                       ) : filteredSubmissions.map(sub => {
                         const config = sub.configuration || {};
                         const isUnread = !sub.viewedAt;
@@ -1360,12 +1361,13 @@ export default function Admin() {
                                 <p className="font-semibold text-luxury-black">{sub.name}</p>
                               </div>
                               <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
+                              {/* Mobile-only contractor badge — md+ uses the dedicated Contractor column. */}
                               {sub.dealerName && (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); setDealerFilter(sub.dealerSlug || 'all'); }}
                                   title={`Filter to leads from ${sub.dealerName}`}
-                                  className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
+                                  className="md:hidden mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
                                 >
                                   <Building2 className="w-2.5 h-2.5" />
                                   {sub.dealerName}
@@ -1380,6 +1382,21 @@ export default function Admin() {
                             </td>
                             <td className="hidden md:table-cell p-3 align-top text-xs text-gray-600">
                               {sub.city ? <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{sub.city}</div> : <span className="text-gray-400 italic">—</span>}
+                            </td>
+                            <td className="hidden md:table-cell p-3 align-top text-xs">
+                              {sub.dealerName ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setDealerFilter(sub.dealerSlug || 'all'); }}
+                                  title={`Filter to leads from ${sub.dealerName}`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded-full font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 max-w-[160px]"
+                                >
+                                  <Building2 className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{sub.dealerName}</span>
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 italic">Direct</span>
+                              )}
                             </td>
                             <td className="p-3 align-top font-bold text-luxury-black">{config.totalPrice || '—'}</td>
                             <td className="hidden lg:table-cell p-3 align-top">
