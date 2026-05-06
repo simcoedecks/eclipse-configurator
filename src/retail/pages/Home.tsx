@@ -768,7 +768,17 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           if (phone)   draftPayload.phone = phone;
           if (address) draftPayload.address = address;
           if (city)    draftPayload.city = city;
-          if (leadSource) draftPayload.source = leadSource;
+          if (leadSource) draftPayload.source = proIntake ? 'pro-portal' : leadSource;
+          // Carry contractor attribution into the draft so the CRM shows
+          // the contractor name even before the customer hits Submit.
+          if (effDealerSlug)    draftPayload.dealerSlug = effDealerSlug;
+          if (effDealerName)    draftPayload.dealerName = effDealerName;
+          if (effDealerEmail)   draftPayload.dealerEmail = effDealerEmail;
+          if (effDealerPhone)   draftPayload.dealerPhone = effDealerPhone;
+          if (effDealerContact) draftPayload.dealerContact = effDealerContact;
+          if (effDealerLogo)    draftPayload.dealerLogoUrl = effDealerLogo;
+          if (effDealerEmail)   draftPayload.assignedTo = effDealerEmail;
+          if (effDealerSlug || proIntake) draftPayload.tags = ['Dealer Lead'];
           const ref = await addDoc(collection(db, 'submissions'), draftPayload);
           setDraftSubmissionId(ref.id);
           console.log('[draft] late-created', ref.id);
@@ -789,7 +799,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           sectionChoices,
           heaterControl,
         };
-        await setDoc(doc(db, 'submissions', draftSubmissionId), {
+        const draftUpdate: any = {
           name, email, phone, address, city,
           configuration: cfg,
           currentStep,
@@ -798,7 +808,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           pipelineStage: 'in-progress',
           isDraft: true,
           summary: getQuoteSummary(),
-        }, { merge: true });
+        };
+        // Backfill dealer attribution if it wasn't on the doc yet — covers
+        // the case where a stale localStorage draftSubmissionId is reused
+        // for a /pro/quote intake session.
+        if (effDealerSlug)    draftUpdate.dealerSlug = effDealerSlug;
+        if (effDealerName)    draftUpdate.dealerName = effDealerName;
+        if (effDealerEmail)   draftUpdate.dealerEmail = effDealerEmail;
+        if (effDealerPhone)   draftUpdate.dealerPhone = effDealerPhone;
+        if (effDealerContact) draftUpdate.dealerContact = effDealerContact;
+        if (effDealerLogo)    draftUpdate.dealerLogoUrl = effDealerLogo;
+        if (effDealerEmail)   draftUpdate.assignedTo = effDealerEmail;
+        if (effDealerSlug || proIntake) draftUpdate.tags = ['Dealer Lead'];
+        await setDoc(doc(db, 'submissions', draftSubmissionId), draftUpdate, { merge: true });
       } catch (err) {
         console.warn('[draft] update failed', err);
       }

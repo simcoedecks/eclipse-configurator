@@ -107,7 +107,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber', 'isDraft', 'updatedAt', 'submittedAt', 'currentStep', 'lastStepAt']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'dealerEmail', 'dealerPhone', 'dealerContact', 'dealerLogoUrl', 'dealerEditToken', 'clientEditToken', 'tokenExpiresAt', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber', 'isDraft', 'updatedAt', 'submittedAt', 'currentStep', 'lastStepAt']) &&
              data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -197,6 +197,11 @@ service cloud.firestore {
         // tripped this rule and caused duplicate submission docs:
         'type', 'source', 'sourceRef', 'viewedAt', 'assignedTo',
         'dealerSlug', 'dealerName',
+        // Pro-portal contractor + edit-token fields (added with the
+        // /pro/quote intake form). Must be allow-listed here too so
+        // the draft → submitted flip carries dealer attribution.
+        'dealerEmail', 'dealerPhone', 'dealerContact', 'dealerLogoUrl',
+        'dealerEditToken', 'clientEditToken', 'tokenExpiresAt',
       ];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return prevData.get('isDraft', false) == true
