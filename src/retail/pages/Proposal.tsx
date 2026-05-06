@@ -739,7 +739,20 @@ export default function Proposal() {
       {/* Header */}
       <header className="bg-white border-b border-luxury-cream sticky top-0 z-20 shadow-sm print:hidden">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <img src="/logo.png" alt="Eclipse Pergola" className="h-8 object-contain" />
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Eclipse Pergola" className="h-8 object-contain" />
+            {data.dealerLogoUrl ? (
+              <>
+                <span className="h-6 w-px bg-luxury-cream" aria-hidden="true" />
+                <img
+                  src={data.dealerLogoUrl}
+                  alt={data.dealerName ? `${data.dealerName} logo` : 'Contractor logo'}
+                  className="h-7 max-w-[140px] object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+              </>
+            ) : null}
+          </div>
           <button
             onClick={handleDownloadPdf}
             disabled={generatingPdf}
@@ -757,8 +770,20 @@ export default function Proposal() {
           {/* Brand mark — always rendered (unlike the sticky header which
               is hidden in print/PDF) so it appears on downloaded PDFs and
               anywhere the proposal is embedded. */}
-          <div className="flex justify-center mb-6 pb-6 border-b border-luxury-cream">
+          <div className="flex flex-col items-center gap-3 mb-6 pb-6 border-b border-luxury-cream">
             <img src="/logo.png" alt="Eclipse Pergola" className="h-24 object-contain" crossOrigin="anonymous" />
+            {data.dealerLogoUrl ? (
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-gray-500">
+                <span>Presented by</span>
+                <img
+                  src={data.dealerLogoUrl}
+                  alt={data.dealerName ? `${data.dealerName} logo` : 'Contractor logo'}
+                  className="h-8 max-w-[160px] object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+                {data.dealerName ? <span className="font-bold text-luxury-black normal-case tracking-normal">{data.dealerName}</span> : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-start justify-between flex-wrap gap-4 mb-8 pb-6 border-b-2 border-luxury-gold">
             <div>

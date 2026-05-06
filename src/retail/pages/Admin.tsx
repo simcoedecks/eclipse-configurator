@@ -74,6 +74,7 @@ export default function Admin() {
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [assignedFilter, setAssignedFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [dealerFilter, setDealerFilter] = useState<string>('all');
   const [emailFilter, setEmailFilter] = useState<'all' | 'opened' | 'sent' | 'not-sent'>('all');
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState<'all' | 'in-progress' | 'abandoned' | 'submitted'>('all');
   const [detailSub, setDetailSub] = useState<any | null>(null);
@@ -217,6 +218,11 @@ export default function Admin() {
         else if (sub.assignedTo !== assignedFilter) return false;
       }
       if (sourceFilter !== 'all' && (sub.source || 'organic') !== sourceFilter) return false;
+      if (dealerFilter !== 'all') {
+        const slug = sub.dealerSlug || '';
+        if (dealerFilter === '__none__') { if (slug) return false; }
+        else if (slug !== dealerFilter) return false;
+      }
       // Email filter:
       //  - 'opened' / 'sent' only apply to submitted leads (drafts never
       //    reached the email step, so they're filtered out)
@@ -298,15 +304,15 @@ export default function Admin() {
       });
     }
     return list;
-  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, emailFilter, submissionStatusFilter, activeTab, columnSort]);
+  }, [standardSubmissions, searchQuery, typeFilter, duplicateFilter, dateFilter, customDateFrom, customDateTo, sortBy, readFilter, signedFilter, stageFilter, tagFilter, assignedFilter, sourceFilter, dealerFilter, emailFilter, submissionStatusFilter, activeTab, columnSort]);
 
   const clearFilters = () => {
     setSearchQuery(''); setTypeFilter('all'); setDuplicateFilter('all'); setDateFilter('all');
     setCustomDateFrom(''); setCustomDateTo('');
     setSortBy('date-desc'); setReadFilter('all'); setSignedFilter('all'); setStageFilter('all'); setTagFilter('all');
-    setAssignedFilter('all'); setSourceFilter('all'); setEmailFilter('all'); setSubmissionStatusFilter('all');
+    setAssignedFilter('all'); setSourceFilter('all'); setDealerFilter('all'); setEmailFilter('all'); setSubmissionStatusFilter('all');
   };
-  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all' || emailFilter !== 'all' || submissionStatusFilter !== 'all';
+  const hasActiveFilters = searchQuery || typeFilter !== 'all' || duplicateFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'date-desc' || readFilter !== 'all' || signedFilter !== 'all' || stageFilter !== 'all' || tagFilter !== 'all' || assignedFilter !== 'all' || sourceFilter !== 'all' || dealerFilter !== 'all' || emailFilter !== 'all' || submissionStatusFilter !== 'all';
 
   const unreadCustomCount = useMemo(() => customRequests.filter(s => !s.viewedAt).length, [customRequests]);
   const unreadCount = useMemo(() => standardSubmissions.filter(s => !s.viewedAt).length, [standardSubmissions]);
@@ -393,6 +399,36 @@ export default function Admin() {
     const set = new Set<string>();
     submissions.forEach(s => (s.tags || []).forEach((t: string) => set.add(t)));
     return Array.from(set).sort();
+  }, [submissions]);
+
+  // Distinct contractors that have submitted leads — used for the
+  // contractor dropdown filter and the leaderboard widget.
+  const dealerOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    submissions.forEach(s => {
+      const slug = s.dealerSlug;
+      if (!slug) return;
+      if (!m.has(slug)) m.set(slug, s.dealerName || slug);
+    });
+    return Array.from(m.entries()).map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [submissions]);
+
+  // Top contractors by submitted lead volume + cumulative quoted value.
+  // Powers the dashboard leaderboard widget. Drafts and abandoned leads
+  // are excluded so the ranking reflects real produced quotes.
+  const contractorLeaderboard = useMemo(() => {
+    const stats = new Map<string, { slug: string; name: string; leads: number; quoted: number }>();
+    submissions.forEach(s => {
+      if (s.isDraft) return;
+      const slug = s.dealerSlug;
+      if (!slug) return;
+      const cur = stats.get(slug) || { slug, name: s.dealerName || slug, leads: 0, quoted: 0 };
+      cur.leads += 1;
+      const t = parsePrice(s.configuration?.totalPrice);
+      if (Number.isFinite(t)) cur.quoted += t;
+      stats.set(slug, cur);
+    });
+    return Array.from(stats.values()).sort((a, b) => b.leads - a.leads || b.quoted - a.quoted).slice(0, 10);
   }, [submissions]);
 
   // Actions
@@ -855,12 +891,48 @@ export default function Admin() {
 
           {/* Dashboard */}
           {activeTab === 'dashboard' && (
-            <DashboardHome
-              submissions={submissions}
-              onOpenSubmission={openDetail}
-              onGoToSubmissions={() => setActiveTab('submissions')}
-              onGoToKanban={() => setActiveTab('kanban')}
-            />
+            <>
+              <DashboardHome
+                submissions={submissions}
+                onOpenSubmission={openDetail}
+                onGoToSubmissions={() => setActiveTab('submissions')}
+                onGoToKanban={() => setActiveTab('kanban')}
+              />
+              {contractorLeaderboard.length > 0 && (
+                <div className="mt-6 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-luxury-black uppercase tracking-widest">Top Contractors</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Ranked by submitted leads · cumulative quoted value shown.</p>
+                    </div>
+                    <button
+                      onClick={() => { setActiveTab('submissions'); }}
+                      className="text-[11px] uppercase tracking-widest font-bold text-luxury-gold hover:underline"
+                    >
+                      View all →
+                    </button>
+                  </div>
+                  <ol className="divide-y divide-slate-100">
+                    {contractorLeaderboard.map((c, i) => (
+                      <li key={c.slug} className="flex items-center gap-3 py-2.5">
+                        <span className="w-6 h-6 rounded-full bg-luxury-gold/15 text-luxury-gold text-[11px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                        <button
+                          onClick={() => { setDealerFilter(c.slug); setActiveTab('submissions'); }}
+                          className="flex-1 text-left min-w-0 hover:text-luxury-gold"
+                        >
+                          <p className="text-sm font-semibold text-luxury-black truncate">{c.name}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{c.slug}</p>
+                        </button>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-luxury-black tabular-nums">{c.leads} {c.leads === 1 ? 'lead' : 'leads'}</p>
+                          <p className="text-[11px] text-slate-500 tabular-nums">${Math.round(c.quoted).toLocaleString()}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </>
           )}
 
           {/* Kanban */}
@@ -1046,6 +1118,11 @@ export default function Admin() {
                   <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold">
                     <option value="all">All Sources</option>
                     {LEAD_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                  <select value={dealerFilter} onChange={e => setDealerFilter(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter leads by contractor / dealer">
+                    <option value="all">All Contractors</option>
+                    <option value="__none__">Direct (no contractor)</option>
+                    {dealerOptions.map(d => <option key={d.slug} value={d.slug}>{d.name}</option>)}
                   </select>
                   <select value={submissionStatusFilter} onChange={e => setSubmissionStatusFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by what the customer did with the form">
                     <option value="all">Submission: All</option>
