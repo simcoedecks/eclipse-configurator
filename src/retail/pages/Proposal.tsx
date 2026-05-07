@@ -686,16 +686,17 @@ export default function Proposal() {
   const lineOverrides: Record<string, number> = (overrides.lineItems && typeof overrides.lineItems === 'object')
     ? overrides.lineItems
     : {};
-  // Showroom Mode factor — applied uniformly to every displayed price
-  // (base, each accessory, additional pergolas, custom line items) so the
-  // customer sees a self-consistent set of numbers. CRM-side pricingBreakdown
-  // stays as MSRP because we only mutate the rendered copies here.
-  const showroomFactor = (() => {
-    if (data.showroomMode !== true) return 1;
-    const dealerPct = Math.max(0, Math.min(100, Number(data.dealerDiscountPct) || 0));
-    const showroomPct = Math.max(0, Math.min(100, Number(data.showroomDiscountPct) || 0));
-    return (1 - dealerPct / 100) * (1 - showroomPct / 100);
-  })();
+  // Showroom Mode — when on, the dealer discount silently scales every
+  // displayed line item (so MSRP is hidden), and the showroom discount
+  // is surfaced as a visible "Showroom Discount" line in the customer's
+  // pricing breakdown so they can see the savings they're getting.
+  const showroomActive = data.showroomMode === true;
+  const dealerPctNum = showroomActive ? Math.max(0, Math.min(100, Number(data.dealerDiscountPct) || 0)) : 0;
+  const showroomPctNum = showroomActive ? Math.max(0, Math.min(100, Number(data.showroomDiscountPct) || 0)) : 0;
+  const dealerFactor = showroomActive ? (1 - dealerPctNum / 100) : 1;
+  // Note: showroom discount is NOT folded into the line items below.
+  // It's rendered as its own visible line and applied to the subtotal.
+  const showroomFactor = dealerFactor;
   const effectivePb = (() => {
     if (!pb) return pb;
     const baseOver = lineOverrides['base'];
@@ -745,6 +746,18 @@ export default function Proposal() {
       total = overrides.total * showroomFactor;
     }
     return { ...computedPricing, subtotal, hst, total };
+  })();
+  // Visible showroom discount — shown as its own line in the customer's
+  // pricing breakdown when Showroom Mode is on. Computed off the
+  // dealer-scaled subtotal so the math the customer sees is consistent.
+  const showroomDiscountAmount = showroomActive && showroomPctNum > 0
+    ? finalPricing.subtotal * (showroomPctNum / 100)
+    : 0;
+  const finalPricingWithShowroom = (() => {
+    if (showroomDiscountAmount <= 0) return finalPricing;
+    const newSubtotal = finalPricing.subtotal - showroomDiscountAmount;
+    const newHst = newSubtotal * (computedPricing.hstRate || 0.13);
+    return { ...finalPricing, subtotal: newSubtotal, hst: newHst, total: newSubtotal + newHst };
   })();
   const customCharges = scaledCustomLineItems.filter((i: any) => i.kind !== 'discount');
   const customDiscounts = scaledCustomLineItems.filter((i: any) => i.kind === 'discount');
@@ -1232,13 +1245,19 @@ export default function Proposal() {
                 <span className="text-gray-600">Subtotal</span>
                 <span className="font-medium">{fmt(finalPricing.subtotal)}</span>
               </div>
+              {showroomDiscountAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-emerald-700 font-semibold">Showroom Discount ({showroomPctNum}%)</span>
+                  <span className="font-medium text-emerald-700">−{fmt(showroomDiscountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">HST (13%)</span>
-                <span className="font-medium">{fmt(finalPricing.hst)}</span>
+                <span className="font-medium">{fmt(finalPricingWithShowroom.hst)}</span>
               </div>
               <div className="flex justify-between items-baseline pt-3 mt-3 border-t-2 border-luxury-gold">
                 <span className="text-sm font-bold uppercase tracking-widest text-luxury-black">Total Investment</span>
-                <span className="text-3xl font-serif text-luxury-gold">{fmt(finalPricing.total)}</span>
+                <span className="text-3xl font-serif text-luxury-gold">{fmt(finalPricingWithShowroom.total)}</span>
               </div>
             </div>
           </div>
@@ -1379,7 +1398,7 @@ export default function Proposal() {
         <SignatureModal
           customerName={data.name}
           submissionId={data.id}
-          totalAmount={finalPricing.total}
+          totalAmount={finalPricingWithShowroom.total}
           onClose={() => setShowSignModal(false)}
           onAccepted={(acceptance) => {
             setData({ ...data, acceptance, status: 'accepted' });

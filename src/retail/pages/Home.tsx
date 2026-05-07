@@ -2377,10 +2377,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               // Showroom Mode — when on, the customer email displays the
               // discounted total instead of MSRP. Admin email keeps MSRP.
               customerDisplayTotal: (adminMode && showroomMode) ? (() => {
+                // Same math as the customer Proposal page: dealer discount
+                // is folded silently into the subtotal, then showroom
+                // discount is taken off that subtotal as a visible line.
                 const msrp = (totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
-                const factor = (1 - Math.max(0, Math.min(100, dealerDiscountPct)) / 100)
-                             * (1 - Math.max(0, Math.min(100, showroomDiscountPct)) / 100);
-                return formatCurrency(msrp * factor);
+                const dealerFactor = 1 - Math.max(0, Math.min(100, dealerDiscountPct)) / 100;
+                const showroomFactor = 1 - Math.max(0, Math.min(100, showroomDiscountPct)) / 100;
+                return formatCurrency(msrp * dealerFactor * showroomFactor);
               })() : null,
               // When a customer edits via clientEditToken we'll set this
               // flag (see customer edit-mode submit below) so the server
