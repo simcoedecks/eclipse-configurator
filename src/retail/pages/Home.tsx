@@ -674,6 +674,39 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   });
   const [scanReceived, setScanReceived] = useState(false);
 
+  // Admin-only "Showroom / Dealer Pricing" controls. Persisted to
+  // localStorage so the admin doesn't re-enter the discount each visit.
+  // Only surfaced in /admin/configurator (gated by adminMode).
+  const [showroomMode, setShowroomMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem('eclipse-showroom-mode') === '1'; } catch { return false; }
+  });
+  const [dealerDiscountPct, setDealerDiscountPct] = useState<number>(() => {
+    if (typeof window === 'undefined') return 30;
+    try {
+      const v = window.localStorage.getItem('eclipse-dealer-discount-pct');
+      const n = v != null ? parseFloat(v) : NaN;
+      return Number.isFinite(n) ? n : 30;
+    } catch { return 30; }
+  });
+  const [showroomDiscountPct, setShowroomDiscountPct] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const v = window.localStorage.getItem('eclipse-showroom-discount-pct');
+      const n = v != null ? parseFloat(v) : NaN;
+      return Number.isFinite(n) ? n : 0;
+    } catch { return 0; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('eclipse-showroom-mode', showroomMode ? '1' : '0'); } catch {}
+  }, [showroomMode]);
+  useEffect(() => {
+    try { window.localStorage.setItem('eclipse-dealer-discount-pct', String(dealerDiscountPct)); } catch {}
+  }, [dealerDiscountPct]);
+  useEffect(() => {
+    try { window.localStorage.setItem('eclipse-showroom-discount-pct', String(showroomDiscountPct)); } catch {}
+  }, [showroomDiscountPct]);
+
   // Pro-portal intake hydration. When the contractor lands here from
   // /pro/quote we read dealer + client info from URL params, prefill
   // the form, and skip the welcome step. Parsed once on mount.
@@ -4847,19 +4880,108 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       </div>
                     )}
 
-                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
-                      <div className="flex flex-col">
-                        <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">Total Investment</span>
-                        {extraPergolas.length > 0 && (
-                          <span className="text-[10px] text-luxury-black/50 dark:text-white/50 italic">
-                            Across {extraPergolas.length + 1} pergolas
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-2xl font-serif text-luxury-black dark:text-white">
-                        {formatCurrency((totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0))}
-                      </span>
-                    </div>
+                    {(() => {
+                      const grandMsrp = (totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
+                      const dealerPct = Math.max(0, Math.min(100, Number.isFinite(dealerDiscountPct) ? dealerDiscountPct : 0));
+                      const showroomPct = Math.max(0, Math.min(100, Number.isFinite(showroomDiscountPct) ? showroomDiscountPct : 0));
+                      const dealerPrice = grandMsrp * (1 - dealerPct / 100);
+                      const showroomNet = dealerPrice * (1 - showroomPct / 100);
+                      const displayPrice = adminMode && showroomMode
+                        ? (showroomPct > 0 ? showroomNet : dealerPrice)
+                        : grandMsrp;
+                      const displayLabel = adminMode && showroomMode
+                        ? (showroomPct > 0 ? 'Showroom Net' : 'Dealer Price')
+                        : 'Total Investment';
+                      return (
+                        <>
+                          {adminMode && (
+                            <div className="mt-4 p-3 rounded-lg border border-luxury-gold/30 bg-luxury-gold/5 dark:bg-luxury-gold/10 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-luxury-gold">Admin · Showroom Pricing</p>
+                                  <p className={`text-[9px] mt-0.5 italic ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>
+                                    Hide MSRP and headline the dealer price (admin / showroom only).
+                                  </p>
+                                </div>
+                                <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={showroomMode}
+                                    onChange={(e) => setShowroomMode(e.target.checked)}
+                                    className="w-3.5 h-3.5 accent-luxury-gold"
+                                  />
+                                  <span className={`text-[10px] uppercase tracking-widest font-bold ${showroomMode ? 'text-luxury-gold' : (isDark ? 'text-white/50' : 'text-luxury-black/50')}`}>Showroom Mode</span>
+                                </label>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <label className="flex flex-col gap-1">
+                                  <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>Dealer Discount</span>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step={0.5}
+                                      value={dealerDiscountPct}
+                                      onChange={(e) => setDealerDiscountPct(parseFloat(e.target.value) || 0)}
+                                      className={`w-full pr-7 pl-2.5 py-1.5 rounded-md border text-sm font-semibold focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none ${isDark ? 'bg-white/5 border-white/15 text-white' : 'bg-white border-luxury-black/15 text-luxury-black'}`}
+                                    />
+                                    <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>%</span>
+                                  </div>
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                  <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>+ Showroom Discount</span>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step={0.5}
+                                      value={showroomDiscountPct}
+                                      onChange={(e) => setShowroomDiscountPct(parseFloat(e.target.value) || 0)}
+                                      className={`w-full pr-7 pl-2.5 py-1.5 rounded-md border text-sm font-semibold focus:ring-2 focus:ring-luxury-gold focus:border-transparent outline-none ${isDark ? 'bg-white/5 border-white/15 text-white' : 'bg-white border-luxury-black/15 text-luxury-black'}`}
+                                    />
+                                    <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs ${isDark ? 'text-white/50' : 'text-luxury-black/50'}`}>%</span>
+                                  </div>
+                                </label>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-luxury-gold/20">
+                                <div>
+                                  <p className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>MSRP</p>
+                                  <p className={`text-sm font-serif tabular-nums ${showroomMode ? 'line-through opacity-50' : ''} ${isDark ? 'text-white' : 'text-luxury-black'}`}>{formatCurrency(grandMsrp)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] uppercase tracking-widest font-bold text-luxury-gold">Dealer ({dealerPct}%)</p>
+                                  <p className="text-sm font-serif tabular-nums text-luxury-gold">{formatCurrency(dealerPrice)}</p>
+                                </div>
+                                <div>
+                                  <p className={`text-[9px] uppercase tracking-widest font-bold ${showroomPct > 0 ? 'text-luxury-gold' : (isDark ? 'text-white/40' : 'text-luxury-black/40')}`}>Net (+{showroomPct}%)</p>
+                                  <p className={`text-sm font-serif tabular-nums ${showroomPct > 0 ? 'text-luxury-gold font-bold' : (isDark ? 'text-white/50' : 'text-luxury-black/50')}`}>{formatCurrency(showroomNet)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex justify-between items-end">
+                            <div className="flex flex-col">
+                              <span className="text-[8px] uppercase tracking-[0.3em] font-bold text-luxury-black/40">{displayLabel}</span>
+                              {extraPergolas.length > 0 && (
+                                <span className="text-[10px] text-luxury-black/50 dark:text-white/50 italic">
+                                  Across {extraPergolas.length + 1} pergolas
+                                </span>
+                              )}
+                              {adminMode && showroomMode && (
+                                <span className="text-[9px] uppercase tracking-widest font-bold text-luxury-gold mt-0.5">
+                                  Showroom view · MSRP hidden
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-2xl font-serif text-luxury-black dark:text-white">
+                              {formatCurrency(displayPrice)}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
                     <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed pt-2">
                       Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
                     </p>
@@ -4944,23 +5066,36 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           <div className={`flex items-center justify-between mb-2 pb-2 border-b ${isDark ? 'border-white/10' : 'border-luxury-cream/50'}`}>
             <div className="flex items-center gap-2">
               <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>
-                {currentStep === 5 ? 'Grand Total' : 'Running Total'}
+                {adminMode && showroomMode
+                  ? (showroomDiscountPct > 0 ? 'Showroom Net' : 'Dealer Price')
+                  : (currentStep === 5 ? 'Grand Total' : 'Running Total')}
               </span>
-              {currentStep < 5 && (
+              {currentStep < 5 && !showroomMode && (
                 <span className={`text-[8px] italic ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>
                   (pre-tax)
                 </span>
               )}
+              {adminMode && showroomMode && (
+                <span className="text-[8px] italic text-luxury-gold">
+                  (MSRP hidden)
+                </span>
+              )}
             </div>
             <motion.span
-              key={(totalPrice || 0) + extraPergolas.length}
+              key={(totalPrice || 0) + extraPergolas.length + (showroomMode ? 1 : 0) + dealerDiscountPct + showroomDiscountPct}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
               className="text-lg font-serif font-medium text-luxury-gold"
             >
               {totalPrice !== null
-                ? formatCurrency(totalPrice + extraPergolas.reduce((s, p) => s + (p.price || 0), 0))
+                ? (() => {
+                    const msrp = totalPrice + extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
+                    if (!(adminMode && showroomMode)) return formatCurrency(msrp);
+                    const dealer = msrp * (1 - Math.max(0, Math.min(100, dealerDiscountPct)) / 100);
+                    const net = dealer * (1 - Math.max(0, Math.min(100, showroomDiscountPct)) / 100);
+                    return formatCurrency(showroomDiscountPct > 0 ? net : dealer);
+                  })()
                 : '—'}
             </motion.span>
           </div>
