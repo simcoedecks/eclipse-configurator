@@ -686,6 +686,16 @@ export default function Proposal() {
   const lineOverrides: Record<string, number> = (overrides.lineItems && typeof overrides.lineItems === 'object')
     ? overrides.lineItems
     : {};
+  // Showroom Mode factor — applied uniformly to every displayed price
+  // (base, each accessory, additional pergolas, custom line items) so the
+  // customer sees a self-consistent set of numbers. CRM-side pricingBreakdown
+  // stays as MSRP because we only mutate the rendered copies here.
+  const showroomFactor = (() => {
+    if (data.showroomMode !== true) return 1;
+    const dealerPct = Math.max(0, Math.min(100, Number(data.dealerDiscountPct) || 0));
+    const showroomPct = Math.max(0, Math.min(100, Number(data.showroomDiscountPct) || 0));
+    return (1 - dealerPct / 100) * (1 - showroomPct / 100);
+  })();
   const effectivePb = (() => {
     if (!pb) return pb;
     const baseOver = lineOverrides['base'];
@@ -695,25 +705,49 @@ export default function Proposal() {
       const v = lineOverrides[k];
       return typeof v === 'number' ? { ...a, cost: v } : a;
     });
+    if (showroomFactor !== 1) {
+      return {
+        ...pb,
+        basePrice: (typeof overriddenBase === 'number' ? overriddenBase : 0) * showroomFactor,
+        itemizedAccessories: overriddenAccessories.map((a: any) => ({
+          ...a,
+          cost: typeof a.cost === 'number' ? a.cost * showroomFactor : a.cost,
+        })),
+      };
+    }
     return { ...pb, basePrice: overriddenBase, itemizedAccessories: overriddenAccessories };
   })();
-  const computedPricing = computeFinalPricing(effectivePb, customLineItems, additionalPergolas);
+  const scaledAdditionalPergolas = showroomFactor !== 1
+    ? (additionalPergolas || []).map((p: any) => ({
+        ...p,
+        price: typeof p.price === 'number' ? p.price * showroomFactor : p.price,
+      }))
+    : additionalPergolas;
+  const scaledCustomLineItems = showroomFactor !== 1
+    ? (customLineItems || []).map((i: any) => ({
+        ...i,
+        amount: typeof i.amount === 'number' ? i.amount * showroomFactor : i.amount,
+      }))
+    : customLineItems;
+  const computedPricing = computeFinalPricing(effectivePb, scaledCustomLineItems, scaledAdditionalPergolas);
   const finalPricing = (() => {
     let subtotal = computedPricing.subtotal;
     let hst = computedPricing.hst;
     let total = computedPricing.total;
+    // Manual subtotal/total overrides still win, but get scaled too so
+    // showroom mode and admin overrides compose correctly.
     if (typeof overrides.subtotal === 'number') {
-      subtotal = overrides.subtotal;
+      subtotal = overrides.subtotal * showroomFactor;
       hst = subtotal * computedPricing.hstRate;
       total = subtotal + hst;
     }
     if (typeof overrides.total === 'number') {
-      total = overrides.total;
+      total = overrides.total * showroomFactor;
     }
     return { ...computedPricing, subtotal, hst, total };
   })();
-  const customCharges = customLineItems.filter((i: any) => i.kind !== 'discount');
-  const customDiscounts = customLineItems.filter((i: any) => i.kind === 'discount');
+  const customCharges = scaledCustomLineItems.filter((i: any) => i.kind !== 'discount');
+  const customDiscounts = scaledCustomLineItems.filter((i: any) => i.kind === 'discount');
   const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : null;
   const fmt = (n: number) => typeof n === 'number'
     ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -1054,7 +1088,7 @@ export default function Proposal() {
                 to the primary pergola block above (header line, then category-
                 grouped line items) so the customer sees a consistent layout
                 across every pergola in the project. */}
-            {additionalPergolas.map((p: any, pIdx: number) => {
+            {scaledAdditionalPergolas.map((p: any, pIdx: number) => {
               const pTotal = computeAdditionalPergolaPrice(p);
               // Sequential numbering — primary pergola is #1, additionals
               // continue from #2. Always use the canonical label even if

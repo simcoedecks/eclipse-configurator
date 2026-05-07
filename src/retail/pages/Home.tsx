@@ -1922,6 +1922,16 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           tokenExpiresAt,
           createdAt: serverTimestamp()
         };
+        // Showroom Mode — admin-only feature in /admin/configurator. When
+        // on, the customer Proposal page applies these discounts to the
+        // displayed totals so the customer sees the dealer/showroom-net
+        // price as their final price (no MSRP visible). The CRM still
+        // sees pricingBreakdown above as MSRP for true margin tracking.
+        if (adminMode && showroomMode) {
+          submissionPayload.showroomMode = true;
+          submissionPayload.dealerDiscountPct = dealerDiscountPct;
+          submissionPayload.showroomDiscountPct = showroomDiscountPct;
+        }
         if (typeof jobNumber === 'number') submissionPayload.jobNumber = jobNumber;
         // Firestore rejects documents that contain `undefined` anywhere.
         // We only recurse into PLAIN objects — Firestore sentinels like
@@ -2364,6 +2374,14 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               dealerEditUrl,
               clientEditUrl,
               isProIntake: !!proIntake,
+              // Showroom Mode — when on, the customer email displays the
+              // discounted total instead of MSRP. Admin email keeps MSRP.
+              customerDisplayTotal: (adminMode && showroomMode) ? (() => {
+                const msrp = (totalPrice || 0) + extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
+                const factor = (1 - Math.max(0, Math.min(100, dealerDiscountPct)) / 100)
+                             * (1 - Math.max(0, Math.min(100, showroomDiscountPct)) / 100);
+                return formatCurrency(msrp * factor);
+              })() : null,
               // When a customer edits via clientEditToken we'll set this
               // flag (see customer edit-mode submit below) so the server
               // sends the itemized "design changed" email.

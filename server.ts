@@ -607,6 +607,9 @@ export async function createExpressApp() {
         dealerEmail, dealerName, dealerSlug, dealerPhone, dealerContact, dealerLogoUrl,
         // Pro-portal extras: role-scoped edit links + intake flag
         dealerEditUrl, clientEditUrl, isProIntake,
+        // Showroom Mode override — when set, customer email shows the
+        // discounted price instead of MSRP. Admin email always shows MSRP.
+        customerDisplayTotal,
       } = req.body;
 
       if (!name || !email || !configuration) {
@@ -771,7 +774,7 @@ export async function createExpressApp() {
                 + `${configuration.depth}' x ${configuration.height}'</li>
               <li><strong>Frame Color:</strong> ${configuration.frameColor}</li>
               <li><strong>Louver Color:</strong> ${configuration.louverColor}</li>
-              <li><strong>Total Price:</strong> ${configuration.totalPrice}</li>
+              <li><strong>Total Price:</strong> ${role === 'customer' && customerDisplayTotal ? customerDisplayTotal : configuration.totalPrice}</li>
             </ul>
             <h3 style="color:#C5A059;font-size:14px;margin-top:20px;">Accessories</h3>
             <ul>

@@ -107,7 +107,7 @@ service cloud.firestore {
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'dealerEmail', 'dealerPhone', 'dealerContact', 'dealerLogoUrl', 'dealerEditToken', 'clientEditToken', 'tokenExpiresAt', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber', 'isDraft', 'updatedAt', 'submittedAt', 'currentStep', 'lastStepAt']) &&
+      return data.keys().hasOnly(['name', 'email', 'phone', 'address', 'city', 'type', 'configuration', 'createdAt', 'contractorId', 'isDuplicate', 'pricingBreakdown', 'summary', 'viewedAt', 'status', 'acceptance', 'pipelineStage', 'source', 'sourceRef', 'tags', 'assignedTo', 'dealerSlug', 'dealerName', 'dealerEmail', 'dealerPhone', 'dealerContact', 'dealerLogoUrl', 'dealerEditToken', 'clientEditToken', 'tokenExpiresAt', 'showroomMode', 'dealerDiscountPct', 'showroomDiscountPct', 'customLineItems', 'pricingOverride', 'additionalPergolas', 'customRequest', 'customRequestNotes', 'attachments', 'pipedriveLeadId', 'heardAbout', 'jobNumber', 'isDraft', 'updatedAt', 'submittedAt', 'currentStep', 'lastStepAt']) &&
              data.keys().hasAll(['name', 'email', 'type', 'createdAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              isValidEmail(data.email) &&
@@ -202,6 +202,7 @@ service cloud.firestore {
         // the draft → submitted flip carries dealer attribution.
         'dealerEmail', 'dealerPhone', 'dealerContact', 'dealerLogoUrl',
         'dealerEditToken', 'clientEditToken', 'tokenExpiresAt',
+        'showroomMode', 'dealerDiscountPct', 'showroomDiscountPct',
       ];
       let affectedKeys = data.diff(prevData).affectedKeys();
       return prevData.get('isDraft', false) == true
