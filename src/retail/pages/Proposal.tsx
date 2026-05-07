@@ -940,6 +940,18 @@ export default function Proposal() {
             maxBaySpanOverride: cfg.maxBaySpanOverride,
             forceMiddleXPost: !!cfg.forceMiddleXPost,
             forceMiddleZPost: !!cfg.forceMiddleZPost,
+            // Geometry overrides — required so the customer's proposal
+            // mirrors the exact design (cantilevers, decorative posts,
+            // removed middle posts, corner offsets) rather than falling
+            // back to the default no-cantilever rectangle.
+            cantileverInsets: cfg.cantileverInsets || {},
+            cornerPostOffsets: cfg.cornerPostOffsets || {},
+            postXOffsets: cfg.postXOffsets || {},
+            postZOffsets: cfg.postZOffsets || {},
+            postXOnlyOffsets: cfg.postXOnlyOffsets || {},
+            postZOnlyOffsets: cfg.postZOnlyOffsets || {},
+            removedMiddlePosts: new Set<string>(Array.isArray(cfg.removedMiddlePosts) ? cfg.removedMiddlePosts : []),
+            decorativePosts: Array.isArray(cfg.decorativePosts) ? cfg.decorativePosts : [],
           };
           return (
             <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream overflow-hidden">
