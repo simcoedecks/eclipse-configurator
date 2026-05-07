@@ -682,12 +682,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     try { return window.localStorage.getItem('eclipse-showroom-mode') === '1'; } catch { return false; }
   });
   const [dealerDiscountPct, setDealerDiscountPct] = useState<number>(() => {
-    if (typeof window === 'undefined') return 30;
+    if (typeof window === 'undefined') return 25;
     try {
       const v = window.localStorage.getItem('eclipse-dealer-discount-pct');
       const n = v != null ? parseFloat(v) : NaN;
-      return Number.isFinite(n) ? n : 30;
-    } catch { return 30; }
+      return Number.isFinite(n) ? n : 25;
+    } catch { return 25; }
   });
   const [showroomDiscountPct, setShowroomDiscountPct] = useState<number>(() => {
     if (typeof window === 'undefined') return 0;
