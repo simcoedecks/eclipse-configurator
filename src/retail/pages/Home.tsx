@@ -227,7 +227,12 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
   const [isDuplicateLead, setIsDuplicateLead] = useState(false);
   // Editing mode — when set, the "Submit for Quote" flow updates this
   // existing submission instead of creating a new one.
-  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(editSubmissionId || null);
+  // Important: editingSubmissionId is intentionally initialised to null,
+  // NOT to the editSubmissionId prop. The prop is only the *intent* to
+  // edit; we must validate the edit token (or trust adminMode) before we
+  // let the submit branch patch the doc. setEditingSubmissionId is called
+  // from the hydrate effect once validation passes.
+  const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
   const [editingHydrated, setEditingHydrated] = useState<boolean>(!editSubmissionId);
   // Snapshot of the configuration at hydrate time — used to compute the
   // itemized design-changed diff when a customer edits via clientEditToken.
@@ -878,7 +883,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         const cfg: any = data.configuration || {};
         // Token-link edit (dealer or client). Validate token + expiry
         // before allowing hydrate. Admin /admin/configurator path skips
-        // this check (no editRole + auth required by Firestore rules).
+        // this check (adminMode=true + Firestore rules require auth for
+        // submission updates the admin path goes through the full reads).
         if (editRole) {
           const urlToken = new URLSearchParams(window.location.search).get('editToken') || '';
           const expected = editRole === 'dealer' ? data.dealerEditToken : data.clientEditToken;
@@ -893,6 +899,15 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             setEditingHydrated(true);
             return;
           }
+        } else if (!adminMode) {
+          // Public /configurator?editId=… without an editRole + token is
+          // not allowed. Only the admin path (adminMode=true) or the
+          // dealer/client token path (editRole set) may edit existing
+          // submissions. Without this guard, anyone with a known
+          // submission ID could overwrite the doc by visiting the URL.
+          console.warn('[edit] refusing to hydrate edit without editRole+token or adminMode');
+          setEditingHydrated(true);
+          return;
         }
         setOriginalEditConfig(cfg);
         setEditDealerInfo({
