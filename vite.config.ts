@@ -15,14 +15,10 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    build: {
-      rollupOptions: {
-        input: {
-          retail: path.resolve(__dirname, 'index.html'),
-          pro: path.resolve(__dirname, 'pro.html'),
-        },
-      },
-    },
+    // Single entry point (index.html). The retail bundle handles every
+    // route, including /pro and /pro/quote (the contractor portal lives
+    // inside the retail bundle now — the old separate src/pro/ entry
+    // was removed because Netlify's SPA fallback never served pro.html).
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       headers: {
