@@ -33,6 +33,7 @@ import UnusedUpgrades from '../components/admin/UnusedUpgrades';
 import TwoAngleViews from '../components/admin/TwoAngleViews';
 import { computeFinalPricing } from '../../shared/lib/pricingMath';
 import { calculateBasePrice } from '../../shared/lib/pricing';
+import { ACCESSORIES } from '../../shared/lib/accessories';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail, stepLabel, submissionStatus, SUBMISSION_STATUS } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
 
@@ -1615,6 +1616,51 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
   })();
   const finalPricing = computeFinalPricing(pb, sub.customLineItems || [], sub.additionalPergolas || []);
   const fmt = (n: number) => typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+
+  // Fallback accessory list — when the saved itemizedAccessories array
+  // is empty/missing (older submissions before the firestore rules fix,
+  // or any submission where the tier-2 minimal write fired), derive a
+  // display-only list from configuration.accessoryIds so the admin can
+  // at least see WHAT the customer selected. Prices show as "—" because
+  // we can't reliably recompute them outside the configurator's full
+  // pricing pipeline.
+  const itemizedFromPb = Array.isArray(pb?.itemizedAccessories) ? pb.itemizedAccessories : [];
+  const accessoryIdList: string[] = Array.isArray(cfg.accessoryIds) ? cfg.accessoryIds
+    : Array.isArray(sub.configuration?.accessoryIds) ? sub.configuration.accessoryIds : [];
+  const accessoryNamesFallback: string[] = Array.isArray(cfg.accessories) ? cfg.accessories
+    : Array.isArray(sub.configuration?.accessories) ? sub.configuration.accessories : [];
+  const accessoriesFromIds = (itemizedFromPb.length === 0 && accessoryIdList.length > 0)
+    ? accessoryIdList.map((id) => {
+        const acc = ACCESSORIES.find(a => a.id === id);
+        const qty = (cfg.accessoryQuantities && cfg.accessoryQuantities[id]) || 1;
+        return { id, name: acc?.name || id, cost: null as number | null, quantity: qty };
+      })
+    : (itemizedFromPb.length === 0 && accessoryNamesFallback.length > 0)
+      ? accessoryNamesFallback.map((label) => ({ id: label, name: String(label), cost: null as number | null, quantity: 1 }))
+      : [];
+  const accessoriesAreFallback = accessoriesFromIds.length > 0;
+
+  // Trust the saved pricingBreakdown.total when admin hasn't applied
+  // line overrides AND the recomputed total noticeably diverges from
+  // it. This covers older submissions where itemizedAccessories is
+  // empty in the doc but pricingBreakdown.total was correctly saved
+  // at submit time. When the admin edits a line item in Pricing, the
+  // recomputed total wins (overrides imply intentional changes).
+  const hasOverrides = !!(sub.pricingOverride && (
+    typeof sub.pricingOverride.subtotal === 'number' ||
+    typeof sub.pricingOverride.total === 'number' ||
+    (sub.pricingOverride.lineItems && Object.keys(sub.pricingOverride.lineItems).length > 0)
+  ));
+  const savedTotal = typeof pb?.total === 'number' ? pb.total : null;
+  const totalDivergence = savedTotal !== null ? Math.abs(savedTotal - finalPricing.total) : 0;
+  const useSavedTotal = !hasOverrides && savedTotal !== null && totalDivergence > 1;
+  const displayPricing = useSavedTotal
+    ? {
+        subtotal: typeof pb.subtotal === 'number' ? pb.subtotal : savedTotal / 1.13,
+        hst: typeof pb.hst === 'number' ? pb.hst : savedTotal - (savedTotal / 1.13),
+        total: savedTotal,
+      }
+    : { subtotal: finalPricing.subtotal, hst: finalPricing.hst, total: finalPricing.total };
   const sourceLabel = LEAD_SOURCES.find(s => s.id === sub.source)?.label || sub.source || '—';
 
   // If this lead came through a dealer, compute dealer cost + margin (admin-only view)
@@ -2068,8 +2114,17 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-slate-100">
                         <tr><td className="px-3 py-2">Bespoke Pergola</td><td className="px-3 py-2 text-right font-semibold">{fmt(pb.basePrice)}</td></tr>
-                        {(pb.itemizedAccessories || []).map((a: any, i: number) => (
-                          <tr key={i}><td className="px-3 py-2 pl-6 text-gray-600">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td><td className="px-3 py-2 text-right">{fmt(a.cost)}</td></tr>
+                        {itemizedFromPb.map((a: any, i: number) => (
+                          <tr key={`pb-${i}`}><td className="px-3 py-2 pl-6 text-gray-600">{a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}</td><td className="px-3 py-2 text-right">{fmt(a.cost)}</td></tr>
+                        ))}
+                        {accessoriesAreFallback && accessoriesFromIds.map((a, i) => (
+                          <tr key={`fb-${i}`} className="bg-amber-50/30">
+                            <td className="px-3 py-2 pl-6 text-gray-600">
+                              {a.name}{a.quantity > 1 ? ` × ${a.quantity}` : ''}
+                              <span className="ml-2 text-[9px] uppercase tracking-widest font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded">price not itemized</span>
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-400 italic">—</td>
+                          </tr>
                         ))}
                         {(sub.additionalPergolas || []).map((p: any) => {
                           const price = typeof p.price === 'number'
@@ -2101,10 +2156,18 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
                             </tr>
                           );
                         })}
-                        <tr className="bg-slate-50"><td className="px-3 py-2 font-semibold">Subtotal</td><td className="px-3 py-2 text-right font-bold">{fmt(finalPricing.subtotal)}</td></tr>
-                        <tr><td className="px-3 py-2 text-gray-500">HST</td><td className="px-3 py-2 text-right">{fmt(finalPricing.hst)}</td></tr>
+                        <tr className="bg-slate-50"><td className="px-3 py-2 font-semibold">Subtotal</td><td className="px-3 py-2 text-right font-bold">{fmt(displayPricing.subtotal)}</td></tr>
+                        <tr><td className="px-3 py-2 text-gray-500">HST</td><td className="px-3 py-2 text-right">{fmt(displayPricing.hst)}</td></tr>
                         <tr className="bg-luxury-gold/5 border-t-2 border-luxury-gold/30">
-                          <td className="px-3 py-3 font-bold">Total</td><td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(finalPricing.total)}</td>
+                          <td className="px-3 py-3 font-bold">
+                            Total
+                            {useSavedTotal && (
+                              <span className="block text-[9px] uppercase tracking-widest font-bold text-amber-700 mt-0.5" title="Recomputed line items don't sum to the submit-time total — showing the trusted saved total.">
+                                from submit
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-right font-bold text-luxury-gold text-lg">{fmt(displayPricing.total)}</td>
                         </tr>
                       </tbody>
                     </table>
