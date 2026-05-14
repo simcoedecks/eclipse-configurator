@@ -43,6 +43,7 @@ import { useTheme } from '../../shared/hooks/useTheme';
 import AddPergolaModal from '../components/AddPergolaModal';
 import CustomRequestModal from '../components/CustomRequestModal';
 import type { AdditionalPergolaItem } from '../../shared/lib/pricingMath';
+import { GLOBAL_MARKUP } from '../../shared/lib/pricingMath';
 import { nextJobNumber } from '../../shared/lib/jobNumber';
 
 enum OperationType {
@@ -1317,8 +1318,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
   const totalPrice = useMemo(() => {
     if (basePrice === null) return null;
-    const subtotal = basePrice + accessoriesPrice + woodgrainUpgrade + adjustmentsTotal;
-    return subtotal;
+    // GLOBAL_MARKUP applies silently to every quote — kept in sync with
+    // computeFinalPricing in pricingMath.ts so the configurator's
+    // running total matches what the Proposal page renders.
+    const rawSubtotal = basePrice + accessoriesPrice + woodgrainUpgrade + adjustmentsTotal;
+    return rawSubtotal * GLOBAL_MARKUP;
   }, [basePrice, accessoriesPrice, woodgrainUpgrade, adjustmentsTotal]);
 
   const pdfData = useMemo(() => {
@@ -1498,7 +1502,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
     const accessoriesTotal = itemizedAccessories.reduce((sum, item) => sum + item.cost, 0);
     const extraPergolasTotal = extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
-    const subtotal = (basePrice || 0) + accessoriesTotal + extraPergolasTotal;
+    // GLOBAL_MARKUP applies silently to every quote — see pricingMath.ts.
+    // Saved pricingBreakdown therefore stores the marked-up subtotal, and
+    // every downstream view (Proposal, CRM, emails) shows consistent numbers.
+    const rawSubtotal = (basePrice || 0) + accessoriesTotal + extraPergolasTotal;
+    const subtotal = rawSubtotal * GLOBAL_MARKUP;
     const hst = subtotal * 0.13;
     const finalTotal = subtotal + hst;
 

@@ -56,6 +56,17 @@ export interface FinalPricing {
 
 const HST_RATE = 0.13;
 
+/**
+ * Global pre-tax markup applied silently to every quote. Multiplied into
+ * the subtotal BEFORE HST so the customer sees a self-consistent set of
+ * numbers (line items roll up to the marked-up subtotal, HST is taken
+ * off the marked-up subtotal, total = subtotal + HST). No visible line
+ * item in the proposal. To change the rate, edit this one constant —
+ * Home.tsx imports it so the configurator's running total and the
+ * saved pricingBreakdown both pick up the new value automatically.
+ */
+export const GLOBAL_MARKUP = 1.05;
+
 export function computeAdditionalPergolaPrice(p: AdditionalPergolaItem): number {
   if (typeof p.price === 'number') return p.price;
   if (Array.isArray(p.lineItems)) {
@@ -82,7 +93,8 @@ export function computeFinalPricing(
     return s + signed * qty;
   }, 0);
   const additionalPergolasTotal = (additionalPergolas || []).reduce((s, p) => s + computeAdditionalPergolaPrice(p), 0);
-  const subtotal = basePrice + accessoriesTotal + customTotal + additionalPergolasTotal;
+  const rawSubtotal = basePrice + accessoriesTotal + customTotal + additionalPergolasTotal;
+  const subtotal = rawSubtotal * GLOBAL_MARKUP;
   const hst = subtotal * HST_RATE;
   const total = subtotal + hst;
   return { basePrice, accessoriesTotal, customTotal, additionalPergolasTotal, subtotal, hst, total, hstRate: HST_RATE };
