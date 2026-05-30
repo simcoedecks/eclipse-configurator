@@ -8,12 +8,17 @@ import Proposal from './pages/Proposal';
 import DealerLanding from './pages/DealerLanding';
 import Pro from './pages/Pro';
 import ProQuote from './pages/ProQuote';
+import Landing from './pages/Landing';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        {/* Conversion landing page for campaigns + organic traffic.
+            To promote it to the homepage, swap the "/" route above to
+            <Landing /> and move <Home /> to e.g. "/build". */}
+        <Route path="/design" element={<Landing />} />
         <Route path="/configurator" element={<ConfiguratorRoute />} />
         <Route path="/scan/:sessionId" element={<Scan />} />
         <Route path="/proposal/:id" element={<Proposal />} />
