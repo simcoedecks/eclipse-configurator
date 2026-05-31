@@ -2455,7 +2455,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`tv-root flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}
+          className={`tv-root flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}
         >
           {currentUser && (
             <div className={`absolute top-0 left-0 w-full py-1.5 px-4 text-center text-xs font-medium z-50 flex items-center justify-center gap-2 shadow-md ${isDark ? 'bg-[#141414] text-white/70' : 'bg-luxury-black text-luxury-cream'}`}>
@@ -2465,7 +2465,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           )}
 
           {/* Left: 3D Visualizer */}
-          <div className={`tv-visualizer flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
+          <div className={`tv-visualizer flex-1 relative h-[30dvh] sm:h-[35dvh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
             <PergolaVisualizer
               width={width}
               depth={depth}
@@ -2508,7 +2508,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           </div>
 
           {/* Right: Lead Capture Form (Sidebar) */}
-          <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
+          <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] border-t md:border-t-0 md:border-l flex flex-col h-[70dvh] sm:h-[65dvh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 overflow-y-auto ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
             <div className="p-6 lg:p-8 flex flex-col justify-center min-h-full relative">
               <h3 className={`text-2xl font-serif mb-2 ${isDark ? 'text-white' : 'text-luxury-black'}`}>Welcome</h3>
               <p className={`text-sm mb-6 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>Please enter your details to start configuring your bespoke pergola.</p>
@@ -2878,7 +2878,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   };
 
   return (
-    <div className={`tv-root flex flex-col md:flex-row h-screen w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}>
+    <div className={`tv-root flex flex-col md:flex-row h-[100dvh] w-full overflow-hidden font-sans relative max-w-[1920px] mx-auto ${isDark ? 'dark bg-[#0a0a0a] text-[#e5e5e5]' : 'bg-luxury-paper dark:bg-[#111] text-luxury-black'}`}>
       <Toaster position="top-center" theme={isDark ? 'dark' : 'light'} />
 
       {currentUser && (
@@ -2889,7 +2889,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       )}
 
       {/* Left: 3D Visualizer */}
-      <div className={`tv-visualizer flex-1 relative h-[30vh] sm:h-[35vh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
+      <div className={`tv-visualizer flex-1 relative h-[30dvh] sm:h-[35dvh] md:h-full lg:h-full overflow-hidden ${isDark ? 'bg-[#111]' : 'bg-luxury-cream/30'}`}>
         <PergolaVisualizer
           width={width}
           depth={depth}
@@ -3010,7 +3010,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       </div>
 
       {/* Right: Sidebar Controls */}
-      <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70vh] sm:h-[65vh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
+      <div className={`tv-sidebar w-full md:w-[380px] lg:w-[420px] xl:w-[480px] 2xl:w-[560px] border-t md:border-t-0 md:border-l flex flex-col h-[70dvh] sm:h-[65dvh] md:h-full lg:h-full shadow-2xl z-20 shrink-0 ${isDark ? 'bg-[#141414] border-white/10' : 'bg-white border-luxury-cream'}`}>
         {/* Step Indicator */}
         <div className={`px-3 py-3 lg:px-5 lg:py-5 border-b shrink-0 flex items-center gap-3 ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-luxury-paper dark:bg-[#111]/50'}`}>
           <div className="flex-1 min-w-0">
@@ -4937,7 +4937,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         </div>
 
         {/* Footer Navigation */}
-        <div className={`px-4 py-3 lg:px-6 lg:py-4 border-t shrink-0 relative ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-white'}`}>
+        <div className={`px-4 py-2 lg:px-6 lg:py-2.5 border-t shrink-0 relative ${isDark ? 'border-white/10 bg-[#0f0f0f]' : 'border-luxury-cream bg-white'}`}>
           {/* Utility Row — Reset + Custom-Pergola Escape Hatch */}
           <div className={`flex items-center justify-between gap-2 pb-2 mb-2 border-b ${isDark ? 'border-white/5' : 'border-luxury-cream/40'}`}>
             <button
@@ -5018,7 +5018,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               {currentStep > 1 && (
                 <button
                   onClick={() => setCurrentStep(s => s - 1)}
-                  className="luxury-button-outline px-6 md:px-8 py-2.5 text-[11px]"
+                  className="luxury-button-outline !px-4 md:!px-6 !py-1.5 !text-[9px]"
                 >
                   Back
                 </button>
@@ -5035,7 +5035,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       updatePipedrive(leadId);
                     }
                   }}
-                  className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                 </button>
@@ -5051,7 +5051,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         }
                       }}
                       disabled={isSubmitting || isGeneratingPDF}
-                      className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : (editingSubmissionId ? 'Update Quote' : 'Submit for Quote')}
                     </button>
@@ -5065,7 +5065,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         }
                       }}
                       disabled={isSubmitting || isGeneratingPDF}
-                      className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Email Quote'}
                     </button>
