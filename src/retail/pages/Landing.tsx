@@ -52,7 +52,7 @@ export default function Landing() {
           <img
             src="/logo.png"
             alt="Eclipse Pergola"
-            className={`object-contain transition-all duration-500 ${scrolled ? 'h-8' : 'h-9'} ${scrolled ? '' : 'brightness-0 invert drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}
+            className={`object-contain transition-all duration-500 ${scrolled ? 'h-16' : 'h-18'} ${scrolled ? '' : 'brightness-0 invert drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}
           />
           <nav className="flex items-center gap-6">
             <button
@@ -141,9 +141,8 @@ export default function Landing() {
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + i * 0.08 }}
               className="flex items-center gap-3"
             >
               <div className="text-luxury-gold shrink-0">{t.icon}</div>
@@ -374,11 +373,16 @@ export default function Landing() {
 /* ───────────────── Helpers ───────────────── */
 
 function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  // Mount-triggered (not whileInView). whileInView relies on an
+  // IntersectionObserver that doesn't fire reliably in every context
+  // (some browsers, headless captures, fast jump-scrolls) — which can
+  // leave content stuck at opacity:0 and the page looking blank. For a
+  // conversion landing page, guaranteed visibility beats scroll-reveal.
+  // The entrance fade/rise still plays on load.
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-80px' }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] }}
     >
       {children}

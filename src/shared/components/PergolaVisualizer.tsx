@@ -1405,7 +1405,10 @@ export default function PergolaVisualizer(props: PergolaVisualizerProps) {
         </Canvas>
       </ErrorBoundary>
       {!props.staticMode && (
-        <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-medium text-[#475569] shadow-sm pointer-events-none">
+        // Hidden on phones (< md) — the hint crowds the cramped mobile
+        // visualizer and touch users already know swipe/pinch. Shown on
+        // tablet/desktop where there's room and the mouse hint is useful.
+        <div className="hidden md:block absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-medium text-[#475569] shadow-sm pointer-events-none">
           {'ontouchstart' in globalThis || navigator.maxTouchPoints > 0
             ? 'Swipe to rotate • Pinch to zoom'
             : 'Drag to rotate • Scroll to zoom'}
