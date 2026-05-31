@@ -2651,24 +2651,26 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     const Icon = icon as any;
 
     return (
-      <div className={`flex flex-col rounded-xl border transition-all overflow-hidden bg-white dark:bg-[#1a1a1a] ${anySelected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 dark:border-white/10'}`}>
-        <div className="w-full h-32 overflow-hidden border-b border-slate-100 dark:border-white/5 relative">
-          <img 
-            src={imageUrl} 
-            alt={title} 
-            className="w-full h-full object-cover"
+      <div className={`flex flex-row rounded-xl border transition-all overflow-hidden bg-white dark:bg-[#1a1a1a] ${anySelected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 dark:border-white/10'}`}>
+        {/* Image — left side, taller than wide, stretches to card height */}
+        <div className="w-2/5 max-w-[160px] shrink-0 self-stretch min-h-[150px] overflow-hidden border-r border-slate-100 dark:border-white/5 relative">
+          <img
+            src={imageUrl}
+            alt={title}
+            className="absolute inset-0 w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-            <div className="flex items-center gap-2 text-white">
-              <Icon className="w-4 h-4" />
-              <span className="font-bold text-sm">{title}</span>
+            <div className="flex items-center gap-1.5 text-white">
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-bold text-xs leading-tight">{title}</span>
             </div>
           </div>
         </div>
-        <div className="p-2 space-y-2">
+        {/* Options — right side, vertically stacked */}
+        <div className="flex-1 p-2 space-y-2 min-w-0">
           <p className="text-[10px] text-slate-500 dark:text-white/50">Select the sides you would like to add:</p>
-          <div className="grid grid-cols-2 gap-1">
+          <div className="grid grid-cols-1 gap-1">
             {groupAccessories.map(a => {
               const isSelected = selectedAccessories.has(a.id);
               const sideName = a.name.split('(')[1].replace(')', '');
