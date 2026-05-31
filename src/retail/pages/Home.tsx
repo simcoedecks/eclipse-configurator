@@ -2811,6 +2811,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0 ml-1" />}
           </div>
           <p className="text-[10px] leading-snug text-slate-500 dark:text-white/50 mb-1.5 flex-1 mt-0.5 line-clamp-2">{description}</p>
+          {accessory.id === 'heater' && (
+            <div className="flex items-start gap-1 mb-1.5 px-1.5 py-1 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40">
+              <span className="text-[10px] leading-none mt-px shrink-0">⚡</span>
+              <span className="text-[9px] font-semibold text-amber-800 dark:text-amber-300 leading-tight">Licensed electrician required to install (additional cost)</span>
+            </div>
+          )}
           <div className="flex justify-between items-center w-full">
             <p className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
               {isSelected && accessory.quantifiable
@@ -4509,6 +4515,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                               <span className="font-serif text-luxury-black/80">{formatCurrency(cost)}</span>
                             </div>
                             {breakdownRender}
+                            {accessory.id === 'heater' && (
+                              <div className="flex items-start gap-1 mt-1 px-1.5 py-1 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40">
+                                <span className="text-[10px] leading-none mt-px shrink-0">⚡</span>
+                                <span className="text-[9px] font-semibold text-amber-800 dark:text-amber-300 leading-tight">Licensed electrician required to install (additional cost)</span>
+                              </div>
+                            )}
                             {wallWoodgrainCost > 0 && (
                               <div className="flex justify-between items-center text-[10px] pl-3 mt-1">
                                 <span className="font-serif text-luxury-black/40 italic font-bold">Woodgrain Upgrade</span>
@@ -5014,7 +5026,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               {currentStep > 1 && (
                 <button
                   onClick={() => setCurrentStep(s => s - 1)}
-                  className="luxury-button-outline !px-4 md:!px-6 !py-1.5 !text-[9px]"
+                  className="luxury-button-outline !px-5 md:!px-7 !py-2 !text-[11px]"
                 >
                   Back
                 </button>
@@ -5031,7 +5043,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       updatePipedrive(leadId);
                     }
                   }}
-                  className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="luxury-button flex-1 lg:flex-none lg:!px-10 !py-2 !text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                 </button>
@@ -5047,7 +5059,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         }
                       }}
                       disabled={isSubmitting || isGeneratingPDF}
-                      className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="luxury-button flex-1 lg:flex-none lg:!px-10 !py-2 !text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : (editingSubmissionId ? 'Update Quote' : 'Submit for Quote')}
                     </button>
@@ -5061,7 +5073,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         }
                       }}
                       disabled={isSubmitting || isGeneratingPDF}
-                      className="luxury-button flex-1 lg:flex-none lg:!px-8 !py-1.5 !text-[9px] flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="luxury-button flex-1 lg:flex-none lg:!px-10 !py-2 !text-[11px] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSubmitting || isGeneratingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Email Quote'}
                     </button>
