@@ -4245,7 +4245,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               <div>
                 <div className="space-y-4">
                   <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Enhance Your Experience</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     {ACCESSORIES.filter(a => ['sensor', 'app_control', 'fan', 'heater'].includes(a.id))
                       .sort((a, b) => {
                         const order = ['sensor', 'app_control', 'fan', 'heater'];
