@@ -1567,55 +1567,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
 
-  const displayedBasePrice = useMemo(() => {
-    let total = basePrice || 0;
-    if (louverColor === '#8B5A2B') {
-      total += calculateLouverCount(width, depth) * 150;
-    }
-    
-    // In Phase 3, include selected accessories in the "Base Price" display as requested
-    if (currentStep === 3) {
-      selectedAccessories.forEach(id => {
-        const accessory = ACCESSORIES.find(a => a.id === id);
-        if (accessory) {
-          const qty = accessory.quantifiable ? (accessoryQuantities[id] || 1) : 1;
-          if (accessory.type === 'flat') {
-            total += accessory.price * qty;
-            if (id === 'heater' && heaterControl === 'dimmer') total += 1031;
-          } else if (accessory.type === 'sqft') {
-            total += accessory.price * (width * depth) * qty;
-          } else if (accessory.type === 'screen_width') {
-            total += calculateScreenPrice(width, height, numScreenBaysX);
-          } else if (accessory.type === 'screen_depth') {
-            total += calculateScreenPrice(depth, height, numScreenBaysZ);
-          } else if (accessory.type === 'wall_width') {
-            const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
-            total += width * height * wallUnitPrice;
-            if (wallColor === '#8B5A2B') {
-              const panelLength = width / numScreenBaysX;
-              const numPanelsPerBay = Math.ceil((height * 12) / 7);
-              for (let i = 0; i < numScreenBaysX; i++) {
-                total += numPanelsPerBay * (panelLength < 12 ? 100 : 150);
-              }
-            }
-          } else if (accessory.type === 'wall_depth') {
-            const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
-            total += depth * height * wallUnitPrice;
-            if (wallColor === '#8B5A2B') {
-              const panelLength = depth / numScreenBaysZ;
-              const numPanelsPerBay = Math.ceil((height * 12) / 7);
-              for (let i = 0; i < numScreenBaysZ; i++) {
-                total += numPanelsPerBay * (panelLength < 12 ? 100 : 150);
-              }
-            }
-          }
-        }
-      });
-    }
-    
-    return total;
-  }, [basePrice, louverColor, width, depth, currentStep, selectedAccessories, accessoryQuantities, height, numScreenBaysX, numScreenBaysZ, wallColor, heaterControl]);
-
   const heaterCardRef = useRef<HTMLButtonElement>(null);
 
   // Conflict detection: structure walls and screens occupy sides
@@ -4076,15 +4027,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   );
                 })()}
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
-                  </div>
-                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
-                    Includes motorized louver system &amp; LED perimeter lighting
-                  </p>
-                </div>
 
               </div>
             </motion.div>
@@ -4153,15 +4095,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   </p>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
-                  </div>
-                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
-                    Includes motorized louver system &amp; LED perimeter lighting
-                  </p>
-                </div>
               </div>
             </motion.div>
           )}
@@ -4297,15 +4230,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
-                  </div>
-                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
-                    Includes motorized louver system &amp; LED perimeter lighting
-                  </p>
-                </div>
               </div>
             </motion.div>
           )}
@@ -4327,15 +4251,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       })
                       .map(renderAccessory)}
                   </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
-                    <span className="text-2xl font-serif text-luxury-gold">{formatCurrency(displayedBasePrice)}</span>
-                  </div>
-                  <p className="text-[9px] italic text-luxury-black/40 dark:text-white/40 mt-1.5 leading-snug">
-                    Includes motorized louver system &amp; LED perimeter lighting
-                  </p>
                 </div>
               </div>
             </motion.div>
