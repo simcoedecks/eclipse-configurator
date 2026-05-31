@@ -2959,8 +2959,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           {isDark ? <Moon className="w-4 h-4 text-luxury-gold" /> : <Sun className="w-4 h-4 text-amber-500" />}
         </button>
 
-        <div className="absolute bottom-4 left-4 lg:bottom-8 lg:left-8 flex flex-col gap-1 md:gap-3 lg:gap-4 z-10">
-          <div className="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-36 sm:w-44 lg:w-56">
+        {/* Louver/Screen preview sliders. Side-by-side (row) on mobile so
+            they don't eat the limited height of the small mobile visualizer;
+            stacked (column) on tablet/desktop where there's vertical room. */}
+        <div className="absolute bottom-4 left-4 lg:bottom-8 lg:left-8 flex flex-row md:flex-col gap-1.5 md:gap-3 lg:gap-4 z-10">
+          <div className="glass-panel px-2.5 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-[7.5rem] sm:w-44 lg:w-56">
             <div className="flex items-center justify-between mb-1 lg:mb-2">
               <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 flex items-center gap-1 lg:gap-1.5 leading-none">
                 <Sun className="w-3 h-3" />
@@ -2981,7 +2984,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           </div>
 
           {(selectedAccessories.has('screen_front') || selectedAccessories.has('screen_back') || selectedAccessories.has('screen_left') || selectedAccessories.has('screen_right')) && (
-            <div className="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-36 sm:w-44 lg:w-56">
+            <div className="glass-panel px-2.5 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-3 rounded-none w-[7.5rem] sm:w-44 lg:w-56">
               <div className="flex items-center justify-between mb-1 lg:mb-2">
                 <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40 flex items-center gap-1 lg:gap-1.5 leading-none">
                   <Blinds className="w-3 h-3" />
