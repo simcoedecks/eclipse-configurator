@@ -3071,7 +3071,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 lg:p-6 space-y-4 lg:space-y-6">
 
           {currentStep === 1 && (
             <motion.div 
@@ -3079,26 +3079,28 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               animate={{ opacity: 1, x: 0 }}
               className="space-y-4"
             >
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {/* Dimension inputs — typable + slider + ± buttons.
-                    Common renderer so we keep consistent behavior across W/D/H. */}
+                    Common renderer so we keep consistent behavior across W/D/H.
+                    Condensed (small buttons, tight gaps) so the whole SIZE step
+                    fits a mobile viewport without scrolling. */}
                 {([
                   { label: 'Width (Louver Length)', value: width,  setter: setWidth,  min: 7, max: 100, ariaKey: 'width' },
                   { label: 'Depth',                 value: depth,  setter: setDepth,  min: 8, max: 40,  ariaKey: 'depth' },
                   { label: 'Height',                value: height, setter: setHeight, min: 8, max: 11,  ariaKey: 'height' },
                 ] as const).map(({ label, value, setter, min, max, ariaKey }) => (
-                  <div key={ariaKey} className="space-y-2">
+                  <div key={ariaKey}>
                     <div className="flex justify-between items-end">
                       <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">{label}</label>
                       <div className="flex items-baseline gap-0.5">
                         <DimensionNumberInput value={value} setter={setter} min={min} max={max} ariaKey={ariaKey} />
-                        <span className="text-lg font-serif font-medium text-luxury-gold">'</span>
+                        <span className="text-base font-serif font-medium text-luxury-gold">'</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => setter(Math.max(min, value - 1))}
-                        className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                        className="w-7 h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                         aria-label={`Decrease ${ariaKey}`}
                       >
                         <Minus className="w-3 h-3" />
@@ -3116,16 +3118,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                       />
                       <button
                         onClick={() => setter(Math.min(max, value + 1))}
-                        className="w-10 h-10 sm:w-7 sm:h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
+                        className="w-7 h-7 flex items-center justify-center rounded-full border border-luxury-black/10 dark:border-white/10 hover:border-luxury-gold hover:text-luxury-gold transition-colors shrink-0"
                         aria-label={`Increase ${ariaKey}`}
                       >
                         <Plus className="w-3 h-3" />
                       </button>
-                    </div>
-                    <div className="flex items-center justify-between text-[9px] text-luxury-black/30 dark:text-white/30">
-                      <span>{min}'</span>
-                      <span>Range: {min}'–{max}'</span>
-                      <span>{max}'</span>
                     </div>
                   </div>
                 ))}
