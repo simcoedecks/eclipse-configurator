@@ -2653,7 +2653,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     return (
       <div className={`flex flex-row rounded-xl border transition-all overflow-hidden bg-white dark:bg-[#1a1a1a] ${anySelected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 dark:border-white/10'}`}>
         {/* Image — left side, taller than wide, stretches to card height */}
-        <div className="w-2/5 max-w-[160px] shrink-0 self-stretch min-h-[150px] overflow-hidden border-r border-slate-100 dark:border-white/5 relative">
+        <div className="w-2/5 max-w-[160px] shrink-0 self-stretch min-h-[120px] overflow-hidden border-r border-slate-100 dark:border-white/5 relative">
           <img
             src={imageUrl}
             alt={title}
@@ -2668,8 +2668,8 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           </div>
         </div>
         {/* Options — right side, vertically stacked */}
-        <div className="flex-1 p-2 space-y-2 min-w-0">
-          <p className="text-[10px] text-slate-500 dark:text-white/50">Select the sides you would like to add:</p>
+        <div className="flex-1 p-1.5 space-y-1 min-w-0">
+          <p className="text-[9px] text-slate-500 dark:text-white/50 leading-tight">Select the sides to add:</p>
           <div className="grid grid-cols-1 gap-1">
             {groupAccessories.map(a => {
               const isSelected = selectedAccessories.has(a.id);
@@ -2713,7 +2713,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   key={a.id}
                   onClick={() => toggleAccessory(a.id)}
                   title={conflict === 'structure' ? 'A structure wall is on this side' : conflict === 'screen' ? 'A motorized screen is on this side' : conflict === 'sectioned' ? 'This side is using per-section customization — configure screens/walls there instead' : undefined}
-                  className={`flex items-center justify-between px-2 py-1 rounded-lg border text-[10px] font-medium transition-all ${
+                  className={`flex items-center justify-between px-2 py-0.5 rounded-lg border text-[10px] font-medium transition-all ${
                     isSelected
                       ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700'
                       : conflict
@@ -2791,28 +2791,28 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         }`}
       >
         {accessory.imageUrl && (
-          <div className="w-full h-32 overflow-hidden border-b border-slate-100 dark:border-white/5">
-            <img 
-              src={accessory.imageUrl} 
-              alt={accessory.name} 
+          <div className="w-full h-12 sm:h-24 overflow-hidden border-b border-slate-100 dark:border-white/5">
+            <img
+              src={accessory.imageUrl}
+              alt={accessory.name}
               className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
               referrerPolicy="no-referrer"
             />
           </div>
         )}
-        <div className="p-4 w-full flex-1 flex flex-col">
-          <div className="flex justify-between items-start mb-1">
-            <div className="flex items-center gap-2">
-              <Icon className={`w-4 h-4 ${isSelected ? 'text-emerald-600' : 'text-slate-400 dark:text-white/40'}`} />
-              <span className={`font-medium text-sm ${isSelected ? 'text-emerald-900' : 'text-slate-900 dark:text-white'}`}>
+        <div className="p-2 sm:p-3 w-full flex-1 flex flex-col">
+          <div className="flex justify-between items-start mb-0.5">
+            <div className="flex items-center gap-1.5">
+              <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-600' : 'text-slate-400 dark:text-white/40'}`} />
+              <span className={`font-medium text-xs sm:text-sm leading-tight ${isSelected ? 'text-emerald-900' : 'text-slate-900 dark:text-white'}`}>
                 {accessory.name}
               </span>
             </div>
-            {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0 ml-2" />}
+            {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0 ml-1" />}
           </div>
-          <p className="text-xs text-slate-500 dark:text-white/50 mb-3 flex-1 mt-2">{description}</p>
+          <p className="text-[10px] leading-snug text-slate-500 dark:text-white/50 mb-1.5 flex-1 mt-0.5 line-clamp-2">{description}</p>
           <div className="flex justify-between items-center w-full">
-            <p className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
+            <p className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
               {isSelected && accessory.quantifiable
                 ? <>+{formatCurrency(accessoryCost * getQty(accessory.id))}{getQty(accessory.id) > 1 && <span className="text-[10px] opacity-60 ml-1">({formatCurrency(accessoryCost)} × {getQty(accessory.id)})</span>}</>
                 : <>+{formatCurrency(accessoryCost)}</>}
@@ -4105,13 +4105,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               className="space-y-6"
             >
               <div>
-                <div className="space-y-6">
-                  <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Motorized Systems</h4>
                     {renderGroupedAccessory('Motorized Screens', 'screen', Blinds, '/motorizedscreens.png')}
                   </div>
-                  
-                  <div className="space-y-4">
+
+                  <div className="space-y-1.5">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Fixed Privacy</h4>
                     {renderGroupedAccessory('Privacy Walls', 'wall', PanelRight, '/privacywall.png')}
                   </div>
@@ -4202,6 +4202,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     </div>
                   )}
 
+                  {/* Privacy Wall Finish — only relevant once a wall is added,
+                      so hide it otherwise to keep the step compact on mobile. */}
+                  {Array.from(selectedAccessories).some(id => id.startsWith('wall')) && (
                   <div className="space-y-2">
                     <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Privacy Wall Finish</h4>
                     <div className="grid grid-cols-4 sm:grid-cols-[repeat(7,minmax(0,1fr))] gap-2 sm:gap-1">
@@ -4225,8 +4228,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
+                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-1.5 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
+                  )}
                 </div>
 
               </div>
@@ -4240,9 +4244,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               className="space-y-6"
             >
               <div>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <h4 className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Enhance Your Experience</h4>
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4">
                     {ACCESSORIES.filter(a => ['sensor', 'app_control', 'fan', 'heater'].includes(a.id))
                       .sort((a, b) => {
                         const order = ['sensor', 'app_control', 'fan', 'heater'];
@@ -4256,13 +4260,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
           )}
 
           {currentStep === 5 && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="space-y-8"
+              className="space-y-3"
             >
               <div>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {/* Previously-saved pergolas render FIRST, in save order — collapsed by default */}
                   {extraPergolas.map((p, idx) => {
                     const price = typeof p.price === 'number' ? p.price : 0;
@@ -4366,7 +4370,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   })}
 
                   {/* Active / current pergola (last — the one being configured now) */}
-                  <div className="border border-luxury-cream p-4 space-y-4">
+                  <div className="border border-luxury-cream p-2.5 space-y-2">
                     {extraPergolas.length > 0 && (
                       <div className="flex items-center gap-2 -mt-1 mb-1">
                         <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-luxury-gold text-luxury-black">
@@ -4375,20 +4379,20 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         <span className="text-[10px] italic text-luxury-black/40 dark:text-white/40">current design</span>
                       </div>
                     )}
-                    <div className="flex flex-col border-b border-luxury-cream pb-4">
+                    <div className="flex flex-col border-b border-luxury-cream pb-2">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="text-lg font-serif mb-1">Bespoke Pergola</h4>
-                          <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-relaxed">
+                          <h4 className="text-base font-serif mb-0.5">Bespoke Pergola</h4>
+                          <p className="text-[10px] text-luxury-black/40 uppercase tracking-widest leading-tight">
                             {width}' × {depth}' × {height}' <br />
                             {COLORS.find(c => c.hex === frameColor)?.name} Frame <br />
-                            {COLORS.find(c => c.hex === louverColor)?.name} Louvers <br />
+                            {COLORS.find(c => c.hex === louverColor)?.name} Louvers
                           </p>
-                          <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
+                          <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-1 leading-snug normal-case">
                             Includes motorized louver system &amp; LED perimeter lighting
                           </p>
                         </div>
-                        <span className="text-lg font-serif text-luxury-gold">{formatCurrency(basePrice || 0)}</span>
+                        <span className="text-base font-serif text-luxury-gold">{formatCurrency(basePrice || 0)}</span>
                       </div>
                       {louverColor === '#8B5A2B' && (
                         <div className="flex justify-between items-center text-[10px] pl-3 mt-2">
@@ -4693,9 +4697,9 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     )}
 
                     {/* Add Another Pergola CTA */}
-                    <div className="pt-4 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3">
-                      <span className={`text-[10px] italic leading-relaxed ${isDark ? 'text-white/40' : 'text-luxury-black/50'}`}>
-                        Building a larger space? Add another pergola to this project.
+                    <div className="pt-2.5 border-t border-luxury-black/10 dark:border-white/10 flex items-center justify-between gap-3">
+                      <span className={`text-[10px] italic leading-tight ${isDark ? 'text-white/40' : 'text-luxury-black/50'}`}>
+                        Building a larger space? Add another pergola.
                       </span>
                       <button
                         type="button"
