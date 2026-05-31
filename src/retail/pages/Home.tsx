@@ -17,7 +17,6 @@ import {
   Calendar,
   User,
   Phone,
-  MapPin,
   Plus,
   Minus,
   Loader2,
@@ -422,7 +421,6 @@ Frame Color: ${getColorName(frameColor)}
 Louver Color: ${getColorName(louverColor)}
 Wall Color: ${getColorName(wallColor)}
 Structure: ${structureText}
-Foundation: ${foundationStatus || 'Not specified'}
 Heater Control: ${selectedAccessories.has('heater') ? heaterControl : 'N/A'}
 Screen Drop: ${screenDrop}%
 Guillotine Open: ${guillotineOpen}%
@@ -4078,61 +4076,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   );
                 })()}
 
-                {/* Foundation Selection — moved to last in Step 1 so the
-                    customer locks in dimensions + structure first. */}
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-widest font-bold text-luxury-black/40 dark:text-white/40">Do you have a foundation?</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => { setFoundationStatus('existing'); setShowFoundationError(false); }}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left ${
-                        foundationStatus === 'existing'
-                          ? 'border-luxury-gold bg-luxury-gold/5 dark:bg-luxury-gold/10 ring-1 ring-luxury-gold'
-                          : showFoundationError
-                            ? 'border-red-400 dark:border-red-500/50'
-                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:border-white/15 dark:hover:border-white/20'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        foundationStatus === 'existing' ? 'border-luxury-gold' : showFoundationError ? 'border-red-400' : 'border-slate-300 dark:border-white/15 dark:border-white/20'
-                      }`}>
-                        {foundationStatus === 'existing' && <div className="w-2 h-2 rounded-full bg-luxury-gold" />}
-                      </div>
-                      <div>
-                        <span className={`text-sm font-serif font-medium block ${foundationStatus === 'existing' ? 'text-luxury-gold' : 'text-luxury-black/80 dark:text-white/80'}`}>
-                          Yes, existing
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">Deck, patio, or concrete pad</span>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { setFoundationStatus('needs'); setShowFoundationError(false); }}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left ${
-                        foundationStatus === 'needs'
-                          ? 'border-luxury-gold bg-luxury-gold/5 dark:bg-luxury-gold/10 ring-1 ring-luxury-gold'
-                          : showFoundationError
-                            ? 'border-red-400 dark:border-red-500/50'
-                            : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:border-white/15 dark:hover:border-white/20'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        foundationStatus === 'needs' ? 'border-luxury-gold' : showFoundationError ? 'border-red-400' : 'border-slate-300 dark:border-white/15 dark:border-white/20'
-                      }`}>
-                        {foundationStatus === 'needs' && <div className="w-2 h-2 rounded-full bg-luxury-gold" />}
-                      </div>
-                      <div>
-                        <span className={`text-sm font-serif font-medium block ${foundationStatus === 'needs' ? 'text-luxury-gold' : 'text-luxury-black/80 dark:text-white/80'}`}>
-                          No, I need one
-                        </span>
-                        <span className="text-[10px] text-slate-500 dark:text-white/50 dark:text-white/40">*Additional cost may occur</span>
-                      </div>
-                    </button>
-                  </div>
-                  {showFoundationError && (
-                    <p className="text-red-500 text-[10px]">Please select your foundation status to continue</p>
-                  )}
-                </div>
-
                 <div className="mt-6 pt-6 border-t border-luxury-black/10 dark:border-white/10">
                   <div className="flex justify-between items-center">
                     <span className="text-xs uppercase tracking-widest font-bold text-luxury-black/60 dark:text-white/60">Base Price</span>
@@ -4526,17 +4469,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             {width}' × {depth}' × {height}' <br />
                             {COLORS.find(c => c.hex === frameColor)?.name} Frame <br />
                             {COLORS.find(c => c.hex === louverColor)?.name} Louvers <br />
-                            {foundationStatus && (
-                              <>
-                                Foundation: {
-                                  {
-                                    'existing': 'Existing Foundation',
-                                    'needs': 'Needs Foundation'
-                                  }[foundationStatus] || foundationStatus
-                                }
-                                <br />
-                              </>
-                            )}
                           </p>
                           <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 mt-2 leading-snug normal-case">
                             Includes motorized louver system &amp; LED perimeter lighting
@@ -5170,15 +5102,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             {/* Primary Actions (Right on Desktop, Top on Mobile) */}
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               {currentStep < 5 ? (
-                <button 
+                <button
                   onClick={() => {
-                    if (currentStep === 1 && !foundationStatus) {
-                      setShowFoundationError(true);
-                    } else {
-                      setCurrentStep(s => s + 1);
-                      if (leadId) {
-                        updatePipedrive(leadId);
-                      }
+                    setCurrentStep(s => s + 1);
+                    if (leadId) {
+                      updatePipedrive(leadId);
                     }
                   }}
                   className="luxury-button flex-1 lg:flex-none lg:px-12 py-2.5 text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5226,35 +5154,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         <div className="fixed inset-0 z-40" onClick={() => setActiveColorWarning(null)} />
       )}
       
-      {/* Foundation Validation Popup */}
-      <AnimatePresence>
-        {showFoundationError && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-luxury-black/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`p-8 max-w-md w-full shadow-2xl border border-luxury-gold/20 text-center space-y-6 ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
-            >
-              <div className="w-16 h-16 bg-luxury-gold/10 rounded-full flex items-center justify-center mx-auto">
-                <MapPin className="w-8 h-8 text-luxury-gold" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-serif text-luxury-black">Foundation Required</h3>
-                <p className="text-sm text-luxury-black/60 dark:text-white/60 leading-relaxed">
-                  Please select a Foundation Status to continue with your architectural specification.
-                </p>
-              </div>
-              <button 
-                onClick={() => setShowFoundationError(false)}
-                className="luxury-button w-full"
-              >
-                Acknowledge
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
       {/* Conflict Confirmation Modal */}
       <AnimatePresence>
         {pendingConflict && (
