@@ -4063,7 +4063,6 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
 
                   <div>
@@ -4085,17 +4084,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-luxury-black/60 dark:text-white/60 mt-2 italic">*Non standard colours may affect lead time and pricing</p>
                   </div>
 
                 </div>
 
-                <div className="mt-4 p-2 bg-luxury-paper dark:bg-[#111] border border-luxury-gold/10 rounded-lg space-y-1">
-                  <p className="text-[10px] italic text-luxury-black/60 dark:text-white/60 font-medium">
-                    *Other colours may affect lead time and pricing
-                  </p>
-                  <p className="text-[10px] italic text-luxury-black/60 dark:text-white/60 font-medium">
-                    *Woodgrain finish may affect lead time as well as cost
+                <div className="mt-2 p-2 bg-luxury-paper dark:bg-[#111] border border-luxury-gold/10 rounded-lg">
+                  <p className="text-[9px] italic text-luxury-black/60 dark:text-white/60 font-medium leading-snug">
+                    *Non-standard &amp; woodgrain finishes may affect lead time and pricing
                   </p>
                 </div>
 
