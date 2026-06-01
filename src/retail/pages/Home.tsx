@@ -651,6 +651,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const [heardAboutOther, setHeardAboutOther] = useState('');
   const [hasStarted, setHasStarted] = useState(skipIntro);
   const [showContactModal, setShowContactModal] = useState(false);
+  // Which action the customer triggered — drives whether the contact
+  // modal (and scan handoff) submits an emailed quote or an on-site
+  // consultation request. Set by the footer buttons before validating.
+  const [submitIntent, setSubmitIntent] = useState<'email' | 'consultation'>('email');
   const [showResetModal, setShowResetModal] = useState(false);
   // Additional pergolas the customer added to this project
   const [extraPergolas, setExtraPergolas] = useState<AdditionalPergolaItem[]>([]);
@@ -994,18 +998,19 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       setAddress(data.address || '');
       setCity(data.city || '');
       setScanReceived(true);
-      // Auto-submit when the modal is open and we received the data
+      // Auto-submit when the modal is open and we received the data.
+      // Honor the intent (quote vs consultation) the customer chose.
       if (showContactModal) {
         setTimeout(() => {
           setShowContactModal(false);
-          handleSubmission('email');
+          handleSubmission(submitIntent);
         }, 800);
       }
       // Delete the session doc to clean up
       deleteDoc(doc(db, 'kiosk-sessions', scanSessionId)).catch(() => {});
     });
     return () => unsub();
-  }, [scanSessionId, hasStarted, skipIntro, showContactModal]);
+  }, [scanSessionId, hasStarted, skipIntro, showContactModal, submitIntent]);
 
   const postFileInputRef = useRef<HTMLInputElement>(null);
   const beamFileInputRef = useRef<HTMLInputElement>(null);
@@ -5016,6 +5021,27 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             </motion.div>
           )}
           
+          {/* On the Review step, offer an on-site consultation as a third
+              action — full-width above the Back/Email row so it reads clearly. */}
+          {currentStep === 5 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSubmitIntent('consultation');
+                if (!name || !email || !phone || !city) {
+                  setShowContactModal(true);
+                } else {
+                  handleSubmission('consultation');
+                }
+              }}
+              disabled={isSubmitting || isGeneratingPDF}
+              className="w-full mb-2 inline-flex items-center justify-center gap-2 border border-luxury-gold text-luxury-gold !py-2 !text-[11px] font-bold uppercase tracking-[0.2em] rounded-none hover:bg-luxury-gold hover:text-luxury-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Schedule On-Site Consultation
+            </button>
+          )}
+
           {/* Back + primary action sit side-by-side on every viewport so the
               nav stays compact (one row instead of stacked on mobile). Back is
               compact on the left; the primary button grows to fill the rest,
@@ -5052,6 +5078,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   {currentUser ? (
                     <button
                       onClick={() => {
+                        setSubmitIntent('email');
                         if (!name || !email || !phone || !city) {
                           setShowContactModal(true);
                         } else {
@@ -5066,6 +5093,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                   ) : (
                     <button
                       onClick={() => {
+                        setSubmitIntent('email');
                         if (!name || !email || !phone || !city) {
                           setShowContactModal(true);
                         } else {
@@ -5221,10 +5249,10 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             >
               <div className="text-center mb-6">
                 <div className="w-12 h-12 bg-luxury-gold/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Mail className="w-6 h-6 text-luxury-gold" />
+                  {submitIntent === 'consultation' ? <Calendar className="w-6 h-6 text-luxury-gold" /> : <Mail className="w-6 h-6 text-luxury-gold" />}
                 </div>
                 <h3 className={`text-xl font-serif ${isDark ? 'text-white' : 'text-luxury-black'}`}>Your Contact Details</h3>
-                <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>We'll send your personalized quote to your email.</p>
+                <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500 dark:text-white/50'}`}>{submitIntent === 'consultation' ? "We'll reach out to schedule your on-site consultation." : "We'll send your personalized quote to your email."}</p>
               </div>
 
               {/* QR code handoff */}
@@ -5261,7 +5289,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                 onSubmit={(e) => {
                   e.preventDefault();
                   setShowContactModal(false);
-                  handleSubmission('email');
+                  handleSubmission(submitIntent);
                 }}
                 className="space-y-3"
               >
@@ -5330,7 +5358,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                     type="submit"
                     className="luxury-button flex-1 !px-4 !py-2.5 text-[11px]"
                   >
-                    Send My Quote
+                    {submitIntent === 'consultation' ? 'Request Consultation' : 'Send My Quote'}
                   </button>
                 </div>
               </form>
