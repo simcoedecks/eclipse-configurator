@@ -1156,6 +1156,11 @@ export default function Admin() {
                     <option value="__none__">Direct (no contractor)</option>
                     {dealerOptions.map(d => <option key={d.slug} value={d.slug}>{d.name}</option>)}
                   </select>
+                  <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by request type — emailed quote vs on-site consultation">
+                    <option value="all">All Requests</option>
+                    <option value="email">Quote requests</option>
+                    <option value="consultation">🗓 Consultations</option>
+                  </select>
                   <select value={submissionStatusFilter} onChange={e => setSubmissionStatusFilter(e.target.value as any)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-luxury-gold" title="Filter by what the customer did with the form">
                     <option value="all">Submission: All</option>
                     <option value="submitted">Submitted</option>
