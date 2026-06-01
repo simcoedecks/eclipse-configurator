@@ -5,7 +5,7 @@ import {
   LogOut, Download, Loader2, Mail, MailOpen, Calendar, MapPin, Phone, Plus, Building2, Send, Menu,
   Search, FileText, ArrowUpDown, ArrowUp, ArrowDown, X, Eye, EyeOff, CheckCheck,
   Map as MapIcon, Trash2, CheckSquare, Square, LayoutGrid, List, Home, Kanban, Users, MessageSquare, Command,
-  Bookmark, Save, Copy, Sparkles, Paperclip, PenLine,
+  Bookmark, Save, Copy, Sparkles, Paperclip, PenLine, Lock,
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -36,6 +36,7 @@ import { calculateBasePrice } from '../../shared/lib/pricing';
 import { ACCESSORIES } from '../../shared/lib/accessories';
 import { PIPELINE_STAGES, stageById, defaultStageFor, LEAD_SOURCES, TEAM_MEMBERS, teamMemberByEmail, stepLabel, submissionStatus, SUBMISSION_STATUS } from '../../shared/lib/crm';
 import { logActivity } from '../lib/crmHelpers';
+import { isAuthorizedAdmin } from '../../shared/lib/adminAuth';
 
 type TabKey = 'dashboard' | 'submissions' | 'custom-requests' | 'kanban' | 'map' | 'jobs' | 'contractors';
 
@@ -110,7 +111,10 @@ export default function Admin() {
 
   // Data listeners
   useEffect(() => {
-    if (!user) return;
+    // Only subscribe for authorized admins. Unauthorized accounts are
+    // blocked by firestore.rules anyway, but skipping the listeners avoids
+    // noisy permission-denied errors and any data fetch attempt.
+    if (!user || !isAuthorizedAdmin(user)) return;
     // Diagnostic logging — prints the signed-in user's UID + email so the
     // admin can compare against what's in the Firestore rules allowlist.
     // This is the fastest way to debug 'permission-denied' loops.
@@ -736,6 +740,33 @@ export default function Admin() {
     { key: 'jobs',        label: 'Jobs',        icon: Building2, badge: jobs.length || undefined, sub: 'Contractor board' },
     { key: 'contractors', label: 'Team',        icon: Users,    sub: `${contractors.length} contractors` },
   ];
+
+  // Authorization gate — a successful sign-in is NOT enough. The account
+  // must be on the admin allowlist (mirrors firestore.rules). Anyone else
+  // — including any Google account — is shown an access-denied screen and
+  // must sign out. The Firestore rules independently block all data access.
+  if (!isAuthorizedAdmin(user)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-luxury-paper via-luxury-cream to-luxury-paper p-6">
+        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-xl max-w-md w-full border border-luxury-cream text-center">
+          <div className="w-14 h-14 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7 text-rose-500" />
+          </div>
+          <h1 className="text-2xl font-serif text-luxury-black mb-2">Access Denied</h1>
+          <p className="text-sm text-gray-600 mb-1">
+            <span className="font-medium text-luxury-black break-all">{user?.email || 'This account'}</span> isn't authorized to access this CRM.
+          </p>
+          <p className="text-xs text-gray-400 mb-6">If you believe this is a mistake, contact your administrator.</p>
+          <button
+            onClick={() => auth.signOut()}
+            className="w-full bg-luxury-black text-white px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-luxury-gold hover:text-luxury-black transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen flex ${isDark ? 'dark bg-[#0a0a0a]' : 'bg-gradient-to-br from-luxury-paper via-white to-luxury-paper'}`}>
