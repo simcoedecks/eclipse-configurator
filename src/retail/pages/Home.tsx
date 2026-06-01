@@ -5369,13 +5369,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
       <ProposalDocument data={pdfData} isGeneratingPDF={isGeneratingPDF} />
       <Toaster position="top-center" />
-      
-      {/* Admin Link */}
-      <div className="admin-link fixed bottom-2 left-1/2 -translate-x-1/2 z-[60] opacity-20 hover:opacity-100 transition-opacity">
-        <a href="/admin" className="text-[10px] text-luxury-black/40 hover:text-luxury-gold font-medium">
-          Admin Dashboard
-        </a>
-      </div>
+
+      {/* NOTE: the floating "Admin Dashboard" link was removed. It was
+          fixed at bottom-center with z-[60], overlapping the Continue /
+          Email Quote CTA (footer is z-20), so taps/double-taps on Continue
+          could land on it and navigate to /admin. Admins reach the CRM by
+          visiting /admin directly. No customer-facing action should ever
+          route into the admin app. */}
       {/* Hidden Proposal for Capture */}
       <div ref={proposalRef} className="fixed top-0 left-0 z-[-50] pointer-events-none">
         {visualizerData && <ProposalDocument data={visualizerData} isGeneratingPDF={true} />}
