@@ -26,7 +26,51 @@ export default function ProQuote() {
   const [contactName, setContactName] = useState('');
   const [dealerEmail, setDealerEmail] = useState('');
   const [dealerPhone, setDealerPhone] = useState('');
+  // logoUrl holds EITHER a pasted https URL OR a resized data: URL from an
+  // uploaded file. We avoid Firebase Storage entirely — the logo is resized
+  // client-side and carried as a compact data URL.
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoError, setLogoError] = useState('');
+
+  // Read an uploaded image, downscale it on a canvas (max 320px on the long
+  // side) and store the result as a PNG data URL. Keeps it small enough to
+  // live in the submission doc and render on the co-branded proposal.
+  const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoError('');
+    if (!file.type.startsWith('image/')) { setLogoError('Please choose an image file (PNG, JPG, SVG…).'); return; }
+    if (file.size > 8 * 1024 * 1024) { setLogoError('That image is too large (max 8MB).'); return; }
+    const reader = new FileReader();
+    reader.onerror = () => setLogoError("Couldn't read that file.");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => setLogoError("That file isn't a readable image.");
+      img.onload = () => {
+        const MAX = 320;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const scale = MAX / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setLogoError("Couldn't process that image."); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        let dataUrl = '';
+        try { dataUrl = canvas.toDataURL('image/png'); } catch { setLogoError("Couldn't process that image."); return; }
+        if (dataUrl.length > 700 * 1024) {
+          setLogoError('Logo is too detailed even after resizing — try a simpler/smaller image.');
+          return;
+        }
+        setLogoUrl(dataUrl);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Step 2 — client info
   const [clientName, setClientName] = useState('');
@@ -51,13 +95,22 @@ export default function ProQuote() {
       dealerEmail: dealerEmail.trim(),
       dealerPhone: dealerPhone.trim(),
       dealerSlug: slugify(businessName.trim()),
-      ...(logoUrl.trim() ? { dealerLogo: logoUrl.trim() } : {}),
       clientName: clientName.trim(),
       clientEmail: clientEmail.trim(),
       clientPhone: clientPhone.trim(),
       clientAddress: clientAddress.trim(),
       clientCity: clientCity.trim(),
     });
+    // Logo handoff: a pasted https URL is short enough for the query string,
+    // but an uploaded data: URL is far too long — stash it in sessionStorage
+    // (survives the client-side navigate + a refresh) and pass a sentinel.
+    const logo = logoUrl.trim();
+    if (logo.startsWith('data:')) {
+      try { sessionStorage.setItem('eclipse-pro-dealer-logo', logo); } catch {}
+      params.set('dealerLogo', 'stored');
+    } else if (logo) {
+      params.set('dealerLogo', logo);
+    }
     navigate(`/configurator?${params.toString()}`);
   };
 
@@ -133,10 +186,53 @@ export default function ProQuote() {
                 <input type="tel" value={dealerPhone} onChange={(e) => setDealerPhone(e.target.value)}
                   placeholder="(555) 123-4567" className={inputClass} />
               </Field>
-              <Field isDark={isDark} label="Logo URL (optional)" icon={<ImageIcon className="w-4 h-4" />} hint="Paste a public URL to your logo image. Appears on the proposal next to Eclipse.">
-                <input type="url" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)}
-                  placeholder="https://yoursite.com/logo.png" className={inputClass} />
-              </Field>
+              <div className="block">
+                <span className={`flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold mb-1.5 ${isDark ? 'text-white/60' : 'text-luxury-black/60'}`}>
+                  <ImageIcon className="w-4 h-4" />
+                  Your logo (optional)
+                </span>
+
+                {logoUrl ? (
+                  /* Preview + remove */
+                  <div className={`flex items-center gap-3 rounded-lg border p-2.5 ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-luxury-black/15'}`}>
+                    <div className="h-12 w-20 flex items-center justify-center rounded bg-white border border-luxury-black/10 shrink-0 overflow-hidden">
+                      <img src={logoUrl} alt="Your logo" className="max-h-12 max-w-full object-contain" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-luxury-black'}`}>
+                        {logoUrl.startsWith('data:') ? 'Logo uploaded' : 'Logo from URL'}
+                      </p>
+                      <p className={`text-[10px] ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>Shown on the proposal next to Eclipse.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setLogoUrl(''); setLogoError(''); }}
+                      className={`text-[10px] uppercase tracking-widest font-bold shrink-0 ${isDark ? 'text-white/50 hover:text-rose-400' : 'text-luxury-black/50 hover:text-rose-500'}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Upload button */}
+                    <label className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed cursor-pointer py-5 px-3 transition-colors ${isDark ? 'border-white/15 hover:border-luxury-gold bg-white/[0.02]' : 'border-luxury-black/20 hover:border-luxury-gold bg-white'}`}>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
+                      <ImageIcon className="w-5 h-5 text-luxury-gold" />
+                      <span className={`text-xs font-bold ${isDark ? 'text-white/80' : 'text-luxury-black/80'}`}>Upload logo file</span>
+                      <span className={`text-[10px] ${isDark ? 'text-white/40' : 'text-luxury-black/40'}`}>PNG, JPG or SVG · with transparency looks best</span>
+                    </label>
+                    {/* Or paste a URL */}
+                    <div className="flex items-center gap-2 my-2">
+                      <div className={`flex-1 h-px ${isDark ? 'bg-white/10' : 'bg-luxury-black/10'}`} />
+                      <span className={`text-[9px] uppercase tracking-widest font-bold ${isDark ? 'text-white/30' : 'text-luxury-black/30'}`}>or paste a URL</span>
+                      <div className={`flex-1 h-px ${isDark ? 'bg-white/10' : 'bg-luxury-black/10'}`} />
+                    </div>
+                    <input type="url" value={logoUrl} onChange={(e) => { setLogoUrl(e.target.value); setLogoError(''); }}
+                      placeholder="https://yoursite.com/logo.png" className={inputClass} />
+                  </>
+                )}
+                {logoError && <p className="text-[10px] text-rose-500 mt-1.5">{logoError}</p>}
+              </div>
 
               <div className="flex justify-end pt-3">
                 <button type="submit" className={primaryBtnClass}>

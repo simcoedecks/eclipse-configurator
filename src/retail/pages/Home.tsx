@@ -740,7 +740,13 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       dealerEmail: p.get('dealerEmail') || '',
       dealerPhone: p.get('dealerPhone') || '',
       dealerSlug: p.get('dealerSlug') || '',
-      dealerLogo: p.get('dealerLogo') || '',
+      // 'stored' sentinel means /pro/quote uploaded a file and stashed the
+      // resized data: URL in sessionStorage (too long for the query string).
+      dealerLogo: (() => {
+        const v = p.get('dealerLogo') || '';
+        if (v === 'stored') { try { return sessionStorage.getItem('eclipse-pro-dealer-logo') || ''; } catch { return ''; } }
+        return v;
+      })(),
       clientName: p.get('clientName') || '',
       clientEmail: p.get('clientEmail') || '',
       clientPhone: p.get('clientPhone') || '',

@@ -726,8 +726,15 @@ export async function createExpressApp() {
            </div>`
         : "";
 
-      const dealerLogoHtml = (isProIntake && dealerLogoUrl)
-        ? `<div style="text-align:center;margin:0 0 16px;"><img src="${dealerLogoUrl}" alt="${dealerName || 'Contractor logo'}" style="max-height:40px;max-width:200px;object-fit:contain;" /></div>`
+      // Dealer logo in the email. Uploaded logos arrive as a data: URL, which
+      // Gmail/Outlook strip from <img src> — so we embed those as a CID
+      // attachment (reliable across clients). Pasted https URLs are used as-is.
+      const dealerLogoIsData = isProIntake && typeof dealerLogoUrl === "string" && dealerLogoUrl.startsWith("data:");
+      const dealerLogoSrc = !isProIntake || !dealerLogoUrl
+        ? ""
+        : dealerLogoIsData ? "cid:dealer-logo" : dealerLogoUrl;
+      const dealerLogoHtml = dealerLogoSrc
+        ? `<div style="text-align:center;margin:0 0 16px;"><img src="${dealerLogoSrc}" alt="${escapeHtml(dealerName || 'Contractor logo')}" style="max-height:40px;max-width:200px;object-fit:contain;" /></div>`
         : "";
 
       // Extract submissionId from the proposalUrl so we can tag the email
@@ -794,6 +801,13 @@ export async function createExpressApp() {
             filename: "pergola-preview.png",
             content:  previewImage.split(",")[1] || previewImage,
             content_id: "pergola-preview",
+          }] : []),
+          // Uploaded dealer logo embedded by CID so it renders in email
+          // clients that strip data: URIs. Referenced as cid:dealer-logo above.
+          ...(dealerLogoIsData ? [{
+            filename: "dealer-logo.png",
+            content:  dealerLogoUrl.split(",")[1] || "",
+            content_id: "dealer-logo",
           }] : []),
         ],
       });
