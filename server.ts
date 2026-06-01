@@ -610,7 +610,11 @@ export async function createExpressApp() {
         // Showroom Mode override — when set, customer email shows the
         // discounted price instead of MSRP. Admin email always shows MSRP.
         customerDisplayTotal,
+        // 'email' (quote) or 'consultation' — drives the email copy so a
+        // consultation request reads differently from a quote.
+        type,
       } = req.body;
+      const isConsultation = type === 'consultation';
 
       if (!name || !email || !configuration) {
         return res.status(400).json({
@@ -749,13 +753,27 @@ export async function createExpressApp() {
 
       const customerFirst = String(name || "").split(/\s+/)[0] || "there";
       const adminSubject =
-        (isDuplicate ? "⚠ DUPLICATE · " : (isProIntake ? "🤝 Pro Quote · " : "📐 New Quote · ")) +
+        (isDuplicate ? "⚠ DUPLICATE · "
+          : isConsultation ? "🗓 Consultation Request · "
+          : isProIntake ? "🤝 Pro Quote · "
+          : "📐 New Quote · ") +
         `${name}` +
         (city ? ` · ${city}` : "") +
         (isProIntake && dealerName ? ` (via ${dealerName})` : "");
       // Personal greeting using the customer's first name. Falls back to a
       // friendly 'Hi there, ...' when no name was provided.
-      const customerSubject = `Hi ${customerFirst}, your pergola design is ready`;
+      const customerSubject = isConsultation
+        ? `Hi ${customerFirst}, we've received your consultation request`
+        : `Hi ${customerFirst}, your pergola design is ready`;
+
+      // A short banner at the top of the body that frames the email as a
+      // consultation request (team will reach out) vs a ready quote.
+      const consultationBannerHtml = isConsultation
+        ? `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:14px 16px;margin:0 0 20px;">
+             <p style="margin:0;color:#92400E;font-weight:700;font-size:14px;">🗓 On-Site Consultation Requested</p>
+             <p style="margin:6px 0 0;color:#92400E;font-size:12px;line-height:1.5;">Our team will reach out shortly to schedule a visit. Your design and budgetary pricing are below for reference.</p>
+           </div>`
+        : "";
 
       const makePayload = (to: string | string[], subject: string, role: 'admin' | 'customer' = 'admin') => ({
         from: FROM_EMAIL,
@@ -765,7 +783,12 @@ export async function createExpressApp() {
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;">
             ${role === 'customer' ? dealerLogoHtml : ''}
-            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">${role === 'customer' ? 'Your Pergola Design' : 'New Pergola Quote'}</h1>
+            <h1 style="color:#1A1A1A;border-bottom:3px solid #C5A059;padding-bottom:12px;">${
+              role === 'customer'
+                ? (isConsultation ? 'Your Consultation Request' : 'Your Pergola Design')
+                : (isConsultation ? 'Consultation Request' : 'New Pergola Quote')
+            }</h1>
+            ${consultationBannerHtml}
             ${warnHtml}
             ${previewImgHtml}
             ${proposalLinkHtml}

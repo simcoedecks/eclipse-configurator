@@ -1391,6 +1391,11 @@ export default function Admin() {
                                   </span>
                                 )}
                                 <p className="font-semibold text-luxury-black">{sub.name}</p>
+                                {sub.type === 'consultation' && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap" title="Customer requested an on-site consultation (not just an emailed quote)">
+                                    🗓 Consultation
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
                               {/* Mobile-only contractor badge — md+ uses the dedicated Contractor column. */}
@@ -1728,6 +1733,11 @@ function SubmissionDetail({ sub, onClose, onCompose, onMarkUnread, onDelete, con
                 )}
                 <h2 className="text-2xl font-serif text-luxury-black">{sub.name}</h2>
                 <PipelineStageSelector submission={sub} />
+                {sub.type === 'consultation' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300" title="Customer requested an on-site consultation">
+                    🗓 Consultation Request
+                  </span>
+                )}
                 {sub.acceptance?.signedAt && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">✓ Signed</span>}
                 {sub.isDuplicate && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-800">⚠ Duplicate</span>}
                 {/* Customer-later-submitted tag: only shown on draft details that
