@@ -2830,55 +2830,55 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
             </p>
           </div>
           {accessory.quantifiable && isSelected && (
-            <div className="w-full mt-3 pt-3 border-t border-emerald-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full mt-1.5 pt-1.5 border-t border-emerald-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
               <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800">Quantity</span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setQty(accessory.id, getQty(accessory.id) - 1); }}
                   disabled={getQty(accessory.id) <= 1}
-                  className="w-8 h-8 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-6 h-6 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                   aria-label="Decrease quantity"
                 >
-                  <Minus className="w-3.5 h-3.5" />
+                  <Minus className="w-3 h-3" />
                 </button>
-                <span className="w-6 text-center text-sm font-bold text-emerald-900">{getQty(accessory.id)}</span>
+                <span className="w-5 text-center text-xs font-bold text-emerald-900">{getQty(accessory.id)}</span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setQty(accessory.id, getQty(accessory.id) + 1); }}
                   disabled={getQty(accessory.id) >= (accessory.maxQuantity || 4)}
-                  className="w-8 h-8 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-6 h-6 rounded-full border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
                   aria-label="Increase quantity"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
                 </button>
               </div>
             </div>
           )}
           {accessory.id === 'heater' && isSelected && (
-            <div className="w-full mt-3 pt-3 border-t border-emerald-100" onClick={(e) => e.stopPropagation()}>
-              <label className="block text-[10px] font-bold text-emerald-800 mb-2">Add Smart Control?</label>
+            <div className="w-full mt-1.5 pt-1.5 border-t border-emerald-100" onClick={(e) => e.stopPropagation()}>
+              <label className="block text-[10px] font-bold text-emerald-800 mb-1">Add Smart Control?</label>
               <button
                 type="button"
                 onClick={() => setHeaterControl(heaterControl === 'dimmer' ? 'switch' : 'dimmer')}
-                className={`w-full flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                className={`w-full flex items-center gap-2 p-1.5 rounded-lg border transition-all ${
                   heaterControl === 'dimmer'
                     ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-emerald-500'
                     : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] hover:border-slate-300 dark:border-white/15'
                 }`}
               >
-                <img src="/bromic-dimmer.png" alt="Bromic Affinity Smart-Heat Dimmer" className="w-12 h-12 object-contain rounded shrink-0" />
-                <div className="flex-1 text-left">
-                  <p className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-900' : 'text-slate-800 dark:text-white/80'}`}>
+                <img src="/bromic-dimmer.png" alt="Bromic Affinity Smart-Heat Dimmer" className="w-8 h-8 object-contain rounded shrink-0" />
+                <div className="flex-1 text-left min-w-0">
+                  <p className={`text-[11px] font-medium leading-tight ${heaterControl === 'dimmer' ? 'text-emerald-900' : 'text-slate-800 dark:text-white/80'}`}>
                     Bromic Affinity Smart-Heat Dimmer
                   </p>
-                  <p className="text-[10px] text-slate-500 dark:text-white/50">App-controlled dimmer with zones</p>
+                  <p className="text-[9px] text-slate-500 dark:text-white/50 leading-tight">App-controlled dimmer with zones</p>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
-                  <span className={`text-xs font-medium ${heaterControl === 'dimmer' ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
+                  <span className={`text-[11px] font-medium ${heaterControl === 'dimmer' ? 'text-emerald-700' : 'text-slate-600 dark:text-white/60'}`}>
                     +{formatCurrency(1031)}
                   </span>
-                  {heaterControl === 'dimmer' && <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5" />}
+                  {heaterControl === 'dimmer' && <Check className="w-3 h-3 text-emerald-500 mt-0.5" />}
                 </div>
               </button>
             </div>
