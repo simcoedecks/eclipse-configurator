@@ -45,19 +45,23 @@
   @apply bg-white/10 border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
 }
 
-/* ─── Buttons ───────────────────────────────────────────────── */
+/* ─── Buttons ───────────────────────────────────────────────────
+   Unified across the configurator:
+   - .luxury-button         = primary action, solid luxury-gold
+   - .luxury-button-outline = secondary action (Back/Cancel), solid neutral
+   Both are filled (have a background colour) and share shape/size/type. */
 .luxury-button {
-  @apply bg-luxury-black text-white px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:bg-luxury-gold hover:tracking-[0.25em] disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply bg-luxury-gold text-luxury-black px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-300 hover:bg-luxury-gold/90 hover:tracking-[0.25em] disabled:opacity-50 disabled:cursor-not-allowed;
 }
 .dark .luxury-button {
-  @apply bg-white text-black hover:bg-luxury-gold hover:text-black;
+  @apply bg-luxury-gold text-luxury-black hover:bg-luxury-gold/90;
 }
 
 .luxury-button-outline {
-  @apply border border-luxury-black/20 text-luxury-black px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-500 hover:border-luxury-gold hover:text-luxury-gold;
+  @apply bg-luxury-cream text-luxury-black border border-luxury-black/10 px-10 py-5 rounded-none font-serif text-sm tracking-[0.2em] uppercase transition-all duration-300 hover:bg-luxury-black/10 disabled:opacity-50 disabled:cursor-not-allowed;
 }
 .dark .luxury-button-outline {
-  @apply border-white/20 text-white/80 hover:border-luxury-gold hover:text-luxury-gold;
+  @apply bg-white/10 text-white border-white/10 hover:bg-white/20;
 }
 
 /* ─── Inputs ────────────────────────────────────────────────── */

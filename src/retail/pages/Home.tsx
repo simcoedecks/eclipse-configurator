@@ -2642,7 +2642,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                 >
                   <button 
                     type="submit"
-                    className="luxury-button group !bg-luxury-black !text-white hover:!bg-luxury-gold hover:!text-white px-12 py-4 text-lg w-full flex items-center justify-center"
+                    className="luxury-button group px-12 py-4 text-lg w-full flex items-center justify-center"
                   >
                     Start Designing
                     <ChevronRight className="inline-block ml-3 w-5 h-5 transition-transform group-hover:translate-x-2" />
@@ -5041,7 +5041,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                 }
               }}
               disabled={isSubmitting || isGeneratingPDF}
-              className="w-full mb-2 inline-flex items-center justify-center gap-2 border border-luxury-gold text-luxury-gold !py-2 !text-[11px] font-bold uppercase tracking-[0.2em] rounded-none hover:bg-luxury-gold hover:text-luxury-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="luxury-button w-full mb-2 inline-flex items-center justify-center gap-2 !py-2 !text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Calendar className="w-3.5 h-3.5" />
               Schedule On-Site Consultation
