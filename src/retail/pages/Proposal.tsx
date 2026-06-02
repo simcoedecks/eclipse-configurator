@@ -1262,13 +1262,20 @@ export default function Proposal() {
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-luxury-cream space-y-2 text-[11px] italic text-gray-500 leading-relaxed">
-            <p>
-              Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
-            </p>
-            <p>
-              Please note that the configurator is provided for budgetary purposes only. Each pergola must be finalized with a site visit so we can provide an accurate final quote based on the specific site conditions and project details.
-            </p>
+          <div className="mt-8 pt-6 border-t border-luxury-cream space-y-3">
+            <div className="rounded-lg border border-luxury-cream bg-luxury-paper px-4 py-3">
+              <p className="text-[12px] text-luxury-black/80 leading-relaxed">
+                <span className="font-bold">This quote covers basic pergola installation only.</span> Any site work, surface or ground preparation, and foundations (footings, concrete pads, deck reinforcement, etc.) that your space requires are <span className="font-bold">not included</span> — these are assessed and quoted separately after a site visit.
+              </p>
+            </div>
+            <div className="space-y-2 text-[11px] italic text-gray-500 leading-relaxed">
+              <p>
+                Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
+              </p>
+              <p>
+                Please note that the configurator is provided for budgetary purposes only. Each pergola must be finalized with a site visit so we can provide an accurate final quote based on the specific site conditions and project details.
+              </p>
+            </div>
           </div>
         </section>
 

@@ -4899,6 +4899,11 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         </>
                       );
                     })()}
+                    <div className="mt-3 rounded-md border border-luxury-black/10 dark:border-white/10 bg-luxury-paper/70 dark:bg-white/[0.03] px-3 py-2">
+                      <p className="text-[10px] leading-relaxed text-luxury-black/70 dark:text-white/70">
+                        <span className="font-bold">This quote covers basic pergola installation only.</span> Any site work, surface or ground preparation, and foundations (footings, concrete pads, deck reinforcement, etc.) that your space requires are <span className="font-bold">not included</span> — these are assessed and quoted separately after a site visit.
+                      </p>
+                    </div>
                     <p className="text-[9px] italic text-luxury-black/50 dark:text-white/50 leading-relaxed pt-2">
                       Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
                     </p>

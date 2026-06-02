@@ -418,7 +418,10 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
               Price subject to duties and fees<br/>
               *Price quoted above is valid for 30 days
             </div>
-            <p className="text-[8px] italic text-[#666] leading-relaxed mt-2 pt-2 border-t border-[#f0f0f0]">
+            <p className="text-[8px] text-[#333] leading-relaxed mt-2 pt-2 border-t border-[#f0f0f0]">
+              <span className="font-bold">This quote covers basic pergola installation only.</span> Any site work, surface or ground preparation, and foundations (footings, concrete pads, deck reinforcement, etc.) that your space requires are <span className="font-bold">not included</span> — these are assessed and quoted separately after a site visit.
+            </p>
+            <p className="text-[8px] italic text-[#666] leading-relaxed mt-1.5">
               Pricing includes installation under normal circumstances. Should any additional work be required, the price will be adjusted to reflect the revised scope.
             </p>
             <p className="text-[8px] italic text-[#666] leading-relaxed mt-1.5">
