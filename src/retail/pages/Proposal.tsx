@@ -7,7 +7,7 @@ import PergolaVisualizer from '../../shared/components/PergolaVisualizer';
 import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
 import { ACCESSORIES } from '../../shared/lib/accessories';
-import { calculateScreenPrice } from '../../shared/lib/pricing';
+import { calculateScreenPrice, wallSqftPrice } from '../../shared/lib/pricing';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -158,7 +158,7 @@ function PopularAddOns({ submission }: { submission: any }) {
     }
   }
 
-  const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+  const wallUnitPrice = wallSqftPrice(width * depth);
   // Only show accessories actually surfaced on Phase 3 / Phase 4 of
   // the configurator — skip "extras" like LED, audio, in-lite scope/halo
   // and guillotine windows which aren't in the primary add-on list.

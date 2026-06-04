@@ -35,7 +35,7 @@ import { toPng, toJpeg } from 'html-to-image';
 import { ProposalDocument } from '../../shared/components/ProposalDocument';
 import { generateProposalPDF } from '../../shared/lib/pdfGenerator';
 import { useDebounce } from 'use-debounce';
-import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, getScreenDescription, formatCurrency } from '../../shared/lib/pricing';
+import { SCREEN_PRICES, getMarkup, calculateLouverCount, calculateScreenPrice, getScreenDescription, formatCurrency, wallSqftPrice } from '../../shared/lib/pricing';
 import { type AccessoryType, type Accessory, ACCESSORIES } from '../../shared/lib/accessories';
 import { COLORS, getColorName } from '../../shared/lib/colors';
 import { useTheme } from '../../shared/hooks/useTheme';
@@ -122,7 +122,11 @@ function calculateBasePrice(depth: number, width: number): number | null {
     }
   }
 
-  return calculatedPrice * getMarkup(area);
+  // The 5% GLOBAL_MARKUP is baked into the base price here — NOT applied to
+  // the subtotal — so the displayed base, the running total, the saved quote,
+  // and the Proposal all show the same number. Mirror any change to the rate
+  // in src/shared/lib/pricing.ts (the admin's copy of this function).
+  return calculatedPrice * getMarkup(area) * GLOBAL_MARKUP;
 }
 
 /**
@@ -268,7 +272,7 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
     let accessoriesText = 'None';
     if (selectedAccessories.size > 0) {
       const details: string[] = [];
-      const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+      const wallUnitPrice = wallSqftPrice(width * depth);
       
       selectedAccessories.forEach(id => {
         const accessory = ACCESSORIES.find(a => a.id === id);
@@ -290,7 +294,7 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
             const remainder = width % numScreenBaysX;
             for (let i = 0; i < numScreenBaysX; i++) {
               const screenLength = base + (i < remainder ? 1 : 0);
-              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
               breakdown.push({ price });
             }
           }
@@ -301,7 +305,7 @@ export default function Home({ skipIntro = false, dealerSlug, dealerEmail, deale
             const remainder = depth % numScreenBaysZ;
             for (let i = 0; i < numScreenBaysZ; i++) {
               const screenLength = base + (i < remainder ? 1 : 0);
-              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
               breakdown.push({ price });
             }
           }
@@ -1178,7 +1182,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
   const accessoriesPrice = useMemo(() => {
     let total = 0;
     const sqft = depth * width;
-    const wallUnitPrice = sqft < 120 ? 60 : 55;
+    const wallUnitPrice = wallSqftPrice(sqft);
 
     // Effective length for a screen/wall on a given side:
     // if the side has a partial structure wall, the screen/wall can only
@@ -1244,7 +1248,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       const bayLen = getBayLengthOnSide(side);
       choices.forEach(choice => {
         if (choice === 'screen') {
-          total += (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+          total += (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05 * GLOBAL_MARKUP;
         } else if (choice === 'wall') {
           total += bayLen * height * wallUnitPrice;
         }
@@ -1327,16 +1331,16 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
   const totalPrice = useMemo(() => {
     if (basePrice === null) return null;
-    // GLOBAL_MARKUP applies silently to every quote — kept in sync with
-    // computeFinalPricing in pricingMath.ts so the configurator's
-    // running total matches what the Proposal page renders.
+    // The 5% GLOBAL_MARKUP is baked into basePrice (see calculateBasePrice),
+    // so the running total is a straight sum of base + accessories. This keeps
+    // the Step 5 line items adding up exactly to the total the customer sees.
     const rawSubtotal = basePrice + accessoriesPrice + woodgrainUpgrade + adjustmentsTotal;
-    return rawSubtotal * GLOBAL_MARKUP;
+    return rawSubtotal;
   }, [basePrice, accessoriesPrice, woodgrainUpgrade, adjustmentsTotal]);
 
   const pdfData = useMemo(() => {
     const sqft = width * depth;
-    const wallUnitPrice = sqft < 120 ? 60 : 55;
+    const wallUnitPrice = wallSqftPrice(sqft);
 
     const louverCount = calculateLouverCount(width, depth);
     const louverUpgrade = louverColor === '#8B5A2B' ? louverCount * 150 : 0;
@@ -1373,7 +1377,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       if (acc.type === 'screen_width') {
         const partial = partialLen(id);
         if (partial !== null) {
-          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05;
+          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05 * GLOBAL_MARKUP;
           return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
         }
         const base = Math.floor(width / numScreenBaysX);
@@ -1381,7 +1385,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         const screens = [];
         for (let i = 0; i < numScreenBaysX; i++) {
           const screenLength = base + (i < remainder ? 1 : 0);
-          const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+          const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
           screens.push({ ...acc, name: `${acc.name} (${screenLength}')`, cost: price, quantity: 1 });
         }
         return screens;
@@ -1389,7 +1393,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       if (acc.type === 'screen_depth') {
         const partial = partialLen(id);
         if (partial !== null) {
-          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05;
+          const price = (SCREEN_PRICES[height]?.[Math.round(partial)] || 0) * 1.05 * GLOBAL_MARKUP;
           return [{ ...acc, name: `${acc.name} (${partial}' — open portion)`, cost: price, quantity: 1 }];
         }
         const base = Math.floor(depth / numScreenBaysZ);
@@ -1397,7 +1401,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         const screens = [];
         for (let i = 0; i < numScreenBaysZ; i++) {
           const screenLength = base + (i < remainder ? 1 : 0);
-          const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+          const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
           screens.push({ ...acc, name: `${acc.name} (${screenLength}')`, cost: price, quantity: 1 });
         }
         return screens;
@@ -1478,7 +1482,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
       const sideLabel = side.charAt(0).toUpperCase() + side.slice(1);
       choices.forEach((choice, idx) => {
         if (choice === 'screen') {
-          const price = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+          const price = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05 * GLOBAL_MARKUP;
           itemizedAccessories.push({
             id: `screen_${side}_bay${idx}`,
             name: `Motorized Screen · ${sideLabel} · Bay ${idx + 1} (${bayLen.toFixed(1)}')`,
@@ -1511,17 +1515,17 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
     const accessoriesTotal = itemizedAccessories.reduce((sum, item) => sum + item.cost, 0);
     const extraPergolasTotal = extraPergolas.reduce((s, p) => s + (p.price || 0), 0);
-    // GLOBAL_MARKUP applies silently to every quote — see pricingMath.ts.
-    // Saved pricingBreakdown therefore stores the marked-up subtotal, and
-    // every downstream view (Proposal, CRM, emails) shows consistent numbers.
+    // The 5% markup is already baked into basePrice, so the saved subtotal is
+    // a straight sum. Every downstream view (Proposal, CRM, emails) reads these
+    // stored numbers, so the base, the line items, and the total all agree.
     const rawSubtotal = (basePrice || 0) + accessoriesTotal + extraPergolasTotal;
-    const subtotal = rawSubtotal * GLOBAL_MARKUP;
+    const subtotal = rawSubtotal;
     const hst = subtotal * 0.13;
     const finalTotal = subtotal + hst;
 
     // Build a list of UPGRADES the customer did NOT pick, with calculated pricing.
     // Used on the PDF's "Available Options & Upgrades" page.
-    const wallUnitPriceForAvail = (width * depth) < 120 ? 60 : 55;
+    const wallUnitPriceForAvail = wallSqftPrice(width * depth);
     const availableUpgrades = ACCESSORIES
       .filter(a => !selectedAccessories.has(a.id))
       .map(a => {
@@ -2687,7 +2691,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
               const sideName = a.name.split('(')[1].replace(')', '');
               
               let cost = 0;
-              const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+              const wallUnitPrice = wallSqftPrice(width * depth);
               if (a.type === 'screen_width') {
                 cost = calculateScreenPrice(width, height, numScreenBaysX);
               } else if (a.type === 'screen_depth') {
@@ -2752,7 +2756,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
     
     let accessoryCost = 0;
     let description = accessory.description;
-    const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+    const wallUnitPrice = wallSqftPrice(width * depth);
     
     if (accessory.type === 'flat') {
       accessoryCost = accessory.price;
@@ -4443,7 +4447,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             breakdown = [];
                             for (let i = 0; i < numScreenBaysX; i++) {
                               const screenLength = base + (i < remainder ? 1 : 0);
-                              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+                              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
                               breakdown.push({ price });
                             }
                           }
@@ -4455,12 +4459,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             breakdown = [];
                             for (let i = 0; i < numScreenBaysZ; i++) {
                               const screenLength = base + (i < remainder ? 1 : 0);
-                              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05;
+                              const price = (SCREEN_PRICES[height]?.[screenLength] || 0) * 1.05 * GLOBAL_MARKUP;
                               breakdown.push({ price });
                             }
                           }
                         } else if (accessory.type === 'wall_width') {
-                          const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+                          const wallUnitPrice = wallSqftPrice(width * depth);
                           cost = width * height * wallUnitPrice;
                           const base = Math.floor(width / numScreenBaysX);
                           const remainder = width % numScreenBaysX;
@@ -4476,7 +4480,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                             }
                           }
                         } else if (accessory.type === 'wall_depth') {
-                          const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+                          const wallUnitPrice = wallSqftPrice(width * depth);
                           cost = depth * height * wallUnitPrice;
                           const base = Math.floor(depth / numScreenBaysZ);
                           const remainder = depth % numScreenBaysZ;
@@ -4573,12 +4577,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
                         const choices = getSectionChoicesForSide(side);
                         const bayLen = getBayLengthOnSide(side);
                         const sideLabel = { front: 'Front', back: 'Rear', left: 'Left', right: 'Right' }[side];
-                        const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+                        const wallUnitPrice = wallSqftPrice(width * depth);
                         choices.forEach((choice, i) => {
                           if (choice === 'open') return;
                           const key = `${side}-sec-${i}`;
                           if (choice === 'screen') {
-                            const cost = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05;
+                            const cost = (SCREEN_PRICES[height]?.[Math.round(bayLen)] || 0) * 1.05 * GLOBAL_MARKUP;
                             sectionRows.push({ key, name: `Motorized Screen — ${sideLabel} §${i + 1} (${bayLen.toFixed(1)}')`, cost });
                           } else if (choice === 'wall') {
                             const cost = bayLen * height * wallUnitPrice;

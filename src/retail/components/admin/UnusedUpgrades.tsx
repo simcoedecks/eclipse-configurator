@@ -1,5 +1,5 @@
 import { ACCESSORIES } from '../../../shared/lib/accessories';
-import { SCREEN_PRICES, calculateScreenPrice, formatCurrency } from '../../../shared/lib/pricing';
+import { SCREEN_PRICES, calculateScreenPrice, formatCurrency, wallSqftPrice } from '../../../shared/lib/pricing';
 
 interface Props {
   submission: any;
@@ -74,7 +74,7 @@ export default function UnusedUpgrades({ submission }: Props) {
   };
 
   // Calculate each unused accessory's price at this configuration
-  const wallUnitPrice = (width * depth) < 120 ? 60 : 55;
+  const wallUnitPrice = wallSqftPrice(width * depth);
   const unused = ACCESSORIES
     .filter(a => PHASE_3_4_IDS.has(a.id) && !selectedIds.has(a.id) && !blockedBySide(a.id))
     .map(a => {

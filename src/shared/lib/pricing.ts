@@ -1,3 +1,5 @@
+import { GLOBAL_MARKUP } from './pricingMath';
+
 export const SCREEN_PRICES: Record<number, Record<number, number>> = {
   8: { 7: 3969.70, 8: 4124.85, 9: 4333.50, 10: 4579.60, 11: 4777.55, 12: 4884.55, 13: 5103.90, 14: 5312.55, 15: 5408.85, 16: 5617.50, 17: 5788.70, 18: 5938.50, 19: 6125.75, 20: 6313.00 },
   9: { 7: 4039.25, 8: 4183.70, 9: 4397.70, 10: 4643.80, 11: 4847.10, 12: 4948.75, 13: 5162.75, 14: 5371.40, 15: 5478.40, 16: 5692.40, 17: 5842.20, 18: 6034.80, 19: 6222.05, 20: 6409.30 },
@@ -9,6 +11,16 @@ export function getMarkup(area: number): number {
   if (area <= 99) return 1.15;
   if (area <= 119) return 1.10;
   return 1.05;
+}
+
+/**
+ * Privacy-wall price per square foot. $60/sqft for compact builds, $55/sqft
+ * for larger ones, with the 5% GLOBAL_MARKUP baked in so walls carry the same
+ * margin as the pergola and screens. Single source of truth — every wall
+ * cost in the configurator, proposal, and admin goes through here.
+ */
+export function wallSqftPrice(totalSqft: number): number {
+  return (totalSqft < 120 ? 60 : 55) * GLOBAL_MARKUP;
 }
 
 export function calculateLouverCount(width: number, depth: number): number {
@@ -37,7 +49,7 @@ export function calculateScreenPrice(length: number, height: number, numBays: nu
     total += SCREEN_PRICES[height]?.[screenLength] || 0;
   }
 
-  return total * 1.05; // 5% markup for screens
+  return total * 1.05 * GLOBAL_MARKUP; // 5% screen markup × global margin
 }
 
 export function getScreenDescription(length: number, numBays: number) {
@@ -86,5 +98,8 @@ export function calculateBasePrice(depth: number, width: number): number | null 
   } else {
     price = 130 * area + 2000;
   }
-  return price * getMarkup(area);
+  // The 5% GLOBAL_MARKUP is baked into the base price here (must match the
+  // configurator's copy in Home.tsx) so an additional pergola priced by the
+  // admin lines up with one priced in the configurator.
+  return price * getMarkup(area) * GLOBAL_MARKUP;
 }

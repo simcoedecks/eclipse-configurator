@@ -57,13 +57,15 @@ export interface FinalPricing {
 const HST_RATE = 0.13;
 
 /**
- * Global pre-tax markup applied silently to every quote. Multiplied into
- * the subtotal BEFORE HST so the customer sees a self-consistent set of
- * numbers (line items roll up to the marked-up subtotal, HST is taken
- * off the marked-up subtotal, total = subtotal + HST). No visible line
- * item in the proposal. To change the rate, edit this one constant —
- * Home.tsx imports it so the configurator's running total and the
- * saved pricingBreakdown both pick up the new value automatically.
+ * Global pre-tax margin markup, applied silently at quote-creation time to the
+ * three core products only: the pergola (baked into calculateBasePrice — two
+ * copies, Home.tsx for the configurator and pricing.ts for the admin), the
+ * motorized screens (calculateScreenPrice), and the privacy walls
+ * (wallSqftPrice). It is deliberately NOT applied to bolt-on accessories
+ * (heater, fan, lighting, sensors) or woodgrain finishes, and NOT multiplied
+ * into the subtotal here — doing so would double-mark and break the invariant
+ * that the subtotal equals the sum of the line items the customer sees. Every
+ * pricing site imports this one constant, so changing the rate updates them all.
  */
 export const GLOBAL_MARKUP = 1.05;
 
@@ -94,7 +96,11 @@ export function computeFinalPricing(
   }, 0);
   const additionalPergolasTotal = (additionalPergolas || []).reduce((s, p) => s + computeAdditionalPergolaPrice(p), 0);
   const rawSubtotal = basePrice + accessoriesTotal + customTotal + additionalPergolasTotal;
-  const subtotal = rawSubtotal * GLOBAL_MARKUP;
+  // The 5% GLOBAL_MARKUP is already baked into basePrice at quote-creation time
+  // (see calculateBasePrice), so the stored basePrice includes it. Do NOT
+  // re-apply it here or the base would be double-marked and the subtotal would
+  // no longer equal the sum of the line items shown on the proposal.
+  const subtotal = rawSubtotal;
   const hst = subtotal * HST_RATE;
   const total = subtotal + hst;
   return { basePrice, accessoriesTotal, customTotal, additionalPergolasTotal, subtotal, hst, total, hstRate: HST_RATE };
