@@ -1,5 +1,6 @@
 import React from 'react';
 import PergolaVisualizer from './PergolaVisualizer';
+import { getPaymentSchedule, isDealerQuote } from '../lib/paymentTerms';
 
 export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data: any, isGeneratingPDF?: boolean, previewMode?: boolean }) => {
   const {
@@ -12,6 +13,9 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
     customLineItems,
     additionalPergolas,
   } = data;
+
+  // Dealer/pro quotes use a 70/30 deposit structure; retail keeps 50/30/20.
+  const isDealer = isDealerQuote(data);
 
   // If customLineItems or additionalPergolas are provided, re-derive
   // subtotal/HST/total so the PDF matches whatever the admin has saved.
@@ -432,18 +436,12 @@ export const ProposalDocument = ({ data, isGeneratingPDF, previewMode }: { data:
           <GoldBar>Payment Terms</GoldBar>
 
           <div className="text-[9px] space-y-1.5 px-2">
-            <div className="flex justify-between border-b border-[#f0f0f0] pb-1">
-              <span className="font-bold">50% due on signing</span>
-              <span className="text-[#666]">Deposit to begin production</span>
-            </div>
-            <div className="flex justify-between border-b border-[#f0f0f0] pb-1">
-              <span className="font-bold">30% due on pergola delivery</span>
-              <span className="text-[#666]">Prior to installation</span>
-            </div>
-            <div className="flex justify-between border-b border-[#f0f0f0] pb-1">
-              <span className="font-bold">Balance due on screen delivery</span>
-              <span className="text-[#666]">Final payment</span>
-            </div>
+            {getPaymentSchedule(isDealer).map((m, i) => (
+              <div key={i} className="flex justify-between border-b border-[#f0f0f0] pb-1">
+                <span className="font-bold">{m.pct} {m.when}</span>
+                <span className="text-[#666]">{m.note}</span>
+              </div>
+            ))}
             <p className="text-[8px] text-[#666] pt-1">
               Payments accepted via wire transfer, Interac e-Transfer to info@eclipsepergola.ca, cash, or cheque payable to "Eclipse Pergola Inc."
               <br/>*Cheque payments add 5 business days for verification.

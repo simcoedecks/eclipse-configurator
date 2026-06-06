@@ -8,6 +8,7 @@ import { COLORS } from '../../shared/lib/colors';
 import { computeFinalPricing, computeAdditionalPergolaPrice } from '../../shared/lib/pricingMath';
 import { ACCESSORIES } from '../../shared/lib/accessories';
 import { calculateScreenPrice, wallSqftPrice } from '../../shared/lib/pricing';
+import { getPaymentSchedule, isDealerQuote } from '../../shared/lib/paymentTerms';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
@@ -1283,11 +1284,7 @@ export default function Proposal() {
         <section className="bg-white rounded-2xl shadow-sm border border-luxury-cream p-8 lg:p-12">
           <h2 className="text-lg font-serif text-luxury-black mb-6">Payment Terms</h2>
           <div className="space-y-3">
-            {[
-              { pct: '50%', when: 'Due on signing', note: 'Deposit to begin production' },
-              { pct: '30%', when: 'Due on pergola delivery', note: 'Prior to installation' },
-              { pct: '20%', when: 'Due on screen delivery', note: 'Final payment' },
-            ].map((t, i) => (
+            {getPaymentSchedule(isDealerQuote(data)).map((t, i) => (
               <div key={i} className="flex justify-between items-center border-b border-luxury-cream pb-3 last:border-0">
                 <div>
                   <p className="font-bold text-luxury-black">{t.pct} {t.when}</p>

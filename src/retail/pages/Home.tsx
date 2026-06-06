@@ -1550,6 +1550,12 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
 
     return {
       name, email, phone, address, city,
+      // Dealer fields drive the 70/30 deposit structure on the PDF template
+      // (isDealerQuote in paymentTerms.ts); absent for retail quotes.
+      dealerName: effDealerName || null,
+      dealerEmail: effDealerEmail || null,
+      dealerPhone: effDealerPhone || null,
+      dealerContact: effDealerContact || null,
       date: new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '-'),
       docNumber: Math.floor(1000 + Math.random() * 9000).toString(),
       width, depth, height,
@@ -1577,7 +1583,7 @@ Total Price: $${grandTotal.toFixed(2)}${customerNotes.trim() ? `\n\nCustomer Not
         staticMode: true,
       }
     };
-  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas, houseWalls, houseWallLengths]);
+  }, [name, email, phone, address, city, width, depth, height, frameColor, louverColor, wallColor, basePrice, selectedAccessories, accessoryQuantities, heaterControl, numScreenBaysX, numScreenBaysZ, extraPergolas, houseWalls, houseWallLengths, effDealerName, effDealerEmail, effDealerPhone, effDealerContact]);
 
   const depths = Array.from({ length: 73 }, (_, i) => i + 8);
   const widths = Array.from({ length: 34 }, (_, i) => i + 7);
