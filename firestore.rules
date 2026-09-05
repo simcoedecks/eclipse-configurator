@@ -163,7 +163,11 @@ service cloud.firestore {
       // customerViewCount power the customer-side view tracker on /proposal/:id.
       let allowedFields = [
         'adminEmailId', 'customerEmailId', 'emailStatus', 'emailSentAt',
-        'pdfUrl', 'pdfFilename', 'viewedAt', 'submitterIp', 'geo',
+        // pdfUrl / pdfFilename are deliberately NOT client-writable: the admin
+        // UI renders pdfUrl as a download link and an <iframe>, so an
+        // anonymous write could inject an attacker-controlled URL into the
+        // CRM. Nothing client-side writes them; admins set them via isAdmin().
+        'viewedAt', 'submitterIp', 'geo',
         'customerFirstViewedAt', 'customerLastViewedAt',
         'customerTotalViewSeconds', 'customerViewCount',
       ];
@@ -300,7 +304,10 @@ service cloud.firestore {
       allow write: if request.resource.data.count is number
                    && request.resource.data.count > 0
                    && request.resource.data.count < 10000000
-                   && (!('count' in resource.data) || request.resource.data.count > resource.data.count - 2);
+                   // Monotonic: a sequence counter may be re-written (retry)
+                   // or incremented, never decremented — a decrement would
+                   // reissue an already-used job number.
+                   && (!('count' in resource.data) || request.resource.data.count >= resource.data.count);
       allow delete: if isAdmin();
     }
 
@@ -339,7 +346,11 @@ service cloud.firestore {
                (!('city' in data) || data.city is string && data.city.size() <= 100) &&
                data.status in ['completed'];
       }
-      allow read: if true;
+      // Single-session reads stay public (the QR handoff needs get + listen
+      // on one doc), but listing the collection would expose every captured
+      // name / phone / email. Only admins may list.
+      allow get: if true;
+      allow list: if isAdmin();
       allow create, update: if isValidKioskData(request.resource.data);
       allow delete: if true;
     }

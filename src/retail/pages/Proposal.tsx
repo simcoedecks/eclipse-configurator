@@ -1266,7 +1266,7 @@ export default function Proposal() {
           <div className="mt-8 pt-6 border-t border-luxury-cream space-y-3">
             <div className="rounded-lg border border-luxury-cream bg-luxury-paper px-4 py-3">
               <p className="text-[12px] text-luxury-black/80 leading-relaxed">
-                <span className="font-bold">This quote covers basic pergola installation only.</span> Any site work, surface or ground preparation, and foundations (footings, concrete pads, deck reinforcement, etc.) that your space requires are <span className="font-bold">not included</span> — these are assessed and quoted separately after a site visit.
+                <span className="font-bold">This quote covers basic pergola installation only.</span> Any site work, surface or ground preparation, and foundations (footings, concrete pads, deck reinforcement, etc.) that your space requires are <span className="font-bold">not included</span> — these are assessed and quoted separately after a site visit. Pricing is for <span className="font-bold">residential installation</span> and does not include permitting or engineering. Commercial and condo installations are available — a site visit must be scheduled for pricing.
               </p>
             </div>
             <div className="space-y-2 text-[11px] italic text-gray-500 leading-relaxed">

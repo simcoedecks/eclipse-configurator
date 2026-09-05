@@ -7,6 +7,8 @@ import { Resend } from "resend";
 import dotenv from "dotenv";
 import { initializeApp as initializeAdminApp, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
+import { ADMIN_EMAILS, ADMIN_UIDS } from "./src/shared/lib/adminAuth";
 
 dotenv.config();
 
@@ -26,6 +28,7 @@ if (missing.length > 0) {
 
 // ─── Firebase Admin ───────────────────────────────────────────────────────────
 let adminDb: any = null;
+let adminAuth: any = null;
 if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
   const adminApp = initializeAdminApp({
     credential: cert({
@@ -35,6 +38,31 @@ if (process.env.FIREBASE_ADMIN_PROJECT_ID && process.env.FIREBASE_ADMIN_CLIENT_E
     }),
   });
   adminDb = getFirestore(adminApp);
+  adminAuth = getAuth(adminApp);
+}
+
+// ─── Admin auth middleware ────────────────────────────────────────────────────
+// Guards every admin-only API route. The CRM sends the signed-in user's
+// Firebase ID token as `Authorization: Bearer <token>`; we verify it and check
+// the account against the same admin allowlist the client and Firestore rules
+// use (src/shared/lib/adminAuth.ts). The `x-export-token` header (EXPORT_SECRET)
+// is also accepted so scripted / server-to-server callers keep working.
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const exportToken = req.headers["x-export-token"];
+  if (process.env.EXPORT_SECRET && exportToken === process.env.EXPORT_SECRET) return next();
+
+  const header = String(req.headers.authorization || "");
+  const idToken = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!idToken) return res.status(401).json({ success: false, error: "Unauthorized" });
+  if (!adminAuth) return res.status(500).json({ success: false, error: "Auth service not configured" });
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    const email = String(decoded.email || "").toLowerCase().trim();
+    if (ADMIN_EMAILS.includes(email) || ADMIN_UIDS.includes(decoded.uid)) return next();
+    return res.status(403).json({ success: false, error: "Forbidden" });
+  } catch {
+    return res.status(401).json({ success: false, error: "Invalid or expired token" });
+  }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -275,7 +303,7 @@ export async function createExpressApp() {
   });
 
   // ── Create Job ──────────────────────────────────────────────────────────────
-  app.post("/api/create-job", async (req: Request, res: Response) => {
+  app.post("/api/create-job", requireAdmin, async (req: Request, res: Response) => {
     try {
       const {
         submissionId, city, customerName, customerEmail,
@@ -775,6 +803,18 @@ export async function createExpressApp() {
            </div>`
         : "";
 
+      // Admin-only banner stating the inquiry TYPE up front — mirrors the CRM's
+      // Type column so an emailed inquiry is unmistakable the moment it opens.
+      const adminTypeBanner = (bg: string, border: string, color: string, text: string) =>
+        `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:14px 16px;margin:0 0 20px;">
+           <p style="margin:0;color:${color};font-weight:700;font-size:14px;">${text}</p>
+         </div>`;
+      const adminTypeBannerHtml = isConsultation
+        ? adminTypeBanner('#FFFBEB', '#FDE68A', '#92400E', '🗓 On-Site Consultation Request')
+        : isProIntake
+          ? adminTypeBanner('#EFF6FF', '#BFDBFE', '#1E40AF', `🤝 Pro / Dealer Quote${dealerName ? ` · via ${dealerName}` : ''}`)
+          : adminTypeBanner('#F5F2ED', '#E7DCC3', '#7A5C1E', '📐 New Quote Request');
+
       const makePayload = (to: string | string[], subject: string, role: 'admin' | 'customer' = 'admin') => ({
         from: FROM_EMAIL,
         to,
@@ -788,7 +828,7 @@ export async function createExpressApp() {
                 ? (isConsultation ? 'Your Consultation Request' : 'Your Pergola Design')
                 : (isConsultation ? 'Consultation Request' : 'New Pergola Quote')
             }</h1>
-            ${consultationBannerHtml}
+            ${role === 'admin' ? adminTypeBannerHtml : consultationBannerHtml}
             ${warnHtml}
             ${previewImgHtml}
             ${proposalLinkHtml}
@@ -879,7 +919,7 @@ export async function createExpressApp() {
         // Also text admin phone if configured (ADMIN_SMS_NUMBER env)
         if (process.env.ADMIN_SMS_NUMBER) {
           const adminBody =
-            `📨 New ${isDuplicate ? '[DUPLICATE] ' : ''}Pergola Quote from ${name} ` +
+            `📨 New ${isDuplicate ? '[DUPLICATE] ' : ''}${isConsultation ? 'Consultation' : 'Pergola Quote'} from ${name} ` +
             `(${configuration.width}'x${configuration.depth}'x${configuration.height}', ${configuration.totalPrice})` +
             (dealerName ? ` via ${dealerName}` : '') + `. ` +
             `Proposal: ${proposalUrl}`;
@@ -963,16 +1003,43 @@ export async function createExpressApp() {
   app.post("/api/design-changed", async (req: Request, res: Response) => {
     try {
       const {
-        submissionId, customerName, customerEmail,
-        dealerEmail, dealerName, jobNumber,
-        proposalUrl, changes, newTotal,
+        submissionId,
+        proposalUrl: rawProposalUrl, changes, newTotal,
       } = req.body || {};
-      if (!submissionId || !customerEmail) {
-        return res.status(400).json({ success: false, error: "Missing submissionId or customerEmail" });
+      if (!submissionId) {
+        return res.status(400).json({ success: false, error: "Missing submissionId" });
       }
       if (!resend) {
         return res.status(200).json({ success: false, error: "Email service not configured" });
       }
+      // Recipients come from the STORED submission, never the request body —
+      // otherwise this public endpoint is an open relay able to email anyone
+      // from our domain. Knowing the submission ID (the proposal access key)
+      // proves the caller has the design; the database decides who is notified.
+      if (!adminDb) {
+        return res.status(200).json({ success: false, error: "Cannot verify submission" });
+      }
+      const subSnap = await adminDb.collection("submissions").doc(String(submissionId)).get();
+      if (!subSnap.exists) {
+        return res.status(404).json({ success: false, error: "Submission not found" });
+      }
+      const sub = subSnap.data() || {};
+      const customerEmail = String(sub.email || "");
+      const customerName  = String(sub.name || "");
+      const dealerEmail   = sub.dealerEmail ? String(sub.dealerEmail) : "";
+      const dealerName    = sub.dealerName ? String(sub.dealerName) : "";
+      const jobNumber     = sub.jobNumber;
+      if (!customerEmail) {
+        return res.status(200).json({ success: false, error: "Submission has no customer email" });
+      }
+      // Only trust a proposal link that points at THIS submission's own
+      // proposal, so the email to the customer can't carry an attacker URL.
+      const proposalUrl =
+        typeof rawProposalUrl === "string"
+          && /^https:\/\//.test(rawProposalUrl)
+          && rawProposalUrl.includes(`/proposal/${submissionId}`)
+          ? rawProposalUrl
+          : "";
       const safeChanges = Array.isArray(changes) ? changes : [];
       const rows = safeChanges.length
         ? safeChanges.map((c: any) => `
@@ -1043,7 +1110,7 @@ export async function createExpressApp() {
   });
 
   // ── Email Status ────────────────────────────────────────────────────────────
-  app.get("/api/email-status/:id", async (req: Request, res: Response) => {
+  app.get("/api/email-status/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { data, error } = await resend.emails.get(req.params.id);
       if (error) {
@@ -1059,7 +1126,7 @@ export async function createExpressApp() {
   });
 
   // ── Admin: send an email from the CRM ──────────────────────────────────────
-  app.post("/api/admin/send-email", async (req: Request, res: Response) => {
+  app.post("/api/admin/send-email", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { to, subject, body, submissionId } = req.body;
       if (!to || !subject || !body) {
@@ -1243,7 +1310,7 @@ export async function createExpressApp() {
   });
 
   // ── Admin: send an SMS from the CRM ────────────────────────────────────────
-  app.post("/api/admin/send-sms", async (req: Request, res: Response) => {
+  app.post("/api/admin/send-sms", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { to, body, submissionId } = req.body;
       if (!to || !body) {
@@ -1355,12 +1422,9 @@ export async function createExpressApp() {
   // ── Generate / Update Dealer Profile (called when contractor is created) ────
   // Writes a public-readable dealerProfiles/{slug} doc with display info
   // for the /dealer/:slug landing page. Admin SDK bypasses Firestore rules.
-  app.post("/api/admin/upsert-dealer-profile", async (req: Request, res: Response) => {
+  app.post("/api/admin/upsert-dealer-profile", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { slug, contractorId, contractorEmail, companyName, contactName, phone, logoUrl, adminSecret } = req.body;
-      if (adminSecret !== process.env.EXPORT_SECRET) {
-        return res.status(401).json({ success: false, error: "Unauthorized" });
-      }
+      const { slug, contractorId, contractorEmail, companyName, contactName, phone, logoUrl } = req.body;
       if (!slug || !companyName || !contractorEmail) {
         return res.status(400).json({ success: false, error: "Missing slug, companyName, or contractorEmail" });
       }
@@ -1404,13 +1468,9 @@ export async function createExpressApp() {
   });
 
   // ── Invite Contractor ───────────────────────────────────────────────────────
-  app.post("/api/pro/invite-contractor", async (req: Request, res: Response) => {
+  app.post("/api/pro/invite-contractor", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { companyName, contactName, email, phone, discountPercentage, slug, logoUrl, adminSecret } = req.body;
-
-      if (adminSecret !== process.env.EXPORT_SECRET) {
-        return res.status(401).json({ success: false, error: "Unauthorized" });
-      }
+      const { companyName, contactName, email, phone, discountPercentage, slug, logoUrl } = req.body;
       if (!companyName || !contactName || !email) {
         return res.status(400).json({ success: false, error: "Missing required fields: companyName, contactName, email" });
       }

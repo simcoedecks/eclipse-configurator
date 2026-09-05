@@ -3,6 +3,7 @@ import { X, Mail, MessageSquare, Send, Loader2, Sparkles } from 'lucide-react';
 import { EMAIL_TEMPLATES, SMS_TEMPLATES, renderTemplate } from '../../../shared/lib/crm';
 import { logActivity } from '../../lib/crmHelpers';
 import { toast } from 'sonner';
+import { auth } from '../../../shared/firebase';
 
 interface Props {
   submission: any;
@@ -48,10 +49,15 @@ export default function ComposeModal({ submission, initialMode = 'email', onClos
     if (mode === 'email' && !subject.trim()) return;
     setSending(true);
     try {
+      // Authorize with the signed-in admin's Firebase ID token — verified
+      // server-side against the admin allowlist. Never a shared secret.
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Please sign in as an admin first');
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` };
       if (mode === 'email') {
         const res = await fetch('/api/admin/send-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ to, subject, body, submissionId: submission.id }),
         });
         const result = await res.json();
@@ -61,7 +67,7 @@ export default function ComposeModal({ submission, initialMode = 'email', onClos
       } else {
         const res = await fetch('/api/admin/send-sms', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ to, body, submissionId: submission.id }),
         });
         const result = await res.json();

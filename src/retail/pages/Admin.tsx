@@ -1289,6 +1289,7 @@ export default function Admin() {
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('date')} className="inline-flex items-center gap-1 hover:text-luxury-black">Date <SortIcon col="date" /></button></th>
                         {/* Header label flips to 'Status' in the New Leads tab — every row there is by definition stage='new' (or a draft), so 'Stage' would be redundant. */}
                         <th className="p-3 font-semibold">{activeTab === 'submissions' ? 'Status' : 'Stage'}</th>
+                        <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('type')} className="inline-flex items-center gap-1 hover:text-luxury-black">Type <SortIcon col="type" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('name')} className="inline-flex items-center gap-1 hover:text-luxury-black">Customer <SortIcon col="name" /></button></th>
                         <th className="p-3 font-semibold"><button onClick={() => toggleColumnSort('email')} className="inline-flex items-center gap-1 hover:text-luxury-black">Contact <SortIcon col="email" /></button></th>
                         <th className="hidden md:table-cell p-3 font-semibold"><button onClick={() => toggleColumnSort('city')} className="inline-flex items-center gap-1 hover:text-luxury-black">Location <SortIcon col="city" /></button></th>
@@ -1301,7 +1302,7 @@ export default function Admin() {
                     </thead>
                     <tbody className="text-sm divide-y divide-slate-100">
                       {filteredSubmissions.length === 0 ? (
-                        <tr><td colSpan={11} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
+                        <tr><td colSpan={12} className="p-8 text-center text-gray-500 italic">{submissions.length === 0 ? 'No submissions yet.' : 'No submissions match your filters.'}</td></tr>
                       ) : filteredSubmissions.map(sub => {
                         const config = sub.configuration || {};
                         const isUnread = !sub.viewedAt;
@@ -1389,6 +1390,17 @@ export default function Admin() {
                               </div>
                             </td>
                             <td className="p-3 align-top">
+                              {sub.type === 'consultation' ? (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap" title="Customer requested an on-site consultation">
+                                  🗓 Consultation
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap" title="Customer requested an emailed quote">
+                                  Quote
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 align-top">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 {typeof sub.jobNumber === 'number' && (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-luxury-gold/15 text-luxury-black border border-luxury-gold/30 whitespace-nowrap">
@@ -1396,11 +1408,6 @@ export default function Admin() {
                                   </span>
                                 )}
                                 <p className="font-semibold text-luxury-black">{sub.name}</p>
-                                {sub.type === 'consultation' && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap" title="Customer requested an on-site consultation (not just an emailed quote)">
-                                    🗓 Consultation
-                                  </span>
-                                )}
                               </div>
                               <p className="text-[11px] text-gray-400 mt-0.5">{config.width}' × {config.depth}' × {config.height}'</p>
                               {/* Mobile-only contractor badge — md+ uses the dedicated Contractor column. */}

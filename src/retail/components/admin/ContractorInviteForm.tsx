@@ -1,5 +1,5 @@
 import { useState, useRef, type FormEvent } from 'react';
-import { storage, storageRef, uploadBytes, getDownloadURL } from '../../../shared/firebase';
+import { auth, storage, storageRef, uploadBytes, getDownloadURL } from '../../../shared/firebase';
 import { Upload, Loader2, X, Image as ImageIcon, Link as LinkIcon, Copy, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -54,14 +54,16 @@ export default function ContractorInviteForm({ onClose }: Props) {
     e.preventDefault();
     setLoading(true);
     try {
-      const adminSecret = prompt('Enter admin secret:') || '';
-      if (!adminSecret) { setLoading(false); return; }
+      // The signed-in admin's Firebase ID token authorizes this call — it's
+      // verified server-side against the admin allowlist. No shared secret.
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) { toast.error('Please sign in as an admin first'); setLoading(false); return; }
       const res = await fetch('/api/pro/invite-contractor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({
           companyName, contactName, email, phone,
-          discountPercentage: discount, slug, logoUrl, adminSecret,
+          discountPercentage: discount, slug, logoUrl,
         }),
       });
       const r = await res.json();
